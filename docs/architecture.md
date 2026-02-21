@@ -22,3 +22,9 @@ The content engine remains domain-agnostic so plugins can extend capabilities wi
 Content body is stored as structured JSON blocks and each block is validated against a registered schema.
 The block registry is the source of truth for block contracts so plugins can register additional semantic blocks.
 Renderer integration is abstracted behind a renderer interface to keep core content definitions independent of theme or UI concerns.
+
+## Phase 7 Intent: Hook System and Plugin Engine
+The extension runtime is built around contracts so plugins can extend capabilities without reaching into core internals.
+Event dispatching supports asynchronous listeners with isolated failure handling so one plugin cannot crash the full pipeline.
+Hooks expose before/after execution points and filter pipelines for value transformations without hard-coding extension logic.
+Plugin lifecycle is split into register and boot stages so structural registration happens before runtime side effects.

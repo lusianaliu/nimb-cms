@@ -34,4 +34,23 @@ export class EventBus {
       listener(payload);
     }
   }
+
+  async dispatch(eventName, payload) {
+    const eventListeners = this.listeners.get(eventName);
+    if (!eventListeners) {
+      return [];
+    }
+
+    const outcomes = [];
+    for (const listener of eventListeners) {
+      try {
+        const value = await Promise.resolve(listener(payload));
+        outcomes.push({ ok: true, value });
+      } catch (error) {
+        outcomes.push({ ok: false, error });
+      }
+    }
+
+    return outcomes;
+  }
 }
