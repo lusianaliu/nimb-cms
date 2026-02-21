@@ -6,3 +6,8 @@ Blocks represent content only and remain portable across themes.
 Configuration should be explicit, versionable, and environment-aware.
 This phase defines identity boundaries only, not runtime features.
 Future phases can add services without violating these principles.
+
+## Phase 3 Intent: Authorization Scaffolding
+Authorization is modelled as a standalone capability layer that is independent from authentication.
+Roles map to permissions in services so plugin modules can register additional permissions later.
+Controllers invoke middleware checks before hitting protected actions to keep access rules explicit.
