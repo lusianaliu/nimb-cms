@@ -11,6 +11,8 @@ import { HttpAuthRouter } from '../auth/http-auth-router.js';
 import { PermissionRegistry } from '../authorization/permission-registry.js';
 import { RoleManagementService } from '../authorization/role-management-service.js';
 import { CapabilityCheckMiddleware } from '../authorization/middleware/capability-check-middleware.js';
+import { ContentService } from '../content/content-service.js';
+import { HttpContentController } from '../content/http-content-controller.js';
 
 export class Application {
   constructor() {
@@ -64,7 +66,11 @@ export class Application {
       authorizationMiddleware
     });
 
-    const router = new BaseRouter({ logger, authRouter });
+    const contentController = new HttpContentController({
+      contentService: new ContentService()
+    });
+
+    const router = new BaseRouter({ logger, authRouter, contentController });
     this.server = router.createServer();
 
     await new Promise((resolve) => {

@@ -4,6 +4,7 @@ export class BaseRouter {
   constructor(options) {
     this.logger = options.logger;
     this.authRouter = options.authRouter;
+    this.contentController = options.contentController;
   }
 
   createServer() {
@@ -16,6 +17,11 @@ export class BaseRouter {
 
       const handledByAuth = await this.authRouter.handle(req, res);
       if (handledByAuth) {
+        return;
+      }
+
+      const handledByContent = await this.contentController.handle(req, res);
+      if (handledByContent) {
         return;
       }
 

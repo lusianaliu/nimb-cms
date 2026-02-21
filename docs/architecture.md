@@ -11,3 +11,9 @@ Future phases can add services without violating these principles.
 Authorization is modelled as a standalone capability layer that is independent from authentication.
 Roles map to permissions in services so plugin modules can register additional permissions later.
 Controllers invoke middleware checks before hitting protected actions to keep access rules explicit.
+
+
+## Phase 4 Intent: Content Engine
+Content is represented as structured data entities with workflow state, metadata, and revision history.
+Controllers orchestrate transport concerns, services encapsulate workflow rules, and models define data shape constraints.
+The content engine remains domain-agnostic so plugins can extend capabilities without coupling to rendering.
