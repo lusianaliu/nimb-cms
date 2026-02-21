@@ -8,6 +8,7 @@ export class ContentModel {
     title,
     slug,
     status,
+    body,
     metadata,
     createdAt,
     updatedAt,
@@ -19,6 +20,7 @@ export class ContentModel {
     this.title = title;
     this.slug = slug;
     this.status = status;
+    this.body = body;
     this.metadata = metadata;
     this.createdAt = createdAt;
     this.updatedAt = updatedAt;

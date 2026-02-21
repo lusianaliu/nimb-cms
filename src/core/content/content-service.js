@@ -1,11 +1,23 @@
 import { randomUUID } from 'node:crypto';
 import { ContentModel } from './models/content-model.js';
+import { createDefaultBlockRegistry } from './blocks/built-in-blocks.js';
+import { BlockValidator } from './blocks/block-validator.js';
 
 export class ContentService {
   constructor(options = {}) {
     this.contents = new Map();
     this.taxonomyService = options.taxonomyService ?? null;
     this.eventBus = options.eventBus ?? null;
+    this.blockRegistry = options.blockRegistry ?? createDefaultBlockRegistry();
+    this.blockValidator = options.blockValidator ?? new BlockValidator({ registry: this.blockRegistry });
+  }
+
+  listRegisteredBlocks() {
+    return this.blockRegistry.list().map((definition) => ({
+      type: definition.type,
+      version: definition.version,
+      schema: this.cloneJsonValue(definition.schema)
+    }));
   }
 
   createContent(input) {
@@ -25,6 +37,11 @@ export class ContentService {
       return { ok: false, error: 'Metadata must be a key-value object' };
     }
 
+    const body = this.normalizeBody(input?.body);
+    if (!body.ok) {
+      return { ok: false, error: body.error };
+    }
+
     const id = randomUUID();
     const slug = this.createUniqueSlug(input?.slug ?? title);
     const now = new Date().toISOString();
@@ -35,6 +52,7 @@ export class ContentService {
       title: title.trim(),
       slug,
       status: 'draft',
+      body: body.value,
       metadata,
       createdAt: now,
       updatedAt: now,
@@ -101,6 +119,15 @@ export class ContentService {
       content.metadata = metadata;
     }
 
+    if (input?.body !== undefined) {
+      const body = this.normalizeBody(input.body);
+      if (!body.ok) {
+        return { ok: false, error: body.error };
+      }
+
+      content.body = body.value;
+    }
+
     if (input?.taxonomyTermIds !== undefined) {
       const assignmentResult = this.assignTaxonomy(content.id, input.taxonomyTermIds);
       if (!assignmentResult.ok) {
@@ -128,6 +155,7 @@ export class ContentService {
       title: `${sourceContent.title} (Copy)`,
       slug: this.createUniqueSlug(sourceContent.slug),
       status: 'draft',
+      body: this.cloneJsonValue(sourceContent.body),
       metadata: { ...sourceContent.metadata },
       createdAt: duplicatedAt,
       updatedAt: duplicatedAt,
@@ -211,6 +239,20 @@ export class ContentService {
     return { ...metadata };
   }
 
+  normalizeBody(bodyInput) {
+    const body = bodyInput ?? [];
+    const validation = this.blockValidator.validateBody(body);
+    if (!validation.ok) {
+      return { ok: false, error: `Invalid block body: ${validation.errors.join('; ')}` };
+    }
+
+    return { ok: true, value: this.cloneJsonValue(body) };
+  }
+
+  cloneJsonValue(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
   createUniqueSlug(source, currentContentId = null) {
     const base = this.normalizeSlug(source) ?? `content-${randomUUID().slice(0, 8)}`;
     let candidate = base;
@@ -263,6 +305,7 @@ export class ContentService {
         title: content.title,
         slug: content.slug,
         status: content.status,
+        body: this.cloneJsonValue(content.body),
         metadata: { ...content.metadata },
         taxonomyTermIds: this.taxonomyService ? this.taxonomyService.getTermIdsForContent(content.id) : [],
         createdAt: content.createdAt,
@@ -281,6 +324,7 @@ export class ContentService {
       title: content.title,
       slug: content.slug,
       status: content.status,
+      body: this.cloneJsonValue(content.body),
       metadata: { ...content.metadata },
       taxonomyTermIds: this.taxonomyService ? this.taxonomyService.getTermIdsForContent(content.id) : [],
       createdAt: content.createdAt,
@@ -292,6 +336,7 @@ export class ContentService {
         timestamp: revision.timestamp,
         state: {
           ...revision.state,
+          body: this.cloneJsonValue(revision.state.body),
           metadata: { ...revision.state.metadata },
           taxonomyTermIds: [...(revision.state.taxonomyTermIds ?? [])]
         }
