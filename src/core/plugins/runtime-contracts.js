@@ -33,6 +33,9 @@ export class RuntimeContracts {
       registerCapability: (definition) => this.registerCapability(definition),
       registerSchema: (definition) => this.registerSchema(definition),
       registerLifecycleHook: (definition) => this.registerLifecycleHook(definition),
+      useCapability: () => {
+        throw new Error('useCapability is provided by runtime context only');
+      },
       logger: this.logger
     };
   }

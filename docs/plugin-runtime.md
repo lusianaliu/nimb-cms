@@ -17,8 +17,10 @@ Core remains domain-agnostic because runtime behavior depends only on manifest c
   - `declaredCapabilities`
   - `requiredPlatformContracts`
 - Register and activate plugins through a deterministic sequence.
+- Resolve capability composition through `ctx.useCapability(name)` without exposing provider identity.
 - Track plugin state via registry (`discovered`, `validated`, `active`, `failed`).
 - Track and execute unload disposers for safe teardown.
+- Validate explicit `exportedCapabilities` contracts and reject duplicate providers.
 
 ## Lifecycle model
 

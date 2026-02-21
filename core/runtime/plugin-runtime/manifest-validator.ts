@@ -26,6 +26,19 @@ export class ManifestValidator {
       throw new Error('manifest.declaredCapabilities must be a string array');
     }
 
+    if (manifest.exportedCapabilities !== undefined) {
+      if (!isRecord(manifest.exportedCapabilities)) {
+        throw new Error('manifest.exportedCapabilities must be an object when provided');
+      }
+
+      for (const [capability, implementation] of Object.entries(manifest.exportedCapabilities)) {
+        requireString(capability, 'exportedCapabilities key');
+        if (typeof implementation !== 'function') {
+          throw new Error(`manifest.exportedCapabilities.${capability} must be a function`);
+        }
+      }
+    }
+
     if (!isRecord(manifest.requiredPlatformContracts)) {
       throw new Error('manifest.requiredPlatformContracts must be an object');
     }
@@ -48,6 +61,9 @@ export class ManifestValidator {
         register: manifest.entrypoints.register
       },
       declaredCapabilities: [...manifest.declaredCapabilities],
+      exportedCapabilities: manifest.exportedCapabilities
+        ? { ...manifest.exportedCapabilities }
+        : {},
       requiredPlatformContracts: { ...manifest.requiredPlatformContracts }
     };
   }

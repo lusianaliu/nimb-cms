@@ -19,6 +19,14 @@ export const pluginManifest = {
     'content:update',
     'content:delete'
   ],
+  exportedCapabilities: {
+    'content:create': () => ({
+      create: async (payload: { title?: string } = {}) => ({
+        status: 'created',
+        title: payload.title ?? 'untitled'
+      })
+    })
+  },
   lifecycleHooks: [
     'onContentCreate',
     'beforeContentSave',

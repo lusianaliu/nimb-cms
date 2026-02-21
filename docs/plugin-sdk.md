@@ -13,7 +13,7 @@ The SDK is intentionally constrained:
 - It does **not** introduce plugin-specific behavior.
 - It does **not** bypass platform contracts.
 
-Plugin authors only describe intent (`capabilities`, `schemas`, `lifecycle`) and the SDK adapter maps that intent to contract calls like `registerCapability`, `registerSchema`, and `registerLifecycleHook`.
+Plugin authors only describe intent (`capabilities`, `exportedCapabilities`, `schemas`, `lifecycle`) and the SDK adapter maps that intent to contract calls like `registerCapability`, `registerSchema`, `registerLifecycleHook`, and `useCapability`.
 
 ## Why wrap contracts instead of replacing them
 

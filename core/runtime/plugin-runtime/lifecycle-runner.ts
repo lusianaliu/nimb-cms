@@ -1,3 +1,4 @@
+import { CapabilityResolver } from '../capability-resolver/capability-resolver.ts';
 import { ManifestValidator } from './manifest-validator.ts';
 import { PluginLoader } from './plugin-loader.ts';
 import { PluginRegistry } from './plugin-registry.ts';
@@ -15,6 +16,10 @@ export class PluginRuntime {
     });
     this.validator = options.validator ?? new ManifestValidator();
     this.registry = options.registry ?? new PluginRegistry();
+    this.capabilityResolver = options.capabilityResolver ?? new CapabilityResolver({
+      registry: this.registry,
+      logger: this.logger
+    });
   }
 
   async start() {
@@ -41,10 +46,20 @@ export class PluginRuntime {
         capabilities: manifest.declaredCapabilities.length
       });
 
+      for (const [capabilityName, interfaceFactory] of Object.entries(manifest.exportedCapabilities ?? {})) {
+        this.capabilityResolver.bindProvider(descriptor.id, capabilityName, interfaceFactory);
+      }
+
       const register = await this.loader.loadRegisterEntrypoint(descriptor, manifest);
       this.logger?.info?.(RuntimeEvent.REGISTER, { plugin: manifest.id });
 
-      const disposer = await Promise.resolve(register(this.contracts));
+      const runtimeContext = this.capabilityResolver.createConsumer(descriptor.id);
+      const runtimeContracts = {
+        ...this.contracts,
+        useCapability: runtimeContext.useCapability
+      };
+
+      const disposer = await Promise.resolve(register(runtimeContracts));
       if (disposer !== undefined && typeof disposer !== 'function') {
         throw new Error('register entrypoint must return a disposer function when provided');
       }
@@ -52,6 +67,7 @@ export class PluginRuntime {
       this.registry.setActive(descriptor.id, disposer ?? noopDisposer);
       this.logger?.info?.(RuntimeEvent.ACTIVATE, { plugin: manifest.id });
     } catch (error) {
+      this.capabilityResolver.unbindProvider(descriptor.id);
       this.registry.setFailed(descriptor.id, createStructuredError(error));
       this.logger?.error?.(RuntimeEvent.FAILURE, {
         plugin: descriptor.id,
@@ -69,6 +85,7 @@ export class PluginRuntime {
 
     try {
       await Promise.resolve(record.disposer());
+      this.capabilityResolver.unbindProvider(pluginId);
       this.registry.setDiscovered(pluginId);
       this.logger?.info?.(RuntimeEvent.UNLOAD, { plugin: pluginId });
       return true;
