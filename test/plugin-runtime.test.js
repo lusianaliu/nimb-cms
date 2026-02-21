@@ -10,6 +10,8 @@ class TestLogger {
   error() {}
 }
 
+const hasContentBasicEntries = (records) => records.some((definition) => definition.source === '@nimblabs/plugin-content-basic');
+
 test('plugin runtime discovers, loads, activates, and unloads content-basic plugin', async () => {
   const logger = new TestLogger();
   const runtimeContracts = new RuntimeContracts({ logger });
@@ -24,13 +26,13 @@ test('plugin runtime discovers, loads, activates, and unloads content-basic plug
 
   assert.ok(contentBasic);
   assert.equal(contentBasic.state, 'active');
-  assert.equal(runtimeContracts.capabilities.size > 0, true);
-  assert.equal(runtimeContracts.schemas.size > 0, true);
-  assert.equal(runtimeContracts.lifecycleHooks.size > 0, true);
+  assert.equal(hasContentBasicEntries(Array.from(runtimeContracts.capabilities.values())), true);
+  assert.equal(hasContentBasicEntries(Array.from(runtimeContracts.schemas.values())), true);
+  assert.equal(hasContentBasicEntries(Array.from(runtimeContracts.lifecycleHooks.values())), true);
 
   const unloaded = await runtime.unload('content-basic');
   assert.equal(unloaded, true);
-  assert.equal(runtimeContracts.capabilities.size, 0);
-  assert.equal(runtimeContracts.schemas.size, 0);
-  assert.equal(runtimeContracts.lifecycleHooks.size, 0);
+  assert.equal(hasContentBasicEntries(Array.from(runtimeContracts.capabilities.values())), false);
+  assert.equal(hasContentBasicEntries(Array.from(runtimeContracts.schemas.values())), false);
+  assert.equal(hasContentBasicEntries(Array.from(runtimeContracts.lifecycleHooks.values())), false);
 });
