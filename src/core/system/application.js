@@ -16,6 +16,9 @@ import { HttpContentController } from '../content/http-content-controller.js';
 import { TaxonomyService } from '../taxonomy/taxonomy-service.js';
 import { HttpTaxonomyController } from '../taxonomy/http-taxonomy-controller.js';
 import { EventBus } from '../events/event-bus.js';
+import { HookSystem } from '../hooks/hook-system.js';
+import { PluginLoader } from '../plugins/plugin-loader.js';
+import { PluginRuntimeContext } from '../plugins/plugin-runtime-context.js';
 
 export class Application {
   constructor() {
@@ -24,6 +27,7 @@ export class Application {
     this.securityConfigService = new SecurityConfigService();
     this.server = null;
     this.database = null;
+    this.pluginLoader = null;
   }
 
   async boot() {
@@ -79,6 +83,23 @@ export class Application {
     const taxonomyController = new HttpTaxonomyController({ taxonomyService });
 
     const router = new BaseRouter({ logger, authRouter, contentController, taxonomyController });
+
+    const hooks = new HookSystem();
+    this.pluginLoader = new PluginLoader({ pluginsDirectory: 'plugins', logger });
+    await this.pluginLoader.discover();
+
+    const pluginRuntimeContext = new PluginRuntimeContext({
+      eventBus,
+      hooks,
+      router,
+      permissionRegistry,
+      blockRegistry: contentController.contentService.blockRegistry,
+      logger
+    });
+
+    await this.pluginLoader.registerEnabled(pluginRuntimeContext);
+    await this.pluginLoader.bootEnabled(pluginRuntimeContext);
+
     this.server = router.createServer();
 
     await new Promise((resolve) => {

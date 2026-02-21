@@ -6,6 +6,15 @@ export class BaseRouter {
     this.authRouter = options.authRouter;
     this.contentController = options.contentController;
     this.taxonomyController = options.taxonomyController;
+    this.pluginRoutes = [];
+  }
+
+
+  registerPluginRoute(handler) {
+    this.pluginRoutes.push(handler);
+    return () => {
+      this.pluginRoutes = this.pluginRoutes.filter((routeHandler) => routeHandler !== handler);
+    };
   }
 
   createServer() {
@@ -29,6 +38,13 @@ export class BaseRouter {
       const handledByTaxonomy = await this.taxonomyController.handle(req, res);
       if (handledByTaxonomy) {
         return;
+      }
+
+      for (const pluginRoute of this.pluginRoutes) {
+        const handledByPlugin = await Promise.resolve(pluginRoute(req, res));
+        if (handledByPlugin) {
+          return;
+        }
       }
 
       res.writeHead(404, { 'Content-Type': 'application/json' });
