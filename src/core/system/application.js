@@ -8,6 +8,9 @@ import { BaseRouter } from '../router/base-router.js';
 import { AuthService } from '../auth/auth-service.js';
 import { SessionStore } from '../auth/session-store.js';
 import { HttpAuthRouter } from '../auth/http-auth-router.js';
+import { PermissionRegistry } from '../authorization/permission-registry.js';
+import { RoleManagementService } from '../authorization/role-management-service.js';
+import { CapabilityCheckMiddleware } from '../authorization/middleware/capability-check-middleware.js';
 
 export class Application {
   constructor() {
@@ -31,13 +34,34 @@ export class Application {
     const migrationRunner = new MigrationRunner(config.migrations.path, logger);
     await migrationRunner.run();
 
+    const permissionRegistry = new PermissionRegistry();
+    permissionRegistry.register({
+      key: 'nimb.admin.panel.read',
+      description: 'Allows reading the admin panel endpoint',
+      source: 'core.system'
+    });
+
+    const roleManagementService = new RoleManagementService({ permissionRegistry });
+    roleManagementService.createRole({
+      id: securityConfig.adminBootstrapRoleId,
+      permissionKeys: ['nimb.admin.panel.read']
+    });
+
+    const authorizationMiddleware = new CapabilityCheckMiddleware({
+      logger,
+      permissionRegistry,
+      roleManagementService
+    });
+
     const authRouter = new HttpAuthRouter({
       logger,
       securityConfig,
       userAuthService: new AuthService(),
       adminAuthService: new AuthService(),
       userSessions: new SessionStore(),
-      adminSessions: new SessionStore()
+      adminSessions: new SessionStore(),
+      roleManagementService,
+      authorizationMiddleware
     });
 
     const router = new BaseRouter({ logger, authRouter });

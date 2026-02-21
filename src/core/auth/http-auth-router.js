@@ -8,12 +8,25 @@ export class HttpAuthRouter {
     this.adminAuthService = options.adminAuthService;
     this.userSessions = options.userSessions;
     this.adminSessions = options.adminSessions;
+    this.roleManagementService = options.roleManagementService;
+    this.authorizationMiddleware = options.authorizationMiddleware;
 
     this.userCookieName = 'nimb_user_session';
     this.adminCookieName = 'nimb_admin_session';
 
     this.adminPath = `/${this.securityConfig.adminPath}`;
     this.adminLoginPath = `/${this.securityConfig.adminLoginPath}`;
+
+    this.requireAdminPanelCapability = this.authorizationMiddleware.requireCapability('nimb.admin.panel.read', {
+      resolveSubjectId: (req) => this.resolveAdminSubjectId(req),
+      unauthenticatedPayload: {
+        error: 'Admin authentication required',
+        loginPath: this.adminLoginPath
+      },
+      forbiddenPayload: {
+        error: 'Admin permission denied'
+      }
+    });
   }
 
   async handle(req, res) {
@@ -37,11 +50,11 @@ export class HttpAuthRouter {
     }
 
     if (req.method === 'POST' && path === `${this.adminPath}/register`) {
-      return this.handleRegister(req, res, this.adminAuthService);
+      return this.handleAdminRegister(req, res);
     }
 
     if (req.method === 'POST' && path === this.adminLoginPath) {
-      return this.handleLogin(req, res, this.adminAuthService, this.adminSessions, this.adminCookieName);
+      return this.handleAdminLogin(req, res);
     }
 
     if (req.method === 'POST' && path === `${this.adminPath}/logout`) {
@@ -71,6 +84,23 @@ export class HttpAuthRouter {
     return true;
   }
 
+  async handleAdminRegister(req, res) {
+    const payload = await this.readJsonBody(req, res);
+    if (!payload) {
+      return true;
+    }
+
+    const result = this.adminAuthService.register(payload);
+    if (!result.ok) {
+      this.respond(res, 400, { error: result.error });
+      return true;
+    }
+
+    this.assignBootstrapRole(result.user.username);
+    this.respond(res, 201, { registered: true, user: result.user });
+    return true;
+  }
+
   async handleLogin(req, res, authService, sessionStore, cookieName) {
     const payload = await this.readJsonBody(req, res);
     if (!payload) {
@@ -85,6 +115,26 @@ export class HttpAuthRouter {
 
     const sessionId = sessionStore.create(result.user);
     res.setHeader('Set-Cookie', `${cookieName}=${sessionId}; HttpOnly; Path=/; SameSite=Lax`);
+    this.respond(res, 200, { authenticated: true, user: result.user });
+    return true;
+  }
+
+  async handleAdminLogin(req, res) {
+    const payload = await this.readJsonBody(req, res);
+    if (!payload) {
+      return true;
+    }
+
+    const result = this.adminAuthService.login(payload);
+    if (!result.ok) {
+      this.respond(res, 401, { error: result.error });
+      return true;
+    }
+
+    this.assignBootstrapRole(result.user.username);
+
+    const sessionId = this.adminSessions.create(result.user);
+    res.setHeader('Set-Cookie', `${this.adminCookieName}=${sessionId}; HttpOnly; Path=/; SameSite=Lax`);
     this.respond(res, 200, { authenticated: true, user: result.user });
     return true;
   }
@@ -115,16 +165,12 @@ export class HttpAuthRouter {
   }
 
   handleAdminPanel(req, res) {
-    const cookies = this.readCookies(req);
-    const session = this.adminSessions.get(cookies[this.adminCookieName]);
-
-    if (!session) {
-      this.respond(res, 401, {
-        error: 'Admin authentication required',
-        loginPath: this.adminLoginPath
-      });
+    if (!this.requireAdminPanelCapability(req, res)) {
       return true;
     }
+
+    const cookies = this.readCookies(req);
+    const session = this.adminSessions.get(cookies[this.adminCookieName]);
 
     this.respond(res, 200, {
       authenticated: true,
@@ -132,6 +178,20 @@ export class HttpAuthRouter {
       route: this.adminPath
     });
     return true;
+  }
+
+  assignBootstrapRole(subjectId) {
+    if (!subjectId) {
+      return;
+    }
+
+    this.roleManagementService.assignRole(subjectId, this.securityConfig.adminBootstrapRoleId);
+  }
+
+  resolveAdminSubjectId(req) {
+    const cookies = this.readCookies(req);
+    const session = this.adminSessions.get(cookies[this.adminCookieName]);
+    return session?.subject?.username ?? null;
   }
 
   readCookies(req) {

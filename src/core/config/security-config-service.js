@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const ROUTE_SEGMENT_PATTERN = /^[a-z0-9-]+$/i;
+const ROLE_IDENTIFIER_PATTERN = /^[a-z0-9._:-]+$/i;
 
 export class SecurityConfigService {
   constructor(options = {}) {
@@ -16,10 +17,12 @@ export class SecurityConfigService {
 
     const adminPath = this.extractStringProperty(content, 'adminPath');
     const adminLoginPath = this.extractStringProperty(content, 'adminLoginPath');
+    const adminBootstrapRoleId = this.extractStringProperty(content, 'adminBootstrapRoleId');
 
     this.cache = {
       adminPath: this.validateSegment(adminPath, 'adminPath'),
-      adminLoginPath: this.validateSegment(adminLoginPath, 'adminLoginPath')
+      adminLoginPath: this.validateSegment(adminLoginPath, 'adminLoginPath'),
+      adminBootstrapRoleId: this.validateRoleId(adminBootstrapRoleId, 'adminBootstrapRoleId')
     };
 
     return this.cache;
@@ -39,6 +42,14 @@ export class SecurityConfigService {
   validateSegment(value, name) {
     if (!ROUTE_SEGMENT_PATTERN.test(value)) {
       throw new Error(`Invalid route segment for ${name}: ${value}`);
+    }
+
+    return value;
+  }
+
+  validateRoleId(value, name) {
+    if (!ROLE_IDENTIFIER_PATTERN.test(value)) {
+      throw new Error(`Invalid role id for ${name}: ${value}`);
     }
 
     return value;
