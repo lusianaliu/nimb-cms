@@ -2,8 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { ContentModel } from './models/content-model.js';
 
 export class ContentService {
-  constructor() {
+  constructor(options = {}) {
     this.contents = new Map();
+    this.taxonomyService = options.taxonomyService ?? null;
+    this.eventBus = options.eventBus ?? null;
   }
 
   createContent(input) {
@@ -42,6 +44,14 @@ export class ContentService {
 
     this.recordRevision(content, 'created');
     this.contents.set(content.id, content);
+
+    if (input?.taxonomyTermIds !== undefined) {
+      const assignmentResult = this.assignTaxonomy(content.id, input.taxonomyTermIds);
+      if (!assignmentResult.ok) {
+        this.contents.delete(content.id);
+        return assignmentResult;
+      }
+    }
 
     return { ok: true, content: this.serializeContent(content) };
   }
@@ -91,11 +101,54 @@ export class ContentService {
       content.metadata = metadata;
     }
 
+    if (input?.taxonomyTermIds !== undefined) {
+      const assignmentResult = this.assignTaxonomy(content.id, input.taxonomyTermIds);
+      if (!assignmentResult.ok) {
+        return assignmentResult;
+      }
+    }
+
     content.status = 'draft';
     content.updatedAt = new Date().toISOString();
     this.recordRevision(content, 'draft-updated');
 
     return { ok: true, content: this.serializeContent(content) };
+  }
+
+  duplicateContent(id) {
+    const sourceContent = this.contents.get(id);
+    if (!sourceContent) {
+      return { ok: false, error: 'Content not found' };
+    }
+
+    const duplicatedAt = new Date().toISOString();
+    const duplicate = new ContentModel({
+      id: randomUUID(),
+      type: sourceContent.type,
+      title: `${sourceContent.title} (Copy)`,
+      slug: this.createUniqueSlug(sourceContent.slug),
+      status: 'draft',
+      metadata: { ...sourceContent.metadata },
+      createdAt: duplicatedAt,
+      updatedAt: duplicatedAt,
+      publishedAt: null,
+      revisions: []
+    });
+
+    this.recordRevision(duplicate, 'duplicated');
+    this.contents.set(duplicate.id, duplicate);
+
+    if (this.taxonomyService) {
+      this.taxonomyService.copyTermsBetweenContent(sourceContent.id, duplicate.id);
+    }
+
+    this.eventBus?.emit('nimb.content.duplicated', {
+      sourceContentId: sourceContent.id,
+      duplicatedContentId: duplicate.id,
+      timestamp: duplicatedAt
+    });
+
+    return { ok: true, content: this.serializeContent(duplicate) };
   }
 
   publishContent(id) {
@@ -121,6 +174,27 @@ export class ContentService {
     content.status = 'draft';
     content.updatedAt = new Date().toISOString();
     this.recordRevision(content, 'moved-to-draft');
+
+    return { ok: true, content: this.serializeContent(content) };
+  }
+
+  assignTaxonomy(contentId, taxonomyTermIds) {
+    const content = this.contents.get(contentId);
+    if (!content) {
+      return { ok: false, error: 'Content not found' };
+    }
+
+    if (!this.taxonomyService) {
+      return { ok: false, error: 'Taxonomy service unavailable' };
+    }
+
+    const assignmentResult = this.taxonomyService.setTermsForContent(content.id, taxonomyTermIds);
+    if (!assignmentResult.ok) {
+      return { ok: false, error: assignmentResult.error };
+    }
+
+    content.updatedAt = new Date().toISOString();
+    this.recordRevision(content, 'taxonomy-assigned');
 
     return { ok: true, content: this.serializeContent(content) };
   }
@@ -190,6 +264,7 @@ export class ContentService {
         slug: content.slug,
         status: content.status,
         metadata: { ...content.metadata },
+        taxonomyTermIds: this.taxonomyService ? this.taxonomyService.getTermIdsForContent(content.id) : [],
         createdAt: content.createdAt,
         updatedAt: content.updatedAt,
         publishedAt: content.publishedAt
@@ -207,6 +282,7 @@ export class ContentService {
       slug: content.slug,
       status: content.status,
       metadata: { ...content.metadata },
+      taxonomyTermIds: this.taxonomyService ? this.taxonomyService.getTermIdsForContent(content.id) : [],
       createdAt: content.createdAt,
       updatedAt: content.updatedAt,
       publishedAt: content.publishedAt,
@@ -216,7 +292,8 @@ export class ContentService {
         timestamp: revision.timestamp,
         state: {
           ...revision.state,
-          metadata: { ...revision.state.metadata }
+          metadata: { ...revision.state.metadata },
+          taxonomyTermIds: [...(revision.state.taxonomyTermIds ?? [])]
         }
       }))
     };

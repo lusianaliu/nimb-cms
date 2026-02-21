@@ -5,6 +5,7 @@ export class BaseRouter {
     this.logger = options.logger;
     this.authRouter = options.authRouter;
     this.contentController = options.contentController;
+    this.taxonomyController = options.taxonomyController;
   }
 
   createServer() {
@@ -22,6 +23,11 @@ export class BaseRouter {
 
       const handledByContent = await this.contentController.handle(req, res);
       if (handledByContent) {
+        return;
+      }
+
+      const handledByTaxonomy = await this.taxonomyController.handle(req, res);
+      if (handledByTaxonomy) {
         return;
       }
 
