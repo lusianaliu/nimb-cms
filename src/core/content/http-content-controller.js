@@ -26,6 +26,16 @@ export class HttpContentController {
       return this.handleUpdate(req, res, contentByIdMatch[1]);
     }
 
+    const duplicateMatch = path.match(/^\/content\/([a-z0-9-]+)\/duplicate$/i);
+    if (duplicateMatch && req.method === 'POST') {
+      return this.handleDuplicate(res, duplicateMatch[1]);
+    }
+
+    const taxonomyMatch = path.match(/^\/content\/([a-z0-9-]+)\/taxonomy$/i);
+    if (taxonomyMatch && req.method === 'PUT') {
+      return this.handleAssignTaxonomy(req, res, taxonomyMatch[1]);
+    }
+
     const publishMatch = path.match(/^\/content\/([a-z0-9-]+)\/publish$/i);
     if (publishMatch && req.method === 'POST') {
       return this.handlePublish(res, publishMatch[1]);
@@ -74,6 +84,28 @@ export class HttpContentController {
     }
 
     const result = this.contentService.updateDraft(contentId, payload);
+    if (!result.ok) {
+      this.respond(res, result.error === 'Content not found' ? 404 : 400, { error: result.error });
+      return true;
+    }
+
+    this.respond(res, 200, result);
+    return true;
+  }
+
+  handleDuplicate(res, contentId) {
+    const result = this.contentService.duplicateContent(contentId);
+    this.respond(res, result.ok ? 201 : 404, result.ok ? result : { error: result.error });
+    return true;
+  }
+
+  async handleAssignTaxonomy(req, res, contentId) {
+    const payload = await this.readJsonBody(req, res);
+    if (!payload) {
+      return true;
+    }
+
+    const result = this.contentService.assignTaxonomy(contentId, payload.termIds);
     if (!result.ok) {
       this.respond(res, result.error === 'Content not found' ? 404 : 400, { error: result.error });
       return true;
