@@ -103,3 +103,6 @@ export const registerContentBasicPlugin = (contracts: Partial<PluginContracts>):
     });
   };
 };
+
+export const register = registerContentBasicPlugin;
+export default registerContentBasicPlugin;

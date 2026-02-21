@@ -16,9 +16,8 @@ import { HttpContentController } from '../content/http-content-controller.js';
 import { TaxonomyService } from '../taxonomy/taxonomy-service.js';
 import { HttpTaxonomyController } from '../taxonomy/http-taxonomy-controller.js';
 import { EventBus } from '../events/event-bus.js';
-import { HookSystem } from '../hooks/hook-system.js';
-import { PluginLoader } from '../plugins/plugin-loader.js';
-import { PluginRuntimeContext } from '../plugins/plugin-runtime-context.js';
+import { PluginRuntime } from '../../../core/runtime/plugin-runtime/lifecycle-runner.ts';
+import { RuntimeContracts } from '../plugins/runtime-contracts.js';
 
 export class Application {
   constructor() {
@@ -27,7 +26,7 @@ export class Application {
     this.securityConfigService = new SecurityConfigService();
     this.server = null;
     this.database = null;
-    this.pluginLoader = null;
+    this.pluginRuntime = null;
   }
 
   async boot() {
@@ -84,21 +83,13 @@ export class Application {
 
     const router = new BaseRouter({ logger, authRouter, contentController, taxonomyController });
 
-    const hooks = new HookSystem();
-    this.pluginLoader = new PluginLoader({ pluginsDirectory: 'plugins', logger });
-    await this.pluginLoader.discover();
-
-    const pluginRuntimeContext = new PluginRuntimeContext({
-      eventBus,
-      hooks,
-      router,
-      permissionRegistry,
-      blockRegistry: contentController.contentService.blockRegistry,
+    const runtimeContracts = new RuntimeContracts({ logger });
+    this.pluginRuntime = new PluginRuntime({
+      pluginsDirectory: 'plugins',
+      contracts: runtimeContracts.createContractSurface(),
       logger
     });
-
-    await this.pluginLoader.registerEnabled(pluginRuntimeContext);
-    await this.pluginLoader.bootEnabled(pluginRuntimeContext);
+    await this.pluginRuntime.start();
 
     this.server = router.createServer();
 
@@ -133,6 +124,10 @@ export class Application {
 
     if (this.database) {
       await this.database.disconnect();
+    }
+
+    if (this.pluginRuntime) {
+      await this.pluginRuntime.unloadAll();
     }
   }
 }
