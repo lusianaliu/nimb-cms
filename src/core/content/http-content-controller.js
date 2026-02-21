@@ -17,6 +17,10 @@ export class HttpContentController {
       return this.handleList(res);
     }
 
+    if (req.method === 'GET' && path === '/content/blocks') {
+      return this.handleListBlockDefinitions(res);
+    }
+
     const contentByIdMatch = path.match(/^\/content\/([a-z0-9-]+)$/i);
     if (contentByIdMatch && req.method === 'GET') {
       return this.handleGetById(res, contentByIdMatch[1]);
@@ -68,6 +72,12 @@ export class HttpContentController {
   handleList(res) {
     const content = this.contentService.listContent();
     this.respond(res, 200, { ok: true, content });
+    return true;
+  }
+
+  handleListBlockDefinitions(res) {
+    const blocks = this.contentService.listRegisteredBlocks();
+    this.respond(res, 200, { ok: true, blocks });
     return true;
   }
 

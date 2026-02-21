@@ -17,3 +17,8 @@ Controllers invoke middleware checks before hitting protected actions to keep ac
 Content is represented as structured data entities with workflow state, metadata, and revision history.
 Controllers orchestrate transport concerns, services encapsulate workflow rules, and models define data shape constraints.
 The content engine remains domain-agnostic so plugins can extend capabilities without coupling to rendering.
+
+## Phase 6 Intent: Block Editor Data Model
+Content body is stored as structured JSON blocks and each block is validated against a registered schema.
+The block registry is the source of truth for block contracts so plugins can register additional semantic blocks.
+Renderer integration is abstracted behind a renderer interface to keep core content definitions independent of theme or UI concerns.
