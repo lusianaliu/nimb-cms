@@ -1,0 +1,19 @@
+{
+  "app": {
+    "name": "Nimb CMS",
+    "env": "development"
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 3000
+  },
+  "database": {
+    "url": "memory://nimb-core"
+  },
+  "logger": {
+    "level": "info"
+  },
+  "migrations": {
+    "path": "src/migrations"
+  }
+}
