@@ -1,5 +1,6 @@
 import type {
   CapabilityDefinition,
+  CapabilityProviderFactory,
   LifecycleDefinition,
   PluginContext,
   RuntimeContracts,
@@ -12,7 +13,8 @@ const CONTRACT_VERSIONS = Object.freeze({
   'plugin.unregisterCapability': '^1.0.0',
   'plugin.registerSchema': '^1.0.0',
   'plugin.unregisterSchema': '^1.0.0',
-  'plugin.registerLifecycleHook': '^1.0.0'
+  'plugin.registerLifecycleHook': '^1.0.0',
+  'plugin.useCapability': '^1.0.0'
 });
 
 const assertRuntimeContract = <K extends keyof RuntimeContracts>(
@@ -73,6 +75,7 @@ export const createRuntimeCompatiblePlugin = (input: {
   name: string;
   version: string;
   capabilities: readonly CapabilityDefinition[];
+  exportedCapabilities: Record<string, CapabilityProviderFactory>;
   schemas: readonly SchemaDefinition[];
   lifecycle?: LifecycleDefinition;
 }): SDKPlugin => {
@@ -86,17 +89,20 @@ export const createRuntimeCompatiblePlugin = (input: {
         register: './register.ts'
       },
       declaredCapabilities: input.capabilities.map((capability) => capability.key),
+      exportedCapabilities: { ...input.exportedCapabilities },
       requiredPlatformContracts: CONTRACT_VERSIONS
     },
     register: async (contracts: Partial<RuntimeContracts>) => {
       assertRuntimeContract(contracts, 'registerCapability', pluginId);
       assertRuntimeContract(contracts, 'registerSchema', pluginId);
       assertRuntimeContract(contracts, 'registerLifecycleHook', pluginId);
+      assertRuntimeContract(contracts, 'useCapability', pluginId);
       assertRuntimeContract(contracts, 'logger', pluginId);
 
       const context: PluginContext = {
         pluginId,
         pluginVersion: input.version,
+        useCapability: contracts.useCapability,
         logger: contracts.logger
       };
 

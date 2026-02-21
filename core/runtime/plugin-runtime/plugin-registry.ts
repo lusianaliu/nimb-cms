@@ -3,6 +3,7 @@ import { PluginState } from './runtime-types.ts';
 export class PluginRegistry {
   constructor() {
     this.records = new Map();
+    this.capabilityProviders = new Map();
   }
 
   registerDescriptor(descriptor) {
@@ -20,6 +21,8 @@ export class PluginRegistry {
     record.manifest = manifest;
     record.state = PluginState.VALIDATED;
     record.error = null;
+
+    this.bindManifestCapabilities(pluginId, manifest);
   }
 
   setActive(pluginId, disposer) {
@@ -34,6 +37,7 @@ export class PluginRegistry {
     record.state = PluginState.FAILED;
     record.error = error;
     record.disposer = null;
+    this.unbindCapabilities(pluginId);
   }
 
   setDiscovered(pluginId) {
@@ -42,6 +46,8 @@ export class PluginRegistry {
     record.manifest = null;
     record.disposer = null;
     record.error = null;
+
+    this.unbindCapabilities(pluginId);
   }
 
   get(pluginId) {
@@ -71,5 +77,32 @@ export class PluginRegistry {
     }
 
     return record;
+  }
+
+  resolveCapabilityProvider(capabilityName) {
+    return this.capabilityProviders.get(capabilityName) ?? null;
+  }
+
+  bindManifestCapabilities(pluginId, manifest) {
+    this.unbindCapabilities(pluginId);
+
+    for (const capabilityName of Object.keys(manifest.exportedCapabilities ?? {})) {
+      const existingProvider = this.capabilityProviders.get(capabilityName);
+      if (existingProvider && existingProvider !== pluginId) {
+        throw new Error(
+          `duplicate capability provider for "${capabilityName}": ${existingProvider} and ${pluginId}`
+        );
+      }
+
+      this.capabilityProviders.set(capabilityName, pluginId);
+    }
+  }
+
+  unbindCapabilities(pluginId) {
+    for (const [capabilityName, providerId] of Array.from(this.capabilityProviders.entries())) {
+      if (providerId === pluginId) {
+        this.capabilityProviders.delete(capabilityName);
+      }
+    }
   }
 }

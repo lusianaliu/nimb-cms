@@ -2,6 +2,8 @@ import { createRuntimeCompatiblePlugin } from './adapter.ts';
 import { validatePluginDefinition } from './validation.ts';
 import type {
   CapabilityDefinition,
+  CapabilityInterface,
+  CapabilityProviderFactory,
   LifecycleDefinition,
   PluginContext,
   PluginDefinition,
@@ -13,6 +15,8 @@ import type {
 
 export type {
   CapabilityDefinition,
+  CapabilityInterface,
+  CapabilityProviderFactory,
   LifecycleDefinition,
   PluginContext,
   PluginDefinition,
@@ -34,6 +38,7 @@ export const definePlugin = (definition: PluginDefinition): SDKPlugin => {
     name: definition.name,
     version: definition.version,
     capabilities: definition.capabilities ?? [],
+    exportedCapabilities: definition.exportedCapabilities ?? {},
     schemas: definition.schemas ?? [],
     lifecycle: definition.lifecycle
   });

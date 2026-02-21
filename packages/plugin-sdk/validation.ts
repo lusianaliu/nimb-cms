@@ -36,6 +36,18 @@ export const validatePluginDefinition = (definition: PluginDefinition): void => 
     }
   }
 
+
+  if (definition.exportedCapabilities !== undefined) {
+    if (!definition.exportedCapabilities || typeof definition.exportedCapabilities !== 'object' || Array.isArray(definition.exportedCapabilities)) {
+      throw new Error('plugin-sdk: "exportedCapabilities" must be an object');
+    }
+
+    for (const [capability, provider] of Object.entries(definition.exportedCapabilities)) {
+      assertNonEmptyString(capability, 'exportedCapabilities key');
+      assertFunction(provider, `exportedCapabilities.${capability}`);
+    }
+  }
+
   if (definition.schemas !== undefined) {
     if (!Array.isArray(definition.schemas)) {
       throw new Error('plugin-sdk: "schemas" must be an array');
