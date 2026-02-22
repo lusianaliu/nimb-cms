@@ -8,6 +8,7 @@ import { PluginRegistry } from './plugin-registry.ts';
 import { TopologyGraph, DependencyResolver, ActivationPlanner, TopologySnapshot } from '../topology/index.ts';
 import { PluginState, RuntimeEvent, createStructuredError } from './runtime-types.ts';
 import { HealthMonitor } from '../health/index.ts';
+import { VersionResolver, CompatibilityChecker, VersionSnapshot } from '../versioning/index.ts';
 
 const noopDisposer = () => {};
 
@@ -26,8 +27,10 @@ export class PluginRuntime {
     this.stateTrace = options.stateTrace ?? new StateTrace({ diagnosticsChannel: this.diagnosticsChannel });
     this.registry = options.registry ?? new PluginRegistry();
     this.topologyGraph = options.topologyGraph ?? new TopologyGraph();
-    this.dependencyResolver = options.dependencyResolver ?? new DependencyResolver();
+    this.dependencyResolver = options.dependencyResolver ?? new DependencyResolver({ allowDuplicateProviders: true });
     this.activationPlanner = options.activationPlanner ?? new ActivationPlanner();
+    this.versionResolver = options.versionResolver ?? new VersionResolver();
+    this.compatibilityChecker = options.compatibilityChecker ?? new CompatibilityChecker();
     this.activationCatalog = new Map();
     this.healthMonitor = options.healthMonitor ?? new HealthMonitor({
       diagnosticsChannel: this.diagnosticsChannel,
@@ -61,6 +64,11 @@ export class PluginRuntime {
       duplicateProviders: [],
       cycles: []
     };
+    this.lastVersionSnapshot = VersionSnapshot.from({
+      resolutions: [],
+      warnings: [],
+      rejectedPlugins: []
+    });
     this.inspector = options.inspector ?? new RuntimeInspector({
       registry: this.registry,
       eventTrace: this.eventTrace,
@@ -68,7 +76,8 @@ export class PluginRuntime {
       stateTrace: this.stateTrace,
       diagnosticsChannel: this.diagnosticsChannel,
       topologyProvider: () => this.getTopologySnapshot(),
-      healthProvider: () => this.healthMonitor.snapshot()
+      healthProvider: () => this.healthMonitor.snapshot(),
+      versionProvider: () => this.lastVersionSnapshot
     });
   }
 
@@ -145,11 +154,37 @@ export class PluginRuntime {
       }
 
       this.lastActivationPlan = [];
+      this.lastVersionSnapshot = VersionSnapshot.from({ resolutions: [], warnings: [], rejectedPlugins: [] });
       this.diagnosticsChannel.emit('plugin.runtime.diagnostics.topology:activationPlan', { activationOrder: [] });
       return this.registry.list();
     }
 
-    this.lastActivationPlan = this.activationPlanner.plan(this.topologyGraph);
+    const versionResolution = this.versionResolver.resolve(this.topologyGraph);
+    const compatibility = this.compatibilityChecker.evaluate(versionResolution);
+    this.lastVersionSnapshot = VersionSnapshot.from({
+      resolutions: versionResolution.resolutions,
+      warnings: compatibility.warnings,
+      rejectedPlugins: compatibility.rejectedPlugins
+    });
+
+    this.registry.setVersionResolutions(versionResolution.resolutions);
+
+    for (const resolution of versionResolution.resolutions) {
+      this.diagnosticsChannel.emit('version:resolved', { ...resolution });
+    }
+
+    for (const conflict of versionResolution.conflicts) {
+      this.diagnosticsChannel.emit('version:conflict', { ...conflict });
+    }
+
+    for (const pluginId of compatibility.rejectedPlugins) {
+      this.diagnosticsChannel.emit('version:rejected', { pluginId });
+      this.registry.setFailed(pluginId, createStructuredError(new Error('capability version compatibility rejected plugin')));
+    }
+
+    const fullPlan = this.activationPlanner.plan(this.topologyGraph);
+    const rejectedSet = new Set(compatibility.rejectedPlugins);
+    this.lastActivationPlan = fullPlan.filter((pluginId) => !rejectedSet.has(pluginId));
     this.diagnosticsChannel.emit('plugin.runtime.diagnostics.topology:activationPlan', {
       activationOrder: [...this.lastActivationPlan]
     });
@@ -158,7 +193,7 @@ export class PluginRuntime {
 
     for (const pluginId of this.lastActivationPlan) {
       const activationItem = activationById.get(pluginId);
-      if (!activationItem) {
+      if (!activationItem || rejectedSet.has(pluginId)) {
         continue;
       }
 
@@ -308,7 +343,16 @@ export class PluginRuntime {
       this.healthMonitor.clearPlugin(pluginId);
       this.topologyGraph.unregisterPlugin(pluginId);
       this.lastValidation = this.dependencyResolver.validate(this.topologyGraph);
-      this.lastActivationPlan = this.activationPlanner.plan(this.topologyGraph);
+      const versionResolution = this.versionResolver.resolve(this.topologyGraph);
+      const compatibility = this.compatibilityChecker.evaluate(versionResolution);
+      this.lastVersionSnapshot = VersionSnapshot.from({
+        resolutions: versionResolution.resolutions,
+        warnings: compatibility.warnings,
+        rejectedPlugins: compatibility.rejectedPlugins
+      });
+      this.registry.setVersionResolutions(versionResolution.resolutions);
+      this.lastActivationPlan = this.activationPlanner.plan(this.topologyGraph)
+        .filter((entry) => !compatibility.rejectedPlugins.includes(entry));
       this.diagnosticsChannel.emit('plugin.runtime.diagnostics.lifecycle.unload', { plugin: pluginId, result: 'success' });
       this.logger?.info?.(RuntimeEvent.UNLOAD, { plugin: pluginId });
       return true;

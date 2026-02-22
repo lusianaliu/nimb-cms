@@ -6,9 +6,18 @@ export class TopologyGraph {
     this.providers = new Map();
   }
 
-  registerPlugin(pluginId: string, manifest: { exportedCapabilities?: Record<string, unknown>, consumedCapabilities?: string[] }, loadOrder: number) {
+  registerPlugin(pluginId: string, manifest: {
+    exportedCapabilities?: Record<string, unknown>,
+    providedCapabilities?: Record<string, { version: string }>,
+    consumedCapabilities?: Record<string, { range: string }>
+  }, loadOrder: number) {
     const exportedCapabilities = sortStrings(Object.keys(manifest.exportedCapabilities ?? {}));
-    const consumedCapabilities = sortStrings(manifest.consumedCapabilities ?? []);
+    const consumedCapabilities = Object.entries(manifest.consumedCapabilities ?? {})
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([capability, declaration]) => ({ capability, range: declaration.range }));
+    const providedCapabilities = Object.entries(manifest.providedCapabilities ?? {})
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([capability, declaration]) => ({ capability, version: declaration.version }));
 
     this.unregisterPlugin(pluginId);
 
@@ -16,6 +25,7 @@ export class TopologyGraph {
       pluginId,
       loadOrder,
       exportedCapabilities,
+      providedCapabilities,
       consumedCapabilities
     };
 
@@ -26,7 +36,8 @@ export class TopologyGraph {
         this.providers.set(capabilityName, new Set());
       }
 
-      this.providers.get(capabilityName).add(pluginId);
+      const capabilityVersion = manifest.providedCapabilities?.[capabilityName]?.version ?? '0.0.0';
+      this.providers.get(capabilityName).add(Object.freeze({ pluginId, version: capabilityVersion, loadOrder }));
     }
   }
 
@@ -42,7 +53,11 @@ export class TopologyGraph {
         continue;
       }
 
-      providerSet.delete(pluginId);
+      for (const provider of Array.from(providerSet)) {
+        if (provider.pluginId === pluginId) {
+          providerSet.delete(provider);
+        }
+      }
       if (providerSet.size === 0) {
         this.providers.delete(capabilityName);
       }
@@ -52,7 +67,13 @@ export class TopologyGraph {
   }
 
   getProviderIds(capabilityName: string) {
-    return sortStrings(Array.from(this.providers.get(capabilityName) ?? []));
+    return sortStrings(Array.from(this.providers.get(capabilityName) ?? []).map((provider) => provider.pluginId));
+  }
+
+  getCapabilityProviders(capabilityName: string) {
+    return Array.from(this.providers.get(capabilityName) ?? [])
+      .map((provider) => ({ ...provider }))
+      .sort((left, right) => left.loadOrder - right.loadOrder || left.pluginId.localeCompare(right.pluginId));
   }
 
   getNodes() {
@@ -65,14 +86,14 @@ export class TopologyGraph {
     const edges = [];
 
     for (const node of this.getNodes()) {
-      for (const capabilityName of node.consumedCapabilities) {
-        const providers = this.getProviderIds(capabilityName);
+      for (const consumption of node.consumedCapabilities) {
+        const providers = this.getProviderIds(consumption.capability);
 
         for (const providerId of providers) {
           edges.push({
             from: node.pluginId,
             to: providerId,
-            capability: capabilityName
+            capability: consumption.capability
           });
         }
       }

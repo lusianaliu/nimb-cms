@@ -137,7 +137,7 @@ export default register;
   await assert.rejects(() => consumer.invoke(), /inactive/);
 });
 
-test('duplicate capability providers fail deterministically while other plugins remain isolated', async () => {
+test('duplicate capability providers can coexist without direct consumer dependency', async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'nimb-capability-dupe-'));
 
   const providerManifest = (id) => `
@@ -178,6 +178,6 @@ export const pluginManifest = {
   const consumer = records.find((record) => record.id === 'z-consumer-plugin');
 
   assert.equal(aProvider?.state, 'active');
-  assert.equal(bProvider?.state, 'failed');
+  assert.equal(bProvider?.state, 'active');
   assert.equal(consumer?.state, 'active');
 });

@@ -98,6 +98,8 @@ export type SDKPlugin = {
     declaredCapabilities: string[];
     exportedEvents: string[];
     exportedCapabilities: Record<string, CapabilityProviderFactory>;
+    providedCapabilities?: Record<string, { version: string }>;
+    consumedCapabilities?: Record<string, { range: string }> | string[];
     requiredPlatformContracts: Record<string, string>;
   };
   register: (contracts: Partial<RuntimeContracts>) => Promise<Disposable>;
