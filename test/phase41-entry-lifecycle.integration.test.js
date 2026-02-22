@@ -6,7 +6,7 @@ import path from 'node:path';
 import { createBootstrap } from '../core/bootstrap/index.ts';
 import { createHttpServer } from '../core/http/index.ts';
 
-const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase40-'));
+const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase41-'));
 
 const writeConfig = (cwd, config) => {
   fs.writeFileSync(path.join(cwd, 'nimb.config.json'), `${JSON.stringify(config, null, 2)}\n`);
@@ -17,7 +17,7 @@ const getJson = async (url, headers = {}) => {
   return { status: response.status, body: await response.json() };
 };
 
-const postJson = async (url, body, headers = {}) => {
+const postJson = async (url, body = {}, headers = {}) => {
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -32,12 +32,25 @@ const postJson = async (url, body, headers = {}) => {
 
 const startServer = async (cwd) => {
   const bootstrap = await createBootstrap({ cwd, startupTimestamp: '2026-01-01T00:00:00.000Z' });
+  const clockValues = [
+    '2026-01-01T00:00:10.000Z',
+    '2026-01-01T00:00:11.000Z',
+    '2026-01-01T00:00:12.000Z',
+    '2026-01-01T00:00:13.000Z',
+    '2026-01-01T00:00:14.000Z'
+  ];
+  let index = 0;
+
   const server = createHttpServer({
     runtime: bootstrap.runtime,
     config: bootstrap.config,
     startupTimestamp: '2026-01-01T00:00:00.000Z',
     port: 0,
-    clock: () => '2026-01-01T00:00:10.000Z',
+    clock: () => {
+      const value = clockValues[Math.min(index, clockValues.length - 1)];
+      index += 1;
+      return value;
+    },
     authService: bootstrap.authService,
     authMiddleware: bootstrap.authMiddleware,
     adminController: bootstrap.adminController,
@@ -51,11 +64,12 @@ const startServer = async (cwd) => {
   return { server, port };
 };
 
-test('phase 40: deterministic content entries', async () => {
+test('phase 41: deterministic entry lifecycle transitions', async () => {
   const cwd = mkdtemp();
   writeConfig(cwd, { name: 'nimb-app', plugins: [], runtime: { logLevel: 'info', mode: 'development' } });
 
   const first = await startServer(cwd);
+  let entryId = '';
 
   try {
     const baseUrl = `http://127.0.0.1:${first.port}`;
@@ -72,37 +86,36 @@ test('phase 40: deterministic content entries', async () => {
     }, headers);
     assert.equal(schemaCreated.status, 200);
 
-    const firstEntry = await postJson(`${baseUrl}/api/admin/entries/article`, {
-      title: 'B title',
-      body: 'second'
+    const created = await postJson(`${baseUrl}/api/admin/entries/article`, {
+      title: 'Lifecycle',
+      body: 'Entry'
     }, headers);
-    assert.equal(firstEntry.status, 200);
+    assert.equal(created.status, 200);
+    assert.equal(created.body.data.entry.state, 'draft');
+    entryId = created.body.data.entry.id;
 
-    const secondEntry = await postJson(`${baseUrl}/api/admin/entries/article`, {
-      body: 'first',
-      title: 'A title'
-    }, headers);
-    assert.equal(secondEntry.status, 200);
-
-    const invalid = await postJson(`${baseUrl}/api/admin/entries/article`, {
-      title: 'missing body'
-    }, headers);
+    const invalid = await postJson(`${baseUrl}/api/admin/entries/article/${encodeURIComponent(entryId)}/archive`, {}, headers);
     assert.equal(invalid.status, 400);
+
+    const published = await postJson(`${baseUrl}/api/admin/entries/article/${encodeURIComponent(entryId)}/publish`, {}, headers);
+    assert.equal(published.status, 200);
+    assert.equal(published.body.data.entry.state, 'published');
+
+    const archived = await postJson(`${baseUrl}/api/admin/entries/article/${encodeURIComponent(entryId)}/archive`, {}, headers);
+    assert.equal(archived.status, 200);
+    assert.equal(archived.body.data.entry.state, 'archived');
+
+    const backToDraft = await postJson(`${baseUrl}/api/admin/entries/article/${encodeURIComponent(entryId)}/draft`, {}, headers);
+    assert.equal(backToDraft.status, 200);
+    assert.equal(backToDraft.body.data.entry.state, 'draft');
 
     const listed = await getJson(`${baseUrl}/api/entries/article`);
     assert.equal(listed.status, 200);
-    assert.equal(listed.body.data.entries.length, 2);
-    assert.deepEqual(
-      listed.body.data.entries.map((entry) => entry.id),
-      [...listed.body.data.entries.map((entry) => entry.id)].sort((left, right) => left.localeCompare(right))
-    );
-
-    const byId = await getJson(`${baseUrl}/api/entries/article/${encodeURIComponent(listed.body.data.entries[0].id)}`);
-    assert.equal(byId.status, 200);
+    assert.equal(listed.body.data.entries[0].state, 'draft');
 
     const inspector = await getJson(`${baseUrl}/inspector`);
     assert.equal(inspector.status, 200);
-    assert.deepEqual(inspector.body.entries, [{ type: 'article', count: 2, states: { draft: 2, published: 0, archived: 0 } }]);
+    assert.deepEqual(inspector.body.entries, [{ type: 'article', count: 1, states: { draft: 1, published: 0, archived: 0 } }]);
   } finally {
     await first.server.stop();
   }
@@ -112,9 +125,9 @@ test('phase 40: deterministic content entries', async () => {
   const second = await startServer(cwd);
   try {
     const baseUrl = `http://127.0.0.1:${second.port}`;
-    const restored = await getJson(`${baseUrl}/api/entries/article`);
+    const restored = await getJson(`${baseUrl}/api/entries/article/${encodeURIComponent(entryId)}`);
     assert.equal(restored.status, 200);
-    assert.equal(restored.body.data.entries.length, 2);
+    assert.equal(restored.body.data.entry.state, 'draft');
 
     const persistedReplay = fs.readFileSync(path.join(cwd, '.nimb', 'content-entries.json'), 'utf8');
     assert.equal(persistedReplay, persisted);
