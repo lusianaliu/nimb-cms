@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nimb Admin</title>
+    <link rel="stylesheet" href="/admin/styles.css" />
+  </head>
+  <body>
+    <main class="layout">
+      <section id="login-panel" class="panel">
+        <h1>Nimb Admin Login</h1>
+        <form id="login-form" class="stack">
+          <label for="username">Username</label>
+          <input id="username" name="username" type="text" value="admin" required />
+
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" value="admin" required />
+
+          <button id="login-button" type="submit">Login</button>
+        </form>
+        <p id="login-status" class="status"></p>
+      </section>
+
+      <section id="dashboard-panel" class="panel hidden">
+        <h1>Nimb Runtime Dashboard</h1>
+        <p id="session-status" class="status"></p>
+
+        <div class="grid">
+          <article>
+            <h2>Runtime Status</h2>
+            <pre id="runtime-output" class="output"></pre>
+          </article>
+
+          <article>
+            <h2>System Status</h2>
+            <pre id="system-output" class="output"></pre>
+          </article>
+
+          <article>
+            <h2>Admin Status</h2>
+            <pre id="admin-output" class="output"></pre>
+          </article>
+        </div>
+
+        <section>
+          <h2>Admin Commands</h2>
+          <div class="actions">
+            <button id="restart-runtime" type="button">Restart Runtime</button>
+            <button id="persist-state" type="button">Persist State</button>
+            <button id="reconcile-goals" type="button">Reconcile Goals</button>
+          </div>
+          <p id="action-status" class="status"></p>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="/admin/login.js"></script>
+    <script type="module" src="/admin/dashboard.js"></script>
+  </body>
+</html>

@@ -1,0 +1,63 @@
+:root {
+  color-scheme: light;
+  font-family: Arial, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.layout {
+  margin: 0 auto;
+  max-width: 1000px;
+  padding: 24px;
+}
+
+.panel {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.hidden {
+  display: none;
+}
+
+.stack {
+  display: grid;
+  gap: 8px;
+  max-width: 320px;
+}
+
+input,
+button {
+  font: inherit;
+  padding: 8px;
+}
+
+.grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.output {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  min-height: 180px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.status {
+  min-height: 20px;
+}
