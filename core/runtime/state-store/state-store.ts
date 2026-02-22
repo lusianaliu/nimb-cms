@@ -17,9 +17,10 @@ const normalizeStateName = (name: unknown) => {
 };
 
 export class RuntimeStateStore {
-  constructor(options: { logger?: { error?: (message: string, metadata?: Record<string, unknown>) => void }, eventSystem?: { emitInternal?: (eventName: string, payload: unknown) => Promise<void> } } = {}) {
+  constructor(options: { logger?: { error?: (message: string, metadata?: Record<string, unknown>) => void }, eventSystem?: { emitInternal?: (eventName: string, payload: unknown) => Promise<void> }, healthReporter?: (failure: { pluginId: string, source: string, stateName?: string, error: unknown }) => Promise<void> | void } = {}) {
     this.logger = options.logger;
     this.eventSystem = options.eventSystem;
+    this.healthReporter = options.healthReporter;
     this.stateByKey = new Map();
     this.subscribersByPlugin = new Map();
     this.subscriptionSequence = 0;
@@ -60,42 +61,58 @@ export class RuntimeStateStore {
     }
 
     const executeUpdate = async () => {
-      const stateRecord = this.getOwnedState(pluginId, normalizedName);
-      const previousValue = cloneValue(stateRecord.value);
-      const nextValue = await Promise.resolve(updater(cloneValue(stateRecord.value)));
-      stateRecord.value = cloneValue(nextValue);
+      try {
+        const stateRecord = this.getOwnedState(pluginId, normalizedName);
+        const previousValue = cloneValue(stateRecord.value);
+        const nextValue = await Promise.resolve(updater(cloneValue(stateRecord.value)));
+        stateRecord.value = cloneValue(nextValue);
 
-      const orderedSubscribers = [...stateRecord.subscribers.values()].sort((left, right) => left.id - right.id);
-      for (const subscriber of orderedSubscribers) {
-        if (!subscriber.active) {
-          continue;
+        const orderedSubscribers = [...stateRecord.subscribers.values()].sort((left, right) => left.id - right.id);
+        for (const subscriber of orderedSubscribers) {
+          if (!subscriber.active) {
+            continue;
+          }
+
+          try {
+            await Promise.resolve(subscriber.handler(cloneValue(stateRecord.value), {
+              name: normalizedName,
+              owner: pluginId,
+              previousValue
+            }));
+          } catch (error) {
+            this.logger?.error?.('plugin.runtime.state.subscriber.failure', {
+              owner: pluginId,
+              name: normalizedName,
+              subscriber: subscriber.pluginId,
+              error: createStructuredError(error)
+            });
+            void Promise.resolve().then(() => this.healthReporter?.({
+              pluginId: subscriber.pluginId,
+              source: 'state',
+              stateName: normalizedName,
+              error
+            }));
+          }
         }
 
-        try {
-          await Promise.resolve(subscriber.handler(cloneValue(stateRecord.value), {
-            name: normalizedName,
-            owner: pluginId,
-            previousValue
-          }));
-        } catch (error) {
-          this.logger?.error?.('plugin.runtime.state.subscriber.failure', {
-            owner: pluginId,
-            name: normalizedName,
-            subscriber: subscriber.pluginId,
-            error: createStructuredError(error)
-          });
-        }
+        const stateKey = this.createStateKey(pluginId, normalizedName);
+        this.stateTrace?.recordMutation(pluginId, stateKey);
+
+        await this.eventSystem?.emitInternal?.('plugin.runtime.state.updated', {
+          owner: pluginId,
+          name: normalizedName
+        });
+
+        return cloneValue(stateRecord.value);
+      } catch (error) {
+        void Promise.resolve().then(() => this.healthReporter?.({
+          pluginId,
+          source: 'state',
+          stateName: normalizedName,
+          error
+        }));
+        throw error;
       }
-
-      const stateKey = this.createStateKey(pluginId, normalizedName);
-      this.stateTrace?.recordMutation(pluginId, stateKey);
-
-      await this.eventSystem?.emitInternal?.('plugin.runtime.state.updated', {
-        owner: pluginId,
-        name: normalizedName
-      });
-
-      return cloneValue(stateRecord.value);
     };
 
     this.updateQueue = this.updateQueue.then(executeUpdate);

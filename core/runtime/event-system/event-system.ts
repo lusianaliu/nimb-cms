@@ -34,6 +34,7 @@ export class EventSystem {
     this.internalSubscriptions = new Map();
     this.internalSequence = 0;
     this.internalDispatchQueue = Promise.resolve();
+    this.healthReporter = options.healthReporter;
   }
 
   onInternal(eventName, handler) {
@@ -212,6 +213,12 @@ export class EventSystem {
             subscriber: subscription.pluginId,
             error: createStructuredError(error)
           });
+          void Promise.resolve().then(() => this.healthReporter?.({
+            pluginId: subscription.pluginId,
+            source: 'event',
+            eventName,
+            error
+          }));
         }
       }
     };
