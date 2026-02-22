@@ -17,6 +17,7 @@ export const createInspectorRoute = ({ runtime }) => {
         goals: inspector.goals(),
         orchestrator: inspector.orchestrator(),
         persistence: inspector.persistence(),
+        admin: inspector.admin(),
         state: cachedState
       });
     }

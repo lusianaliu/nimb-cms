@@ -134,6 +134,8 @@ export class PluginRuntime {
     this.authStatus = Object.freeze({ activeSessions: 0, users: Object.freeze([]), authHealth: 'idle' });
     this.restoredRuntimeState = null;
     this.runtimeStarted = false;
+    this.adminExecutor = options.adminExecutor ?? (async () => ({ success: false, outcome: 'unsupported' }));
+    this.adminStatusProvider = options.adminStatusProvider ?? (() => Object.freeze({ lastCommands: Object.freeze([]), commandHistory: Object.freeze([]), adminHealth: 'idle' }));
     this.inspector = options.inspector ?? new RuntimeInspector({
       registry: this.registry,
       eventTrace: this.eventTrace,
@@ -153,7 +155,8 @@ export class PluginRuntime {
       stateProvider: () => this.getState(),
       bootstrapProvider: () => this.bootstrapSnapshot,
       persistenceProvider: () => this.persistenceStatus,
-      authProvider: () => this.authStatus
+      authProvider: () => this.authStatus,
+      adminProvider: () => this.getAdminStatus()
     });
   }
 
@@ -215,7 +218,32 @@ export class PluginRuntime {
     });
   }
 
+  setAdminExecutor(executor) {
+    this.adminExecutor = typeof executor === 'function'
+      ? executor
+      : (async () => ({ success: false, outcome: 'unsupported' }));
 
+    return this.adminExecutor;
+  }
+
+  setAdminStatusProvider(provider) {
+    this.adminStatusProvider = typeof provider === 'function'
+      ? provider
+      : (() => Object.freeze({ lastCommands: Object.freeze([]), commandHistory: Object.freeze([]), adminHealth: 'idle' }));
+
+    return this.adminStatusProvider;
+  }
+
+  async executeAdminCommand(command) {
+    this.diagnosticsChannel.emit('admin:command:accepted', { action: command?.action, requestId: command?.requestId });
+    const result = await this.adminExecutor(command);
+    this.diagnosticsChannel.emit('admin:command:completed', { action: command?.action, requestId: command?.requestId, success: result?.success === true });
+    return Object.freeze({ ...result });
+  }
+
+  getAdminStatus() {
+    return this.adminStatusProvider();
+  }
 
   registerGoal(goal) {
     return this.goalEngine.register(goal);
