@@ -130,6 +130,9 @@ export class PluginRuntime {
       rejectedPlugins: []
     });
     this.bootstrapSnapshot = BootstrapSnapshot.empty();
+    this.persistenceStatus = Object.freeze({ lastSaveTime: null, storedKeys: Object.freeze([]), storageHealth: 'idle' });
+    this.restoredRuntimeState = null;
+    this.runtimeStarted = false;
     this.inspector = options.inspector ?? new RuntimeInspector({
       registry: this.registry,
       eventTrace: this.eventTrace,
@@ -147,7 +150,8 @@ export class PluginRuntime {
       orchestratorProvider: () => this.orchestrator?.snapshot?.() ?? OrchestratorSnapshot.empty(),
       goalsProvider: () => this.goalEngine?.snapshot?.() ?? GoalSnapshot.empty(),
       stateProvider: () => this.getState(),
-      bootstrapProvider: () => this.bootstrapSnapshot
+      bootstrapProvider: () => this.bootstrapSnapshot,
+      persistenceProvider: () => this.persistenceStatus
     });
   }
 
@@ -160,7 +164,30 @@ export class PluginRuntime {
     return this.bootstrapSnapshot;
   }
 
+  setPersistenceStatus(status) {
+    this.persistenceStatus = Object.freeze({
+      lastSaveTime: status?.lastSaveTime ?? null,
+      storedKeys: Object.freeze([...(status?.storedKeys ?? [])]),
+      storageHealth: status?.storageHealth ?? 'idle'
+    });
+
+    return this.persistenceStatus;
+  }
+
+  setRestoredState(snapshot) {
+    this.restoredRuntimeState = snapshot ?? null;
+    return this.restoredRuntimeState;
+  }
+
+  getRestoredState() {
+    return this.restoredRuntimeState;
+  }
+
   getState() {
+    if (!this.runtimeStarted && this.restoredRuntimeState) {
+      return this.restoredRuntimeState;
+    }
+
     if (!this.stateProjector || typeof this.stateProjector.project !== 'function') {
       return RuntimeStateSnapshot.empty();
     }
@@ -195,6 +222,7 @@ export class PluginRuntime {
   }
 
   async start() {
+    this.runtimeStarted = true;
     const descriptors = await this.loader.discover();
     const validated = [];
 

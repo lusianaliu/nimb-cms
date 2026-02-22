@@ -26,7 +26,8 @@ export class RuntimeInspector {
     orchestratorProvider?: () => unknown,
     goalsProvider?: () => unknown,
     stateProvider?: () => unknown,
-    bootstrapProvider?: () => unknown
+    bootstrapProvider?: () => unknown,
+    persistenceProvider?: () => unknown
   } = {}) {
     this.registry = options.registry;
     this.eventTrace = options.eventTrace;
@@ -45,6 +46,7 @@ export class RuntimeInspector {
     this.goalsProvider = options.goalsProvider;
     this.stateProvider = options.stateProvider;
     this.bootstrapProvider = options.bootstrapProvider;
+    this.persistenceProvider = options.persistenceProvider;
   }
 
   health() {
@@ -136,6 +138,14 @@ export class RuntimeInspector {
 
   bootstrap() {
     return this.bootstrapProvider?.() ?? emptyBootstrapSnapshot();
+  }
+
+  persistence() {
+    return this.persistenceProvider?.() ?? Object.freeze({
+      lastSaveTime: null,
+      storedKeys: Object.freeze([]),
+      storageHealth: 'idle'
+    });
   }
 
   snapshot() {
