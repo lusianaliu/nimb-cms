@@ -13,6 +13,7 @@ import { CapabilityRouter } from '../routing/index.ts';
 import { SandboxRunner } from '../sandbox/index.ts';
 import { PolicyEngine } from '../policy/index.ts';
 import { Scheduler } from '../scheduler/index.ts';
+import { Reconciler, ReconcileLoop } from '../reconciler/index.ts';
 
 const noopDisposer = () => {};
 
@@ -64,6 +65,18 @@ export class PluginRuntime {
         dependencyCascadeStop: async (pluginId) => this.dependencyCascadeStop(pluginId)
       }
     });
+    this.reconciler = options.reconciler ?? new Reconciler({
+      diagnosticsChannel: this.diagnosticsChannel,
+      topologyProvider: () => this.getTopologySnapshot(),
+      healthProvider: () => this.healthMonitor.snapshot(),
+      schedulerProvider: () => this.scheduler.snapshot(),
+      policyProvider: () => this.policyEngine.snapshot()
+    });
+    this.reconcileLoop = options.reconcileLoop ?? new ReconcileLoop({
+      reconciler: this.reconciler,
+      scheduler: this.scheduler,
+      diagnosticsChannel: this.diagnosticsChannel
+    });
     this.capabilityResolver = options.capabilityResolver ?? new CapabilityResolver({
       registry: this.registry,
       logger: this.logger,
@@ -105,7 +118,8 @@ export class PluginRuntime {
       routingProvider: () => this.capabilityRouter.snapshot(),
       sandboxProvider: () => this.sandboxRunner.snapshot(),
       policyProvider: () => this.policyEngine.snapshot(),
-      schedulerProvider: () => this.scheduler.snapshot()
+      schedulerProvider: () => this.scheduler.snapshot(),
+      reconcilerProvider: () => this.reconciler.snapshot()
     });
   }
 
@@ -302,6 +316,11 @@ export class PluginRuntime {
         throw scheduled?.error ?? new Error(`scheduled lifecycle execution failed for plugin ${descriptor.id}`);
       }
 
+      await this.reconcileLoop.runAfterSchedulerCycle({
+        executeAction: (action) => this.executeReconcileAction(action),
+        policyDecision: Object.freeze({ allowExecution: true, degradedMode: false, retryStrategy: 'none', reasons: Object.freeze([]) })
+      });
+
       const disposer = scheduled.value;
       if (disposer !== undefined && typeof disposer !== 'function') {
         throw new Error('register entrypoint must return a disposer function when provided');
@@ -325,6 +344,30 @@ export class PluginRuntime {
       await this.healthMonitor.recordFailure({ pluginId: descriptor.id, source: 'lifecycle', error });
       return false;
     }
+  }
+
+
+  async executeReconcileAction(action) {
+    if (action.type === 'restart-plugin' || action.type === 'schedule-plugin') {
+      return this.retryActivation(action.pluginId);
+    }
+
+    if (action.type === 'remove-topology-node') {
+      return this.removeInvalidTopologyNode(action.pluginId);
+    }
+
+    return false;
+  }
+
+  async removeInvalidTopologyNode(pluginId) {
+    this.topologyGraph.unregisterPlugin(pluginId);
+    this.activationCatalog.delete(pluginId);
+    this.lastActivationPlan = this.lastActivationPlan.filter((entry) => entry !== pluginId);
+    this.stateStore.unloadPlugin(pluginId);
+    this.eventSystem.unregisterPlugin(pluginId);
+    this.capabilityResolver.unbindProvider(pluginId);
+    this.healthMonitor.clearPlugin(pluginId);
+    return true;
   }
 
   async retryActivation(pluginId) {
