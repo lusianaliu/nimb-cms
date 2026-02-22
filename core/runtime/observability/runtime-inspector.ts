@@ -31,7 +31,8 @@ export class RuntimeInspector {
     authProvider?: () => unknown,
     adminProvider?: () => unknown,
     contentProvider?: () => unknown,
-    entriesProvider?: () => unknown
+    entriesProvider?: () => unknown,
+    entryQueryProvider?: () => unknown
   } = {}) {
     this.registry = options.registry;
     this.eventTrace = options.eventTrace;
@@ -55,6 +56,7 @@ export class RuntimeInspector {
     this.adminProvider = options.adminProvider;
     this.contentProvider = options.contentProvider;
     this.entriesProvider = options.entriesProvider;
+    this.entryQueryProvider = options.entryQueryProvider;
   }
 
   health() {
@@ -182,6 +184,10 @@ export class RuntimeInspector {
 
   entries() {
     return this.entriesProvider?.() ?? Object.freeze([]);
+  }
+
+  entryQuery() {
+    return this.entryQueryProvider?.() ?? Object.freeze({ totalQueries: 0, lastQuery: null });
   }
 
   snapshot() {

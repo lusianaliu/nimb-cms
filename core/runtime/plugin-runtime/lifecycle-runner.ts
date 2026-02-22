@@ -138,6 +138,7 @@ export class PluginRuntime {
     this.adminStatusProvider = options.adminStatusProvider ?? (() => Object.freeze({ lastCommands: Object.freeze([]), commandHistory: Object.freeze([]), adminHealth: 'idle' }));
     this.contentStatusProvider = options.contentStatusProvider ?? (() => Object.freeze({ registeredTypes: Object.freeze([]), schemaHashes: Object.freeze([]), validation: Object.freeze({ valid: true, errors: Object.freeze([]) }) }));
     this.entryStatusProvider = options.entryStatusProvider ?? (() => Object.freeze([]));
+    this.entryQueryStatusProvider = options.entryQueryStatusProvider ?? (() => Object.freeze({ totalQueries: 0, lastQuery: null }));
     this.inspector = options.inspector ?? new RuntimeInspector({
       registry: this.registry,
       eventTrace: this.eventTrace,
@@ -160,7 +161,8 @@ export class PluginRuntime {
       authProvider: () => this.authStatus,
       adminProvider: () => this.getAdminStatus(),
       contentProvider: () => this.getContentStatus(),
-      entriesProvider: () => this.getEntryStatus()
+      entriesProvider: () => this.getEntryStatus(),
+      entryQueryProvider: () => this.getEntryQueryStatus()
     });
   }
 
@@ -260,6 +262,18 @@ export class PluginRuntime {
 
   getEntryStatus() {
     return this.entryStatusProvider?.() ?? Object.freeze([]);
+  }
+
+  setEntryQueryStatusProvider(provider) {
+    this.entryQueryStatusProvider = typeof provider === 'function'
+      ? provider
+      : (() => Object.freeze({ totalQueries: 0, lastQuery: null }));
+
+    return this.entryQueryStatusProvider;
+  }
+
+  getEntryQueryStatus() {
+    return this.entryQueryStatusProvider?.() ?? Object.freeze({ totalQueries: 0, lastQuery: null });
   }
 
   async executeAdminCommand(command) {

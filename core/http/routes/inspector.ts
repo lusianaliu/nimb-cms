@@ -20,6 +20,7 @@ export const createInspectorRoute = ({ runtime }) => {
         admin: inspector.admin(),
         content: inspector.content(),
         entries: inspector.entries(),
+        entryQuery: inspector.entryQuery?.() ?? { totalQueries: 0, lastQuery: null },
         state: cachedState
       });
     }

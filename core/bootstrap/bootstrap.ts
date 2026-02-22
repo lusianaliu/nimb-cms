@@ -128,6 +128,7 @@ export const createBootstrap = async ({ cwd = process.cwd(), startupTimestamp = 
   await persistEntries();
   runtime.setContentStatusProvider?.(() => contentRegistry.inspectorSnapshot());
   runtime.setEntryStatusProvider?.(() => entryRegistry.inspectorSnapshot());
+  runtime.setEntryQueryStatusProvider?.(() => entryRegistry.queryInspectorSnapshot());
 
   return Object.freeze({
     config,
