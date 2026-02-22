@@ -134,7 +134,7 @@ export default register;
   const consumer = await import(path.join(tempRoot, 'z-consumer-plugin/register.ts'));
   await runtime.unload('a-provider-plugin');
 
-  await assert.rejects(() => consumer.invoke(), /inactive/);
+  await assert.rejects(() => consumer.invoke(), /inactive|not found/);
 });
 
 test('duplicate capability providers can coexist without direct consumer dependency', async () => {

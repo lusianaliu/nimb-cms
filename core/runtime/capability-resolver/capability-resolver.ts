@@ -25,8 +25,10 @@ export class CapabilityResolver {
     this.logger = options.logger;
     this.interfaceFactories = new Map();
     this.cache = new Map();
+    this.providerInterfaces = new Map();
     this.capabilityTrace = options.capabilityTrace;
     this.healthReporter = options.healthReporter;
+    this.router = options.router;
   }
 
   bindProvider(pluginId, capabilityName, interfaceFactory) {
@@ -35,13 +37,14 @@ export class CapabilityResolver {
     }
 
     this.interfaceFactories.set(`${pluginId}:${capabilityName}`, interfaceFactory);
-    this.cache.delete(capabilityName);
+    this.cache.clear();
   }
 
   unbindProvider(pluginId) {
     for (const providerKey of Array.from(this.interfaceFactories.keys())) {
       if (providerKey.startsWith(`${pluginId}:`)) {
         this.interfaceFactories.delete(providerKey);
+        this.providerInterfaces.delete(providerKey);
       }
     }
 
@@ -61,37 +64,53 @@ export class CapabilityResolver {
       return cached.interface;
     }
 
-    const providerId = this.registry.resolveCapabilityProvider(capabilityName, consumerId);
-    if (!providerId) {
+    const route = this.router?.route?.({
+      consumerId,
+      capabilityName,
+      invocationKey: 'resolve'
+    });
+    const initialProviderId = this.router
+      ? route?.providerId ?? null
+      : this.registry.resolveCapabilityProvider(capabilityName, consumerId);
+    if (!initialProviderId) {
       throw new Error(`[${consumerId}] capability provider not found: ${capabilityName}`);
     }
 
-    const factory = this.interfaceFactories.get(`${providerId}:${capabilityName}`);
-    if (!factory) {
-      throw new Error(`[${consumerId}] capability provider unavailable: ${capabilityName}`);
-    }
-
-    const providerRecord = this.registry.require(providerId);
-    const rawInterface = factory({
-      capability: capabilityName,
-      providerId,
-      manifest: providerRecord.manifest
-    });
-
-    assertCapabilityInterface(rawInterface, capabilityName);
-    this.capabilityTrace?.recordResolution(capabilityName, providerId, consumerId);
-    const guarded = this.createGuardedInterface(consumerId, providerId, capabilityName, rawInterface);
-    this.cache.set(cacheKey, { providerId, interface: guarded });
+    this.getProviderInterface(initialProviderId, capabilityName);
+    this.capabilityTrace?.recordResolution(capabilityName, initialProviderId, consumerId);
+    const guarded = this.createGuardedInterface(consumerId, capabilityName);
+    this.cache.set(cacheKey, { providerId: initialProviderId, interface: guarded });
     return guarded;
   }
 
-  createGuardedInterface(consumerId, providerId, capabilityName, rawInterface) {
-    const guardedEntries = Object.entries(rawInterface).map(([key, member]) => {
-      return [
-        key,
-        async (...args) => {
+  createGuardedInterface(consumerId, capabilityName) {
+    return new Proxy(Object.create(null), {
+      get: (_, memberKey) => {
+        if (typeof memberKey !== 'string') {
+          return undefined;
+        }
+
+        return async (...args) => {
+          const route = this.router?.route?.({
+            consumerId,
+            capabilityName,
+            invocationKey: memberKey
+          });
+          const providerId = this.router
+            ? route?.providerId ?? null
+            : this.registry.resolveCapabilityProvider(capabilityName, consumerId);
+          if (!providerId) {
+            throw new Error(`[${consumerId}] capability provider not found: ${capabilityName}`);
+          }
+
           if (!this.isProviderActive(providerId)) {
             throw new Error(`[${consumerId}] capability provider is inactive: ${capabilityName}`);
+          }
+
+          const providerInterface = this.getProviderInterface(providerId, capabilityName);
+          const member = providerInterface[memberKey];
+          if (typeof member !== 'function') {
+            throw new Error(`[${consumerId}] capability method unavailable: ${capabilityName}.${memberKey}`);
           }
 
           try {
@@ -104,7 +123,7 @@ export class CapabilityResolver {
               capability: capabilityName,
               provider: providerId,
               consumer: consumerId,
-              member: key,
+              member: memberKey,
               error: {
                 message: error instanceof Error ? error.message : String(error)
               }
@@ -117,11 +136,34 @@ export class CapabilityResolver {
             }));
             throw error;
           }
-        }
-      ];
+        };
+      }
+    });
+  }
+
+  getProviderInterface(providerId, capabilityName) {
+    const providerKey = `${providerId}:${capabilityName}`;
+    const cached = this.providerInterfaces.get(providerKey);
+    if (cached) {
+      return cached;
+    }
+
+    const factory = this.interfaceFactories.get(providerKey);
+    if (!factory) {
+      throw new Error(`capability provider unavailable: ${capabilityName}`);
+    }
+
+    const providerRecord = this.registry.require(providerId);
+    const rawInterface = factory({
+      capability: capabilityName,
+      providerId,
+      manifest: providerRecord.manifest
     });
 
-    return Object.freeze(Object.fromEntries(guardedEntries));
+    assertCapabilityInterface(rawInterface, capabilityName);
+    const frozen = Object.freeze({ ...rawInterface });
+    this.providerInterfaces.set(providerKey, frozen);
+    return frozen;
   }
 
   isProviderActive(pluginId) {

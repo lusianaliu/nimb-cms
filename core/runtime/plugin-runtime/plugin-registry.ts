@@ -104,6 +104,21 @@ export class PluginRegistry {
     return providers[0] ?? null;
   }
 
+  listCapabilityProviders(capabilityName) {
+    return [...(this.capabilityProviders.get(capabilityName) ?? [])];
+  }
+
+  isVersionCompatible(consumerId, capabilityName, providerId) {
+    const consumerRecord = consumerId ? this.get(consumerId) : null;
+    const consumerDeclaresCapability = Boolean(consumerRecord?.manifest?.consumedCapabilities?.[capabilityName]);
+    const resolution = this.versionResolutions.get(`${consumerId}:${capabilityName}`);
+    if (!resolution) {
+      return !consumerDeclaresCapability;
+    }
+
+    return resolution.providerId === providerId;
+  }
+
   bindManifestCapabilities(pluginId, manifest) {
     this.unbindCapabilities(pluginId);
 

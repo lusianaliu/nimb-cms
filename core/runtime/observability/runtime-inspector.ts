@@ -9,7 +9,8 @@ export class RuntimeInspector {
     diagnosticsChannel?: { snapshot: () => unknown[] },
     topologyProvider?: () => unknown,
     healthProvider?: () => unknown,
-    versionProvider?: () => unknown
+    versionProvider?: () => unknown,
+    routingProvider?: () => unknown
   } = {}) {
     this.registry = options.registry;
     this.eventTrace = options.eventTrace;
@@ -19,6 +20,7 @@ export class RuntimeInspector {
     this.topologyProvider = options.topologyProvider;
     this.healthProvider = options.healthProvider;
     this.versionProvider = options.versionProvider;
+    this.routingProvider = options.routingProvider;
   }
 
   health() {
@@ -44,6 +46,12 @@ export class RuntimeInspector {
       resolvedVersions: Object.freeze([]),
       compatibilityWarnings: Object.freeze([]),
       rejectedPlugins: Object.freeze([])
+    });
+  }
+
+  routing() {
+    return this.routingProvider?.() ?? Object.freeze({
+      decisions: Object.freeze([])
     });
   }
 
