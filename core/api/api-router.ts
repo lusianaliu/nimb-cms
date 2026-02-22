@@ -35,7 +35,7 @@ const readJsonBody = async (request: { method?: string, headers: Record<string, 
   return JSON.parse(raw);
 };
 
-export const createApiRouter = ({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes }: { runtime: { getInspector: () => unknown }, authService?: { login: (input: { username: string, password: string }) => Promise<unknown>, logout: (token: string) => Promise<boolean>, getSession: (token: string) => unknown }, authMiddleware?: { attach: (context: { request: { headers: Record<string, string | string[] | undefined> } }) => { token: string | null, authenticated: boolean, session: unknown } }, adminController?: { restartRuntime: (input: { requestId: string, payload: unknown }) => Promise<unknown>, persistRuntime: (input: { requestId: string, payload: unknown }) => Promise<unknown>, reconcileGoals: (input: { requestId: string, payload: unknown }) => Promise<unknown>, status: () => unknown }, contentRegistry?: { register: (schema: unknown, options?: { source?: string }) => unknown, list: () => unknown[], get: (name: string) => unknown } , persistContentTypes?: () => Promise<unknown> }) => {
+export const createApiRouter = ({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries }: { runtime: { getInspector: () => unknown }, authService?: { login: (input: { username: string, password: string }) => Promise<unknown>, logout: (token: string) => Promise<boolean>, getSession: (token: string) => unknown }, authMiddleware?: { attach: (context: { request: { headers: Record<string, string | string[] | undefined> } }) => { token: string | null, authenticated: boolean, session: unknown } }, adminController?: { restartRuntime: (input: { requestId: string, payload: unknown }) => Promise<unknown>, persistRuntime: (input: { requestId: string, payload: unknown }) => Promise<unknown>, reconcileGoals: (input: { requestId: string, payload: unknown }) => Promise<unknown>, status: () => unknown }, contentRegistry?: { register: (schema: unknown, options?: { source?: string }) => unknown, list: () => unknown[], get: (name: string) => unknown } , persistContentTypes?: () => Promise<unknown>, entryRegistry?: { create: (type: string, data: unknown, options?: { source?: string, timestamp?: string }) => unknown, list: (type: string) => unknown[], get: (type: string, id: string) => unknown }, persistEntries?: () => Promise<unknown> }) => {
   const routes = defaultRoutes();
   const adminRouter = adminController
     ? createAdminRouter({ controller: adminController, authMiddleware })
@@ -99,6 +99,27 @@ export const createApiRouter = ({ runtime, authService, authMiddleware, adminCon
         return jsonResponse({ success: true, data: { contentType: schema }, meta: {} }, { statusCode: 200 });
       }
 
+      if (context.path.startsWith('/api/entries/') && context.method === 'GET' && entryRegistry) {
+        const parts = context.path.split('/').filter(Boolean);
+
+        if (parts.length === 3) {
+          const type = decodeURIComponent(parts[2]);
+          return jsonResponse({ success: true, data: { entries: entryRegistry.list(type) }, meta: {} }, { statusCode: 200 });
+        }
+
+        if (parts.length === 4) {
+          const type = decodeURIComponent(parts[2]);
+          const id = decodeURIComponent(parts[3]);
+          const entry = entryRegistry.get(type, id);
+
+          if (!entry) {
+            return jsonResponse(createApiError({ code: 'NOT_FOUND', message: `Entry not found: ${type}/${id}` }), { statusCode: 404 });
+          }
+
+          return jsonResponse({ success: true, data: { entry }, meta: {} }, { statusCode: 200 });
+        }
+      }
+
       const requestBody = await readJsonBody(context.request);
 
 
@@ -114,6 +135,23 @@ export const createApiRouter = ({ runtime, authService, authMiddleware, adminCon
           return jsonResponse({ success: true, data: { contentType: schema }, meta: {} }, { statusCode: 200 });
         } catch (error) {
           return jsonResponse(createApiError({ code: 'INVALID_REQUEST', message: error instanceof Error ? error.message : 'Invalid schema' }), { statusCode: 400 });
+        }
+      }
+
+      if (context.path.startsWith('/api/admin/entries/') && context.method === 'POST' && entryRegistry && authMiddleware) {
+        const auth = authMiddleware.attach(context);
+        if (!auth.authenticated) {
+          return jsonResponse(createApiError({ code: 'INVALID_REQUEST', message: 'Invalid token' }), { statusCode: 401 });
+        }
+
+        const type = decodeURIComponent(context.path.slice('/api/admin/entries/'.length));
+
+        try {
+          const entry = entryRegistry.create(type, requestBody, { source: 'admin.command', timestamp: context.timestamp });
+          await persistEntries?.();
+          return jsonResponse({ success: true, data: { entry }, meta: {} }, { statusCode: 200 });
+        } catch (error) {
+          return jsonResponse(createApiError({ code: 'INVALID_REQUEST', message: error instanceof Error ? error.message : 'Invalid entry payload' }), { statusCode: 400 });
         }
       }
 

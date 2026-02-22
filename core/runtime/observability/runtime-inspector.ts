@@ -30,7 +30,8 @@ export class RuntimeInspector {
     persistenceProvider?: () => unknown,
     authProvider?: () => unknown,
     adminProvider?: () => unknown,
-    contentProvider?: () => unknown
+    contentProvider?: () => unknown,
+    entriesProvider?: () => unknown
   } = {}) {
     this.registry = options.registry;
     this.eventTrace = options.eventTrace;
@@ -53,6 +54,7 @@ export class RuntimeInspector {
     this.authProvider = options.authProvider;
     this.adminProvider = options.adminProvider;
     this.contentProvider = options.contentProvider;
+    this.entriesProvider = options.entriesProvider;
   }
 
   health() {
@@ -176,6 +178,10 @@ export class RuntimeInspector {
       schemaHashes: Object.freeze([]),
       validation: Object.freeze({ valid: true, errors: Object.freeze([]) })
     });
+  }
+
+  entries() {
+    return this.entriesProvider?.() ?? Object.freeze([]);
   }
 
   snapshot() {

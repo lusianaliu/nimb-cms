@@ -5,7 +5,7 @@ import { BootstrapSnapshot } from './bootstrap-snapshot.ts';
 import { FileSystemStorageAdapter, PersistenceEngine } from '../persistence/index.ts';
 import { AuthService, SessionStore, createAuthMiddleware } from '../auth/index.ts';
 import { CommandDispatcher, createAdminController } from '../admin/index.ts';
-import { ContentRegistry, ContentStore } from '../content/index.ts';
+import { ContentRegistry, ContentStore, EntryRegistry, EntryStore } from '../content/index.ts';
 
 const toRuntimeStatus = (runtime) => {
   const state = runtime.getState?.();
@@ -26,6 +26,8 @@ export const createBootstrap = async ({ cwd = process.cwd(), startupTimestamp = 
   const authMiddleware = createAuthMiddleware({ authService });
   const contentRegistry = new ContentRegistry();
   const contentStore = new ContentStore({ storageAdapter });
+  const entryRegistry = new EntryRegistry({ contentRegistry });
+  const entryStore = new EntryStore({ storageAdapter });
 
 
   const restore = async () => {
@@ -37,6 +39,9 @@ export const createBootstrap = async ({ cwd = process.cwd(), startupTimestamp = 
     for (const schema of restoredSchemas.types) {
       contentRegistry.register(schema, { source: 'restore' });
     }
+
+    const restoredEntries = await entryStore.restore();
+    entryRegistry.restore(restoredEntries.entries);
   };
 
   const persist = async () => {
@@ -54,6 +59,8 @@ export const createBootstrap = async ({ cwd = process.cwd(), startupTimestamp = 
     schemaVersion: 'v1',
     types: contentRegistry.list()
   });
+
+  const persistEntries = async () => entryStore.persist(entryRegistry.snapshot());
 
   await restore();
   await authService.restore();
@@ -118,7 +125,9 @@ export const createBootstrap = async ({ cwd = process.cwd(), startupTimestamp = 
 
   await persist();
   await persistContentTypes();
+  await persistEntries();
   runtime.setContentStatusProvider?.(() => contentRegistry.inspectorSnapshot());
+  runtime.setEntryStatusProvider?.(() => entryRegistry.inspectorSnapshot());
 
   return Object.freeze({
     config,
@@ -131,6 +140,9 @@ export const createBootstrap = async ({ cwd = process.cwd(), startupTimestamp = 
     adminController,
     contentRegistry,
     contentStore,
-    persistContentTypes
+    persistContentTypes,
+    entryRegistry,
+    entryStore,
+    persistEntries
   });
 };
