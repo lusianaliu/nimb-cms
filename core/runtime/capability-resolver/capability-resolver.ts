@@ -25,6 +25,7 @@ export class CapabilityResolver {
     this.logger = options.logger;
     this.interfaceFactories = new Map();
     this.cache = new Map();
+    this.capabilityTrace = options.capabilityTrace;
   }
 
   bindProvider(pluginId, capabilityName, interfaceFactory) {
@@ -76,6 +77,7 @@ export class CapabilityResolver {
     });
 
     assertCapabilityInterface(rawInterface, capabilityName);
+    this.capabilityTrace?.recordResolution(capabilityName, providerId, consumerId);
     const guarded = this.createGuardedInterface(consumerId, providerId, capabilityName, rawInterface);
     this.cache.set(capabilityName, { providerId, interface: guarded });
     return guarded;
@@ -91,8 +93,11 @@ export class CapabilityResolver {
           }
 
           try {
-            return await Promise.resolve(member(...args));
+            const result = await Promise.resolve(member(...args));
+            this.capabilityTrace?.recordInvocation(capabilityName, providerId, consumerId, true);
+            return result;
           } catch (error) {
+            this.capabilityTrace?.recordInvocation(capabilityName, providerId, consumerId, false);
             this.logger?.error?.('plugin.runtime.capability.failure', {
               capability: capabilityName,
               provider: providerId,

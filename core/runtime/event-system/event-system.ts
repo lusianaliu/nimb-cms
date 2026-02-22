@@ -23,6 +23,7 @@ const toSortedUniqueEvents = (eventNames: unknown, pluginId: string) => {
 export class EventSystem {
   constructor(options = {}) {
     this.logger = options.logger;
+    this.eventTrace = options.eventTrace;
     this.pluginEvents = new Map();
     this.eventDeclarations = new Map();
     this.pluginLoadOrder = new Map();
@@ -185,6 +186,11 @@ export class EventSystem {
 
     const dispatch = async () => {
       const orderedSubscribers = this.getOrderedSubscribers(eventName);
+      this.eventTrace?.recordEmission(
+        eventName,
+        pluginId,
+        orderedSubscribers.filter((subscription) => subscription.active).map((subscription) => subscription.pluginId)
+      );
 
       for (const subscription of orderedSubscribers) {
         if (!subscription.active || !this.pluginSubscriptions.has(subscription.pluginId)) {
