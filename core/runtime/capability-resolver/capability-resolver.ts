@@ -55,12 +55,13 @@ export class CapabilityResolver {
   }
 
   resolveForConsumer(consumerId, capabilityName) {
-    const cached = this.cache.get(capabilityName);
+    const cacheKey = `${consumerId}:${capabilityName}`;
+    const cached = this.cache.get(cacheKey);
     if (cached && this.isProviderActive(cached.providerId)) {
       return cached.interface;
     }
 
-    const providerId = this.registry.resolveCapabilityProvider(capabilityName);
+    const providerId = this.registry.resolveCapabilityProvider(capabilityName, consumerId);
     if (!providerId) {
       throw new Error(`[${consumerId}] capability provider not found: ${capabilityName}`);
     }
@@ -80,7 +81,7 @@ export class CapabilityResolver {
     assertCapabilityInterface(rawInterface, capabilityName);
     this.capabilityTrace?.recordResolution(capabilityName, providerId, consumerId);
     const guarded = this.createGuardedInterface(consumerId, providerId, capabilityName, rawInterface);
-    this.cache.set(capabilityName, { providerId, interface: guarded });
+    this.cache.set(cacheKey, { providerId, interface: guarded });
     return guarded;
   }
 

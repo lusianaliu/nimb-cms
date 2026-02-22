@@ -45,9 +45,40 @@ export class ManifestValidator {
       }
     }
 
+    if (manifest.providedCapabilities !== undefined) {
+      if (!isRecord(manifest.providedCapabilities)) {
+        throw new Error('manifest.providedCapabilities must be an object when provided');
+      }
+
+      for (const [capability, declaration] of Object.entries(manifest.providedCapabilities)) {
+        requireString(capability, 'providedCapabilities key');
+        if (!isRecord(declaration)) {
+          throw new Error(`manifest.providedCapabilities.${capability} must be an object`);
+        }
+
+        requireString(declaration.version, `providedCapabilities.${capability}.version`);
+      }
+    }
+
     if (manifest.consumedCapabilities !== undefined) {
-      if (!Array.isArray(manifest.consumedCapabilities) || manifest.consumedCapabilities.some((capability) => typeof capability !== 'string' || capability.trim().length === 0)) {
-        throw new Error('manifest.consumedCapabilities must be a string array when provided');
+      const isLegacyArray = Array.isArray(manifest.consumedCapabilities);
+      if (!isLegacyArray && !isRecord(manifest.consumedCapabilities)) {
+        throw new Error('manifest.consumedCapabilities must be a string array or object map when provided');
+      }
+
+      if (isLegacyArray && manifest.consumedCapabilities.some((capability) => typeof capability !== 'string' || capability.trim().length === 0)) {
+        throw new Error('manifest.consumedCapabilities array values must be non-empty strings');
+      }
+
+      if (!isLegacyArray) {
+        for (const [capability, declaration] of Object.entries(manifest.consumedCapabilities)) {
+          requireString(capability, 'consumedCapabilities key');
+          if (!isRecord(declaration)) {
+            throw new Error(`manifest.consumedCapabilities.${capability} must be an object`);
+          }
+
+          requireString(declaration.range, `consumedCapabilities.${capability}.range`);
+        }
       }
     }
 
@@ -79,9 +110,19 @@ export class ManifestValidator {
       exportedCapabilities: manifest.exportedCapabilities
         ? { ...manifest.exportedCapabilities }
         : {},
-      consumedCapabilities: manifest.consumedCapabilities
-        ? [...new Set(manifest.consumedCapabilities)].sort()
-        : [],
+      providedCapabilities: Object.fromEntries(
+        Object.entries(manifest.providedCapabilities ?? {}).map(([capability, declaration]) => [
+          capability,
+          { version: declaration.version.trim() }
+        ])
+      ),
+      consumedCapabilities: Array.isArray(manifest.consumedCapabilities)
+        ? Object.fromEntries([...new Set(manifest.consumedCapabilities)].sort().map((capability) => [capability, { range: '*' }]))
+        : Object.fromEntries(
+          Object.entries(manifest.consumedCapabilities ?? {})
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([capability, declaration]) => [capability, { range: declaration.range.trim() }])
+        ),
       requiredPlatformContracts: { ...manifest.requiredPlatformContracts }
     };
   }

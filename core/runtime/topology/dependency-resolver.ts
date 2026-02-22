@@ -4,7 +4,7 @@ export class DependencyResolver {
   }
 
   validate(graph: {
-    getNodes: () => Array<{ pluginId: string, consumedCapabilities: string[] }>,
+    getNodes: () => Array<{ pluginId: string, consumedCapabilities: Array<{ capability: string, range: string }> }>,
     getProviderIds: (capabilityName: string) => string[],
     getEdges: () => Array<{ from: string, to: string, capability: string }>
   }) {
@@ -12,20 +12,20 @@ export class DependencyResolver {
     const duplicateProviders = [];
 
     for (const node of graph.getNodes()) {
-      for (const capabilityName of node.consumedCapabilities) {
-        const providers = graph.getProviderIds(capabilityName);
+      for (const consumption of node.consumedCapabilities) {
+        const providers = graph.getProviderIds(consumption.capability);
 
         if (providers.length === 0) {
           unresolvedDependencies.push({
             pluginId: node.pluginId,
-            capability: capabilityName
+            capability: consumption.capability
           });
         }
 
         if (!this.allowDuplicateProviders && providers.length > 1) {
           duplicateProviders.push({
             pluginId: node.pluginId,
-            capability: capabilityName,
+            capability: consumption.capability,
             providers
           });
         }

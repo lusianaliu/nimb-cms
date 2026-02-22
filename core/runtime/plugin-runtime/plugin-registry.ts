@@ -4,6 +4,7 @@ export class PluginRegistry {
   constructor() {
     this.records = new Map();
     this.capabilityProviders = new Map();
+    this.versionResolutions = new Map();
   }
 
   registerDescriptor(descriptor) {
@@ -38,6 +39,7 @@ export class PluginRegistry {
     record.error = error;
     record.disposer = null;
     this.unbindCapabilities(pluginId);
+    this.clearConsumerResolutions(pluginId);
   }
 
   setDiscovered(pluginId) {
@@ -48,6 +50,7 @@ export class PluginRegistry {
     record.error = null;
 
     this.unbindCapabilities(pluginId);
+    this.clearConsumerResolutions(pluginId);
   }
 
   get(pluginId) {
@@ -79,29 +82,56 @@ export class PluginRegistry {
     return record;
   }
 
-  resolveCapabilityProvider(capabilityName) {
-    return this.capabilityProviders.get(capabilityName) ?? null;
+  setVersionResolutions(resolutions) {
+    this.versionResolutions.clear();
+    for (const resolution of resolutions) {
+      this.versionResolutions.set(`${resolution.consumerId}:${resolution.capability}`, {
+        providerId: resolution.providerId,
+        version: resolution.version
+      });
+    }
+  }
+
+  resolveCapabilityProvider(capabilityName, consumerId = null) {
+    if (consumerId) {
+      const explicit = this.versionResolutions.get(`${consumerId}:${capabilityName}`);
+      if (explicit) {
+        return explicit.providerId;
+      }
+    }
+
+    const providers = this.capabilityProviders.get(capabilityName) ?? [];
+    return providers[0] ?? null;
   }
 
   bindManifestCapabilities(pluginId, manifest) {
     this.unbindCapabilities(pluginId);
 
     for (const capabilityName of Object.keys(manifest.exportedCapabilities ?? {})) {
-      const existingProvider = this.capabilityProviders.get(capabilityName);
-      if (existingProvider && existingProvider !== pluginId) {
-        throw new Error(
-          `duplicate capability provider for "${capabilityName}": ${existingProvider} and ${pluginId}`
-        );
+      if (!this.capabilityProviders.has(capabilityName)) {
+        this.capabilityProviders.set(capabilityName, []);
       }
 
-      this.capabilityProviders.set(capabilityName, pluginId);
+      this.capabilityProviders.get(capabilityName).push(pluginId);
+      this.capabilityProviders.get(capabilityName).sort((left, right) => left.localeCompare(right));
+    }
+  }
+
+  clearConsumerResolutions(pluginId) {
+    for (const key of Array.from(this.versionResolutions.keys())) {
+      if (key.startsWith(`${pluginId}:`)) {
+        this.versionResolutions.delete(key);
+      }
     }
   }
 
   unbindCapabilities(pluginId) {
-    for (const [capabilityName, providerId] of Array.from(this.capabilityProviders.entries())) {
-      if (providerId === pluginId) {
+    for (const [capabilityName, providers] of Array.from(this.capabilityProviders.entries())) {
+      const filtered = providers.filter((providerId) => providerId !== pluginId);
+      if (filtered.length === 0) {
         this.capabilityProviders.delete(capabilityName);
+      } else {
+        this.capabilityProviders.set(capabilityName, filtered);
       }
     }
   }

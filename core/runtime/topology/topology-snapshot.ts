@@ -7,7 +7,8 @@ export class TopologySnapshot {
         pluginId: node.pluginId,
         loadOrder: node.loadOrder,
         exportedCapabilities: [...node.exportedCapabilities],
-        consumedCapabilities: [...node.consumedCapabilities]
+        providedCapabilities: node.providedCapabilities.map((entry) => ({ ...entry })),
+        consumedCapabilities: node.consumedCapabilities.map((entry) => ({ ...entry }))
       }))),
       edges: freezeEntries(graph.getEdges().map((edge) => ({ ...edge }))),
       activationOrder: Object.freeze([...activationOrder]),
