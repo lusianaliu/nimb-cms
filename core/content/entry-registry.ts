@@ -1,5 +1,7 @@
 import { createEntry } from './entry-schema.ts';
 import { validateEntryData } from './entry-validator.ts';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const mutationAllowed = (source) => source === 'admin.command' || source === 'restore';
 
@@ -60,7 +62,7 @@ const ENTRY_TRANSITIONS = Object.freeze({
 const canTransition = ({ from, to }) => (ENTRY_TRANSITIONS[from] ?? Object.freeze([])).includes(to);
 
 export class EntryRegistry {
-  constructor({ contentRegistry }) {
+  constructor({ contentRegistry, rootDirectory = process.cwd() }) {
     if (!contentRegistry) {
       throw new Error('EntryRegistry requires contentRegistry');
     }
@@ -70,6 +72,9 @@ export class EntryRegistry {
     this.entriesById = new Map();
     this.queryCount = 0;
     this.lastQuery = null;
+    this.entriesFilePath = path.join(rootDirectory, 'data', 'entries.json');
+
+    this.#ensureStorageFile();
   }
 
   create(type, data, { source = 'unknown', timestamp = new Date().toISOString(), updatedAt = timestamp } = {}) {
@@ -93,13 +98,67 @@ export class EntryRegistry {
       const updated = createEntry({ type, data: validation.data, state: existing.state, createdAt: existing.createdAt, updatedAt });
       this.entriesById.set(updated.id, updated);
       this.#index(updated);
+      this.#persist();
       return updated;
     }
 
     const created = createEntry({ type, data: validation.data, state: 'draft', createdAt: timestamp, updatedAt });
     this.entriesById.set(created.id, created);
     this.#index(created);
+    this.#persist();
     return created;
+  }
+
+  update(type, id, data, { source = 'unknown', timestamp = new Date().toISOString() } = {}) {
+    if (!mutationAllowed(source)) {
+      throw new Error('Entry mutations require admin command');
+    }
+
+    const entry = this.get(type, id);
+    if (!entry) {
+      throw new Error(`Entry not found: ${type}/${id}`);
+    }
+
+    const schema = this.contentRegistry.get(type);
+    if (!schema) {
+      throw new Error(`Content type not found: ${type}`);
+    }
+
+    const validation = validateEntryData({ schema, input: data });
+    if (!validation.valid) {
+      throw new Error(validation.errors.join('; '));
+    }
+
+    const updated = createEntry({
+      type,
+      data: validation.data,
+      state: entry.state,
+      createdAt: entry.createdAt,
+      updatedAt: timestamp
+    });
+
+    this.entriesById.delete(entry.id);
+    this.entriesById.set(updated.id, updated);
+    this.#index(updated);
+    this.#persist();
+    return updated;
+  }
+
+  delete(type, id, { source = 'unknown' } = {}) {
+    if (!mutationAllowed(source)) {
+      throw new Error('Entry mutations require admin command');
+    }
+
+    const entry = this.get(type, id);
+    if (!entry) {
+      throw new Error(`Entry not found: ${type}/${id}`);
+    }
+
+    this.entriesById.delete(entry.id);
+    const next = (this.entriesByType.get(type) ?? []).filter((candidate) => candidate.id !== entry.id);
+    this.entriesByType.set(type, Object.freeze(next.sort(byCreatedAt)));
+    this.#persist();
+    return entry;
   }
 
   transition(type, id, state, { source = 'unknown', timestamp = new Date().toISOString() } = {}) {
@@ -130,6 +189,7 @@ export class EntryRegistry {
 
     this.entriesById.set(next.id, next);
     this.#index(next);
+    this.#persist();
     return next;
   }
 
@@ -207,6 +267,16 @@ export class EntryRegistry {
     }
   }
 
+  restoreFromDisk() {
+    const payload = this.#readStorage();
+    this.restore(payload.entries);
+  }
+
+  persist() {
+    this.#persist();
+    return this.snapshot();
+  }
+
   snapshot() {
     const all = [...this.entriesById.values()].sort((left, right) => left.id.localeCompare(right.id));
     return Object.freeze({
@@ -241,5 +311,49 @@ export class EntryRegistry {
     const next = current.filter((item) => item.id !== entry.id);
     next.push(entry);
     this.entriesByType.set(entry.type, Object.freeze(next.sort(byCreatedAt)));
+  }
+
+  #ensureStorageFile() {
+    fs.mkdirSync(path.dirname(this.entriesFilePath), { recursive: true });
+    if (!fs.existsSync(this.entriesFilePath)) {
+      const initial = JSON.stringify({ schemaVersion: 'v1', entries: [] }, null, 2);
+      fs.writeFileSync(this.entriesFilePath, `${initial}\n`, 'utf8');
+    }
+  }
+
+  #readStorage() {
+    this.#ensureStorageFile();
+
+    let parsed;
+    try {
+      const content = fs.readFileSync(this.entriesFilePath, 'utf8');
+      parsed = JSON.parse(content);
+    } catch (error) {
+      throw new Error(`Invalid entry storage file at ${this.entriesFilePath}: ${error instanceof Error ? error.message : 'parse failed'}`);
+    }
+
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.entries)) {
+      throw new Error(`Invalid entry storage file at ${this.entriesFilePath}: expected { schemaVersion, entries[] }`);
+    }
+
+    const entries = [...parsed.entries].sort(byId);
+    return Object.freeze({
+      schemaVersion: String(parsed.schemaVersion ?? 'v1'),
+      entries: Object.freeze(entries)
+    });
+  }
+
+  #persist() {
+    this.#ensureStorageFile();
+    const snapshot = this.snapshot();
+    const normalized = {
+      schemaVersion: snapshot.schemaVersion,
+      entries: [...snapshot.entries].sort(byId)
+    };
+    const serialized = `${JSON.stringify(normalized, null, 2)}\n`;
+    const tempPath = `${this.entriesFilePath}.tmp`;
+
+    fs.writeFileSync(tempPath, serialized, 'utf8');
+    fs.renameSync(tempPath, this.entriesFilePath);
   }
 }
