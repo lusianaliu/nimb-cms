@@ -12,6 +12,45 @@ const byCreatedAt = (left, right) => {
   return left.id.localeCompare(right.id);
 };
 
+const byUpdatedAt = (left, right) => {
+  const byTime = left.updatedAt.localeCompare(right.updatedAt);
+  if (byTime !== 0) {
+    return byTime;
+  }
+
+  const byCreated = left.createdAt.localeCompare(right.createdAt);
+  if (byCreated !== 0) {
+    return byCreated;
+  }
+
+  return left.id.localeCompare(right.id);
+};
+
+const byId = (left, right) => left.id.localeCompare(right.id);
+
+const sortComparators = Object.freeze({
+  createdAt: byCreatedAt,
+  updatedAt: byUpdatedAt,
+  id: byId
+});
+
+const normalizeSort = (sort) => (sort === 'updatedAt' || sort === 'id' ? sort : 'createdAt');
+const normalizeOrder = (order) => (String(order ?? '').toLowerCase() === 'desc' ? 'desc' : 'asc');
+
+const normalizePagination = ({ limit, offset }) => {
+  const parsedLimit = Number.parseInt(String(limit ?? ''), 10);
+  const parsedOffset = Number.parseInt(String(offset ?? ''), 10);
+
+  return Object.freeze({
+    limit: Number.isFinite(parsedLimit) && parsedLimit >= 0 ? parsedLimit : null,
+    offset: Number.isFinite(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0
+  });
+};
+
+const withOrder = (comparator, order) => (order === 'desc'
+  ? (left, right) => comparator(right, left)
+  : comparator);
+
 const ENTRY_TRANSITIONS = Object.freeze({
   draft: Object.freeze(['published']),
   published: Object.freeze(['archived']),
@@ -29,6 +68,8 @@ export class EntryRegistry {
     this.contentRegistry = contentRegistry;
     this.entriesByType = new Map();
     this.entriesById = new Map();
+    this.queryCount = 0;
+    this.lastQuery = null;
   }
 
   create(type, data, { source = 'unknown', timestamp = new Date().toISOString(), updatedAt = timestamp } = {}) {
@@ -105,11 +146,39 @@ export class EntryRegistry {
   }
 
   list(type) {
+    return this.query(type);
+  }
+
+  query(type, options = {}) {
     if (!this.contentRegistry.get(type)) {
       return Object.freeze([]);
     }
 
-    return Object.freeze([...(this.entriesByType.get(type) ?? [])].sort(byCreatedAt));
+    const state = typeof options.state === 'string' ? options.state : null;
+    const sort = normalizeSort(options.sort);
+    const order = normalizeOrder(options.order);
+    const pagination = normalizePagination(options);
+    const comparator = withOrder(sortComparators[sort] ?? byCreatedAt, order);
+
+    const sorted = [...(this.entriesByType.get(type) ?? [])].sort(comparator);
+    const filtered = state ? sorted.filter((entry) => entry.state === state) : sorted;
+    const paged = pagination.limit === null
+      ? filtered.slice(pagination.offset)
+      : filtered.slice(pagination.offset, pagination.offset + pagination.limit);
+
+    this.queryCount += 1;
+    this.lastQuery = Object.freeze({
+      type,
+      state,
+      sort,
+      order,
+      limit: pagination.limit,
+      offset: pagination.offset,
+      matchedCount: filtered.length,
+      returnedCount: paged.length
+    });
+
+    return Object.freeze(paged);
   }
 
   get(type, id) {
@@ -158,6 +227,13 @@ export class EntryRegistry {
 
       return Object.freeze({ type, count: entries.length, states: Object.freeze(stateCounts) });
     }));
+  }
+
+  queryInspectorSnapshot() {
+    return Object.freeze({
+      totalQueries: this.queryCount,
+      lastQuery: this.lastQuery
+    });
   }
 
   #index(entry) {

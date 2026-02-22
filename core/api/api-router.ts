@@ -35,14 +35,14 @@ const readJsonBody = async (request: { method?: string, headers: Record<string, 
   return JSON.parse(raw);
 };
 
-export const createApiRouter = ({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries }: { runtime: { getInspector: () => unknown }, authService?: { login: (input: { username: string, password: string }) => Promise<unknown>, logout: (token: string) => Promise<boolean>, getSession: (token: string) => unknown }, authMiddleware?: { attach: (context: { request: { headers: Record<string, string | string[] | undefined> } }) => { token: string | null, authenticated: boolean, session: unknown } }, adminController?: { restartRuntime: (input: { requestId: string, payload: unknown }) => Promise<unknown>, persistRuntime: (input: { requestId: string, payload: unknown }) => Promise<unknown>, reconcileGoals: (input: { requestId: string, payload: unknown }) => Promise<unknown>, status: () => unknown }, contentRegistry?: { register: (schema: unknown, options?: { source?: string }) => unknown, list: () => unknown[], get: (name: string) => unknown } , persistContentTypes?: () => Promise<unknown>, entryRegistry?: { create: (type: string, data: unknown, options?: { source?: string, timestamp?: string }) => unknown, list: (type: string) => unknown[], get: (type: string, id: string) => unknown, publish: (type: string, id: string, options?: { source?: string, timestamp?: string }) => unknown, archive: (type: string, id: string, options?: { source?: string, timestamp?: string }) => unknown, draft: (type: string, id: string, options?: { source?: string, timestamp?: string }) => unknown }, persistEntries?: () => Promise<unknown> }) => {
+export const createApiRouter = ({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries }: { runtime: { getInspector: () => unknown }, authService?: { login: (input: { username: string, password: string }) => Promise<unknown>, logout: (token: string) => Promise<boolean>, getSession: (token: string) => unknown }, authMiddleware?: { attach: (context: { request: { headers: Record<string, string | string[] | undefined> } }) => { token: string | null, authenticated: boolean, session: unknown } }, adminController?: { restartRuntime: (input: { requestId: string, payload: unknown }) => Promise<unknown>, persistRuntime: (input: { requestId: string, payload: unknown }) => Promise<unknown>, reconcileGoals: (input: { requestId: string, payload: unknown }) => Promise<unknown>, status: () => unknown }, contentRegistry?: { register: (schema: unknown, options?: { source?: string }) => unknown, list: () => unknown[], get: (name: string) => unknown } , persistContentTypes?: () => Promise<unknown>, entryRegistry?: { create: (type: string, data: unknown, options?: { source?: string, timestamp?: string }) => unknown, list: (type: string) => unknown[], query: (type: string, options?: { state?: string, limit?: string, offset?: string, sort?: string, order?: string }) => unknown[], get: (type: string, id: string) => unknown, publish: (type: string, id: string, options?: { source?: string, timestamp?: string }) => unknown, archive: (type: string, id: string, options?: { source?: string, timestamp?: string }) => unknown, draft: (type: string, id: string, options?: { source?: string, timestamp?: string }) => unknown }, persistEntries?: () => Promise<unknown> }) => {
   const routes = defaultRoutes();
   const adminRouter = adminController
     ? createAdminRouter({ controller: adminController, authMiddleware })
     : null;
 
   return Object.freeze({
-    async handle(context: { method: string, path: string, timestamp: string, request: { headers: Record<string, string | string[] | undefined>, method?: string, [Symbol.asyncIterator]: () => AsyncIterableIterator<Buffer> } }) {
+    async handle(context: { method: string, path: string, query?: Record<string, string>, timestamp: string, request: { headers: Record<string, string | string[] | undefined>, method?: string, [Symbol.asyncIterator]: () => AsyncIterableIterator<Buffer> } }) {
       if (!context.path.startsWith('/api')) {
         return null;
       }
@@ -104,7 +104,27 @@ export const createApiRouter = ({ runtime, authService, authMiddleware, adminCon
 
         if (parts.length === 3) {
           const type = decodeURIComponent(parts[2]);
-          return jsonResponse({ success: true, data: { entries: entryRegistry.list(type) }, meta: {} }, { statusCode: 200 });
+          const entries = entryRegistry.query(type, {
+            state: context.query?.state,
+            limit: context.query?.limit,
+            offset: context.query?.offset,
+            sort: context.query?.sort,
+            order: context.query?.order
+          });
+
+          return jsonResponse({
+            success: true,
+            data: { entries },
+            meta: {
+              query: {
+                state: context.query?.state ?? null,
+                limit: context.query?.limit ?? null,
+                offset: context.query?.offset ?? null,
+                sort: context.query?.sort ?? null,
+                order: context.query?.order ?? null
+              }
+            }
+          }, { statusCode: 200 });
         }
 
         if (parts.length === 4) {
