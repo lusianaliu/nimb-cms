@@ -260,5 +260,5 @@ export default register;
   assert.deepEqual(c.received, [1, 2]);
 
   const failures = logger.errors.filter((entry) => entry.message === 'plugin.runtime.event.failure');
-  assert.equal(failures.length, 2);
+  assert.equal(failures.length, 1);
 });

@@ -26,6 +26,7 @@ export class CapabilityResolver {
     this.interfaceFactories = new Map();
     this.cache = new Map();
     this.capabilityTrace = options.capabilityTrace;
+    this.healthReporter = options.healthReporter;
   }
 
   bindProvider(pluginId, capabilityName, interfaceFactory) {
@@ -107,6 +108,12 @@ export class CapabilityResolver {
                 message: error instanceof Error ? error.message : String(error)
               }
             });
+            void Promise.resolve().then(() => this.healthReporter?.({
+              pluginId: providerId,
+              source: 'capability',
+              capability: capabilityName,
+              error
+            }));
             throw error;
           }
         }

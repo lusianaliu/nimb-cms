@@ -7,7 +7,8 @@ export class RuntimeInspector {
     capabilityTrace?: { snapshot: () => unknown[] },
     stateTrace?: { snapshot: () => unknown[] },
     diagnosticsChannel?: { snapshot: () => unknown[] },
-    topologyProvider?: () => unknown
+    topologyProvider?: () => unknown,
+    healthProvider?: () => unknown
   } = {}) {
     this.registry = options.registry;
     this.eventTrace = options.eventTrace;
@@ -15,6 +16,16 @@ export class RuntimeInspector {
     this.stateTrace = options.stateTrace;
     this.diagnosticsChannel = options.diagnosticsChannel;
     this.topologyProvider = options.topologyProvider;
+    this.healthProvider = options.healthProvider;
+  }
+
+  health() {
+    return this.healthProvider?.() ?? Object.freeze({
+      plugins: Object.freeze([]),
+      failures: Object.freeze([]),
+      recoveryActions: Object.freeze([]),
+      degradedCapabilities: Object.freeze([])
+    });
   }
 
   topology() {

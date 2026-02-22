@@ -7,6 +7,7 @@ import { DiagnosticsChannel, RuntimeInspector, EventTrace, CapabilityTrace, Stat
 import { PluginRegistry } from './plugin-registry.ts';
 import { TopologyGraph, DependencyResolver, ActivationPlanner, TopologySnapshot } from '../topology/index.ts';
 import { PluginState, RuntimeEvent, createStructuredError } from './runtime-types.ts';
+import { HealthMonitor } from '../health/index.ts';
 
 const noopDisposer = () => {};
 
@@ -24,23 +25,36 @@ export class PluginRuntime {
     this.capabilityTrace = options.capabilityTrace ?? new CapabilityTrace({ diagnosticsChannel: this.diagnosticsChannel });
     this.stateTrace = options.stateTrace ?? new StateTrace({ diagnosticsChannel: this.diagnosticsChannel });
     this.registry = options.registry ?? new PluginRegistry();
+    this.topologyGraph = options.topologyGraph ?? new TopologyGraph();
+    this.dependencyResolver = options.dependencyResolver ?? new DependencyResolver();
+    this.activationPlanner = options.activationPlanner ?? new ActivationPlanner();
+    this.activationCatalog = new Map();
+    this.healthMonitor = options.healthMonitor ?? new HealthMonitor({
+      diagnosticsChannel: this.diagnosticsChannel,
+      recoveryHandlers: {
+        retryActivation: async (pluginId) => this.retryActivation(pluginId),
+        isolatePlugin: async (pluginId) => this.isolatePlugin(pluginId),
+        disableCapabilityProvider: async (pluginId) => this.disableCapabilityProvider(pluginId),
+        dependencyCascadeStop: async (pluginId) => this.dependencyCascadeStop(pluginId)
+      }
+    });
     this.capabilityResolver = options.capabilityResolver ?? new CapabilityResolver({
       registry: this.registry,
       logger: this.logger,
-      capabilityTrace: this.capabilityTrace
+      capabilityTrace: this.capabilityTrace,
+      healthReporter: (failure) => this.healthMonitor.recordFailure(failure)
     });
     this.eventSystem = options.eventSystem ?? new EventSystem({
       logger: this.logger,
-      eventTrace: this.eventTrace
+      eventTrace: this.eventTrace,
+      healthReporter: (failure) => this.healthMonitor.recordFailure(failure)
     });
     this.stateStore = options.stateStore ?? new RuntimeStateStore({
       logger: this.logger,
       eventSystem: this.eventSystem,
-      stateTrace: this.stateTrace
+      stateTrace: this.stateTrace,
+      healthReporter: (failure) => this.healthMonitor.recordFailure(failure)
     });
-    this.topologyGraph = options.topologyGraph ?? new TopologyGraph();
-    this.dependencyResolver = options.dependencyResolver ?? new DependencyResolver();
-    this.activationPlanner = options.activationPlanner ?? new ActivationPlanner();
     this.lastActivationPlan = [];
     this.lastValidation = {
       unresolvedDependencies: [],
@@ -53,7 +67,8 @@ export class PluginRuntime {
       capabilityTrace: this.capabilityTrace,
       stateTrace: this.stateTrace,
       diagnosticsChannel: this.diagnosticsChannel,
-      topologyProvider: () => this.getTopologySnapshot()
+      topologyProvider: () => this.getTopologySnapshot(),
+      healthProvider: () => this.healthMonitor.snapshot()
     });
   }
 
@@ -83,6 +98,7 @@ export class PluginRuntime {
         const manifest = this.validator.validate(manifestData, descriptor);
         this.registry.setValidated(descriptor.id, manifest);
         this.topologyGraph.registerPlugin(descriptor.id, manifest, index);
+        this.activationCatalog.set(descriptor.id, { descriptor, manifest, loadOrder: index });
         this.diagnosticsChannel.emit('plugin.runtime.diagnostics.lifecycle.validate', { plugin: descriptor.id });
         this.logger?.info?.(RuntimeEvent.VALIDATE, {
           plugin: manifest.id,
@@ -185,6 +201,7 @@ export class PluginRuntime {
       this.registry.setActive(descriptor.id, disposer ?? noopDisposer);
       this.diagnosticsChannel.emit('plugin.runtime.diagnostics.lifecycle.activate', { plugin: descriptor.id });
       this.logger?.info?.(RuntimeEvent.ACTIVATE, { plugin: manifest.id });
+      return true;
     } catch (error) {
       this.stateStore.unloadPlugin(descriptor.id);
       this.eventSystem.unregisterPlugin(descriptor.id);
@@ -196,7 +213,84 @@ export class PluginRuntime {
         stage: 'start',
         error: createStructuredError(error)
       });
+      await this.healthMonitor.recordFailure({ pluginId: descriptor.id, source: 'lifecycle', error });
+      return false;
     }
+  }
+
+  async retryActivation(pluginId) {
+    const record = this.registry.get(pluginId);
+    if (!record || record.state === PluginState.ACTIVE) {
+      return false;
+    }
+
+    const activation = this.activationCatalog.get(pluginId);
+    if (!activation) {
+      return false;
+    }
+
+    return this.activatePlugin(activation.descriptor, activation.manifest, activation.loadOrder);
+  }
+
+  async isolatePlugin(pluginId) {
+    const record = this.registry.get(pluginId);
+    if (!record) {
+      return false;
+    }
+
+    this.stateStore.unloadPlugin(pluginId);
+    this.eventSystem.unregisterPlugin(pluginId);
+    this.capabilityResolver.unbindProvider(pluginId);
+    if (record.state !== PluginState.FAILED) {
+      this.registry.setFailed(pluginId, createStructuredError(new Error('plugin isolated by health monitor')));
+    }
+
+    return true;
+  }
+
+  async disableCapabilityProvider(pluginId) {
+    this.capabilityResolver.unbindProvider(pluginId);
+    this.registry.unbindCapabilities(pluginId);
+    return true;
+  }
+
+  async dependencyCascadeStop(pluginId) {
+    const topology = this.getTopologySnapshot();
+    const dependents = this.getDependentPlugins(topology.edges, pluginId);
+
+    for (const dependentId of dependents) {
+      await this.isolatePlugin(dependentId);
+    }
+
+    return dependents;
+  }
+
+  getDependentPlugins(edges, providerId) {
+    const reverse = new Map();
+    for (const edge of edges) {
+      if (!reverse.has(edge.to)) {
+        reverse.set(edge.to, new Set());
+      }
+      reverse.get(edge.to).add(edge.from);
+    }
+
+    const ordered = [];
+    const visited = new Set();
+    const walk = (current) => {
+      const next = Array.from(reverse.get(current) ?? []).sort((left, right) => left.localeCompare(right));
+      for (const entry of next) {
+        if (visited.has(entry)) {
+          continue;
+        }
+
+        visited.add(entry);
+        ordered.push(entry);
+        walk(entry);
+      }
+    };
+
+    walk(providerId);
+    return ordered;
   }
 
   async unload(pluginId) {
@@ -211,6 +305,7 @@ export class PluginRuntime {
       this.eventSystem.unregisterPlugin(pluginId);
       this.capabilityResolver.unbindProvider(pluginId);
       this.registry.setDiscovered(pluginId);
+      this.healthMonitor.clearPlugin(pluginId);
       this.topologyGraph.unregisterPlugin(pluginId);
       this.lastValidation = this.dependencyResolver.validate(this.topologyGraph);
       this.lastActivationPlan = this.activationPlanner.plan(this.topologyGraph);
@@ -228,6 +323,7 @@ export class PluginRuntime {
         stage: 'unload',
         error: createStructuredError(error)
       });
+      await this.healthMonitor.recordFailure({ pluginId, source: 'lifecycle', error });
       return false;
     }
   }
