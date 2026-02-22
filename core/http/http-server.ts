@@ -9,24 +9,28 @@ import { createInspectorRoute } from './routes/inspector.ts';
 import { createApiRouter } from '../api/index.ts';
 import { errorResponse, notFoundResponse } from './response.ts';
 
-const adminUiRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../ui/admin');
-
 const adminContentTypeMap = Object.freeze({
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8'
 });
 
-const resolveAdminAssetPath = (requestPath) => {
-  if (requestPath === '/admin' || requestPath === '/admin/') {
+const normalizeAdminMount = (basePath) => {
+  const value = String(basePath ?? '/admin').trim() || '/admin';
+  const withLeadingSlash = value.startsWith('/') ? value : `/${value}`;
+  return withLeadingSlash.replace(/\/+$/g, '') || '/';
+};
+
+const resolveAdminAssetPath = ({ requestPath, adminBasePath, adminUiRoot }) => {
+  if (requestPath === adminBasePath || requestPath === `${adminBasePath}/`) {
     return path.join(adminUiRoot, 'index.html');
   }
 
-  if (!requestPath.startsWith('/admin/')) {
+  if (!requestPath.startsWith(`${adminBasePath}/`)) {
     return null;
   }
 
-  const relativePath = requestPath.slice('/admin/'.length);
+  const relativePath = requestPath.slice(`${adminBasePath}/`.length);
   if (!relativePath) {
     return path.join(adminUiRoot, 'index.html');
   }
@@ -36,11 +40,19 @@ const resolveAdminAssetPath = (requestPath) => {
     return null;
   }
 
-  return candidate;
+  if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+    return candidate;
+  }
+
+  return path.join(adminUiRoot, 'index.html');
 };
 
-const trySendAdminAsset = (response, requestPath) => {
-  const filePath = resolveAdminAssetPath(requestPath);
+const trySendAdminAsset = (response, requestPath, adminMount) => {
+  if (!adminMount.enabled) {
+    return false;
+  }
+
+  const filePath = resolveAdminAssetPath({ requestPath, adminBasePath: adminMount.basePath, adminUiRoot: adminMount.uiRoot });
   if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
     return false;
   }
@@ -64,6 +76,11 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, port = 300
     createInspectorRoute({ runtime })
   ]);
   const apiRouter = createApiRouter({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries });
+  const adminMount = Object.freeze({
+    enabled: config?.admin?.enabled === true,
+    basePath: normalizeAdminMount(config?.admin?.basePath),
+    uiRoot: path.resolve(process.cwd(), config?.admin?.staticDir ?? './ui/admin')
+  });
 
   const server = http.createServer((request, response) => {
     const context = createRequestContext(request, { clock });
@@ -75,13 +92,13 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, port = 300
           return;
         }
 
+        if (trySendAdminAsset(response, context.path, adminMount)) {
+          return;
+        }
+
         const handler = router.dispatch(context);
 
         if (!handler) {
-          if (trySendAdminAsset(response, context.path)) {
-            return;
-          }
-
           notFoundResponse({ path: context.path, timestamp: context.timestamp }).send(response);
           return;
         }

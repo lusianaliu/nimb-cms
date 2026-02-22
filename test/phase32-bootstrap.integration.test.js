@@ -75,6 +75,12 @@ test('phase 32: missing config falls back to deterministic defaults', () => {
     runtime: {
       logLevel: 'info',
       mode: 'development'
+    },
+    server: {},
+    admin: {
+      enabled: true,
+      basePath: '/admin',
+      staticDir: './ui/admin'
     }
   });
 });

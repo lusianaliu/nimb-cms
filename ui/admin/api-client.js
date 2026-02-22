@@ -2,7 +2,9 @@ const state = {
   token: null
 };
 
-const request = async (path, options = {}) => {
+const apiPath = (resource) => `/api${resource.startsWith('/') ? resource : `/${resource}`}`;
+
+const request = async (resource, options = {}) => {
   const headers = {
     ...(options.headers ?? {})
   };
@@ -11,7 +13,7 @@ const request = async (path, options = {}) => {
     headers.authorization = `Bearer ${state.token}`;
   }
 
-  const response = await fetch(path, {
+  const response = await fetch(apiPath(resource), {
     ...options,
     headers
   });
@@ -38,48 +40,48 @@ export const apiClient = Object.freeze({
     state.token = token;
   },
   async login({ username, password }) {
-    return jsonPost('/api/auth/login', { username, password });
+    return jsonPost('/auth/login', { username, password });
   },
   async getSystem() {
-    return request('/api/system');
+    return request('/system');
   },
   async getRuntime() {
-    return request('/api/runtime');
+    return request('/runtime');
   },
   async getAdminStatus() {
-    return request('/api/admin/status');
+    return request('/admin/status');
   },
   async restartRuntime() {
-    return jsonPost('/api/admin/runtime/restart');
+    return jsonPost('/admin/runtime/restart');
   },
   async persistState() {
-    return jsonPost('/api/admin/runtime/persist');
+    return jsonPost('/admin/runtime/persist');
   },
   async reconcileGoals() {
-    return jsonPost('/api/admin/goals/reconcile');
+    return jsonPost('/admin/goals/reconcile');
   },
   async getContentTypes() {
-    return request('/api/content-types');
+    return request('/content-types');
   },
   async createContentType(schema) {
-    return jsonPost('/api/admin/content-types', schema);
+    return jsonPost('/admin/content-types', schema);
   },
   async listEntries(type) {
-    return request(`/api/entries/${encodeURIComponent(type)}`);
+    return request(`/entries/${encodeURIComponent(type)}`);
   },
   async getEntry(type, id) {
-    return request(`/api/entries/${encodeURIComponent(type)}/${encodeURIComponent(id)}`);
+    return request(`/entries/${encodeURIComponent(type)}/${encodeURIComponent(id)}`);
   },
   async createEntry(type, data) {
-    return jsonPost(`/api/admin/entries/${encodeURIComponent(type)}`, data);
+    return jsonPost(`/admin/entries/${encodeURIComponent(type)}`, data);
   },
   async publishEntry(type, id) {
-    return jsonPost(`/api/admin/entries/${encodeURIComponent(type)}/${encodeURIComponent(id)}/publish`);
+    return jsonPost(`/admin/entries/${encodeURIComponent(type)}/${encodeURIComponent(id)}/publish`);
   },
   async archiveEntry(type, id) {
-    return jsonPost(`/api/admin/entries/${encodeURIComponent(type)}/${encodeURIComponent(id)}/archive`);
+    return jsonPost(`/admin/entries/${encodeURIComponent(type)}/${encodeURIComponent(id)}/archive`);
   },
   async draftEntry(type, id) {
-    return jsonPost(`/api/admin/entries/${encodeURIComponent(type)}/${encodeURIComponent(id)}/draft`);
+    return jsonPost(`/admin/entries/${encodeURIComponent(type)}/${encodeURIComponent(id)}/draft`);
   }
 });
