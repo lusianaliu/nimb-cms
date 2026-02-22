@@ -24,6 +24,7 @@ export class RuntimeStateStore {
     this.subscribersByPlugin = new Map();
     this.subscriptionSequence = 0;
     this.updateQueue = Promise.resolve();
+    this.stateTrace = options.stateTrace;
   }
 
   define(pluginId: string, name: string, initialValue: unknown) {
@@ -85,6 +86,9 @@ export class RuntimeStateStore {
           });
         }
       }
+
+      const stateKey = this.createStateKey(pluginId, normalizedName);
+      this.stateTrace?.recordMutation(pluginId, stateKey);
 
       await this.eventSystem?.emitInternal?.('plugin.runtime.state.updated', {
         owner: pluginId,
