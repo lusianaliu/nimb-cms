@@ -43,7 +43,7 @@ test('phase 34: deterministic http endpoints', async () => {
 
     const health = await getJson(`${baseUrl}/health`);
     assert.equal(health.status, 200);
-    assert.deepEqual(health.body, { status: 'ok' });
+    assert.deepEqual(health.body, { status: 'ok', runtime: 'active' });
 
     const runtimeFirst = await getJson(`${baseUrl}/runtime`);
     const runtimeSecond = await getJson(`${baseUrl}/runtime`);
@@ -58,7 +58,7 @@ test('phase 34: deterministic http endpoints', async () => {
     const inspectorSecond = await getJson(`${baseUrl}/inspector`);
     assert.equal(inspectorFirst.status, 200);
     assert.deepEqual(inspectorFirst.body, inspectorSecond.body);
-    assert.deepEqual(Object.keys(inspectorFirst.body), ['admin', 'auth', 'goals', 'orchestrator', 'persistence', 'state']);
+    assert.deepEqual(Object.keys(inspectorFirst.body), ['admin', 'auth', 'content', 'entries', 'entryQuery', 'goals', 'orchestrator', 'persistence', 'state']);
 
     const missing = await getJson(`${baseUrl}/missing`);
     assert.equal(missing.status, 404);
