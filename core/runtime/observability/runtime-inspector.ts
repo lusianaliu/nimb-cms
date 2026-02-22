@@ -1,3 +1,4 @@
+import { RuntimeStateSnapshot } from '../state/state-snapshot.ts';
 const freezeEntries = (entries: unknown[]) => Object.freeze(entries.map((entry) => Object.freeze(entry)));
 
 export class RuntimeInspector {
@@ -14,7 +15,8 @@ export class RuntimeInspector {
     sandboxProvider?: () => unknown,
     policyProvider?: () => unknown,
     schedulerProvider?: () => unknown,
-    reconcilerProvider?: () => unknown
+    reconcilerProvider?: () => unknown,
+    stateProvider?: () => unknown
   } = {}) {
     this.registry = options.registry;
     this.eventTrace = options.eventTrace;
@@ -29,6 +31,7 @@ export class RuntimeInspector {
     this.policyProvider = options.policyProvider;
     this.schedulerProvider = options.schedulerProvider;
     this.reconcilerProvider = options.reconcilerProvider;
+    this.stateProvider = options.stateProvider;
   }
 
   health() {
@@ -93,6 +96,10 @@ export class RuntimeInspector {
     });
   }
 
+
+  state() {
+    return this.stateProvider?.() ?? RuntimeStateSnapshot.empty();
+  }
 
   snapshot() {
     return Object.freeze({

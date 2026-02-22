@@ -14,6 +14,7 @@ import { SandboxRunner } from '../sandbox/index.ts';
 import { PolicyEngine } from '../policy/index.ts';
 import { Scheduler } from '../scheduler/index.ts';
 import { Reconciler, ReconcileLoop } from '../reconciler/index.ts';
+import { StateProjector, RuntimeStateSnapshot } from '../state/index.ts';
 
 const noopDisposer = () => {};
 
@@ -77,6 +78,13 @@ export class PluginRuntime {
       scheduler: this.scheduler,
       diagnosticsChannel: this.diagnosticsChannel
     });
+    this.stateProjector = options.stateProjector ?? new StateProjector({
+      topologyProvider: () => this.getTopologySnapshot(),
+      healthProvider: () => this.healthMonitor.snapshot(),
+      policyProvider: () => this.policyEngine.snapshot(),
+      schedulerProvider: () => this.scheduler.snapshot(),
+      reconcilerProvider: () => this.reconciler.snapshot()
+    });
     this.capabilityResolver = options.capabilityResolver ?? new CapabilityResolver({
       registry: this.registry,
       logger: this.logger,
@@ -119,12 +127,21 @@ export class PluginRuntime {
       sandboxProvider: () => this.sandboxRunner.snapshot(),
       policyProvider: () => this.policyEngine.snapshot(),
       schedulerProvider: () => this.scheduler.snapshot(),
-      reconcilerProvider: () => this.reconciler.snapshot()
+      reconcilerProvider: () => this.reconciler.snapshot(),
+      stateProvider: () => this.getState()
     });
   }
 
   getInspector() {
     return this.inspector;
+  }
+
+  getState() {
+    if (!this.stateProjector || typeof this.stateProjector.project !== 'function') {
+      return RuntimeStateSnapshot.empty();
+    }
+
+    return this.stateProjector.project();
   }
 
   getTopologySnapshot() {
