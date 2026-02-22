@@ -4,6 +4,7 @@ import { createRouter } from './router.ts';
 import { createHealthRoute } from './routes/health.ts';
 import { createRuntimeRoute } from './routes/runtime.ts';
 import { createInspectorRoute } from './routes/inspector.ts';
+import { createApiRouter } from '../api/index.ts';
 import { errorResponse, notFoundResponse } from './response.ts';
 
 export const createHttpServer = ({ runtime, config, startupTimestamp, port = 3000, clock = () => new Date().toISOString() }) => {
@@ -12,9 +13,16 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, port = 300
     createRuntimeRoute({ config, runtime, startupTimestamp, clock }),
     createInspectorRoute({ runtime })
   ]);
+  const apiRouter = createApiRouter({ runtime });
 
   const server = http.createServer((request, response) => {
     const context = createRequestContext(request, { clock });
+    const apiResponse = apiRouter.handle(context);
+    if (apiResponse) {
+      apiResponse.send(response);
+      return;
+    }
+
     const handler = router.dispatch(context);
 
     if (!handler) {
