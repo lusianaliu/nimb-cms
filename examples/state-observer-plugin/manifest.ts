@@ -6,6 +6,7 @@ export const pluginManifest = {
     register: './register.ts'
   },
   declaredCapabilities: [],
+  consumedCapabilities: ['state-reactive:content-summary'],
   requiredPlatformContracts: {
     'plugin.useCapability': '^1.0.0'
   }
