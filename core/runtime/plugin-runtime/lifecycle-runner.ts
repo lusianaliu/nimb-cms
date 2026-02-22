@@ -131,6 +131,7 @@ export class PluginRuntime {
     });
     this.bootstrapSnapshot = BootstrapSnapshot.empty();
     this.persistenceStatus = Object.freeze({ lastSaveTime: null, storedKeys: Object.freeze([]), storageHealth: 'idle' });
+    this.authStatus = Object.freeze({ activeSessions: 0, users: Object.freeze([]), authHealth: 'idle' });
     this.restoredRuntimeState = null;
     this.runtimeStarted = false;
     this.inspector = options.inspector ?? new RuntimeInspector({
@@ -151,7 +152,8 @@ export class PluginRuntime {
       goalsProvider: () => this.goalEngine?.snapshot?.() ?? GoalSnapshot.empty(),
       stateProvider: () => this.getState(),
       bootstrapProvider: () => this.bootstrapSnapshot,
-      persistenceProvider: () => this.persistenceStatus
+      persistenceProvider: () => this.persistenceStatus,
+      authProvider: () => this.authStatus
     });
   }
 
@@ -172,6 +174,16 @@ export class PluginRuntime {
     });
 
     return this.persistenceStatus;
+  }
+
+  setAuthStatus(status) {
+    this.authStatus = Object.freeze({
+      activeSessions: status?.activeSessions ?? 0,
+      users: Object.freeze([...(status?.users ?? [])]),
+      authHealth: status?.authHealth ?? 'idle'
+    });
+
+    return this.authStatus;
   }
 
   setRestoredState(snapshot) {

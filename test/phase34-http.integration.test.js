@@ -58,7 +58,7 @@ test('phase 34: deterministic http endpoints', async () => {
     const inspectorSecond = await getJson(`${baseUrl}/inspector`);
     assert.equal(inspectorFirst.status, 200);
     assert.deepEqual(inspectorFirst.body, inspectorSecond.body);
-    assert.deepEqual(Object.keys(inspectorFirst.body), ['goals', 'orchestrator', 'persistence', 'state']);
+    assert.deepEqual(Object.keys(inspectorFirst.body), ['auth', 'goals', 'orchestrator', 'persistence', 'state']);
 
     const missing = await getJson(`${baseUrl}/missing`);
     assert.equal(missing.status, 404);

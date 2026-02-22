@@ -27,7 +27,8 @@ export class RuntimeInspector {
     goalsProvider?: () => unknown,
     stateProvider?: () => unknown,
     bootstrapProvider?: () => unknown,
-    persistenceProvider?: () => unknown
+    persistenceProvider?: () => unknown,
+    authProvider?: () => unknown
   } = {}) {
     this.registry = options.registry;
     this.eventTrace = options.eventTrace;
@@ -47,6 +48,7 @@ export class RuntimeInspector {
     this.stateProvider = options.stateProvider;
     this.bootstrapProvider = options.bootstrapProvider;
     this.persistenceProvider = options.persistenceProvider;
+    this.authProvider = options.authProvider;
   }
 
   health() {
@@ -145,6 +147,14 @@ export class RuntimeInspector {
       lastSaveTime: null,
       storedKeys: Object.freeze([]),
       storageHealth: 'idle'
+    });
+  }
+
+  auth() {
+    return this.authProvider?.() ?? Object.freeze({
+      activeSessions: 0,
+      users: Object.freeze([]),
+      authHealth: 'idle'
     });
   }
 
