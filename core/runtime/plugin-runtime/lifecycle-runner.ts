@@ -9,6 +9,7 @@ import { TopologyGraph, DependencyResolver, ActivationPlanner, TopologySnapshot 
 import { PluginState, RuntimeEvent, createStructuredError } from './runtime-types.ts';
 import { HealthMonitor } from '../health/index.ts';
 import { VersionResolver, CompatibilityChecker, VersionSnapshot } from '../versioning/index.ts';
+import { CapabilityRouter } from '../routing/index.ts';
 
 const noopDisposer = () => {};
 
@@ -31,6 +32,13 @@ export class PluginRuntime {
     this.activationPlanner = options.activationPlanner ?? new ActivationPlanner();
     this.versionResolver = options.versionResolver ?? new VersionResolver();
     this.compatibilityChecker = options.compatibilityChecker ?? new CompatibilityChecker();
+    this.capabilityRouter = options.capabilityRouter ?? new CapabilityRouter({
+      registry: this.registry,
+      diagnosticsChannel: this.diagnosticsChannel,
+      topologyProvider: () => this.getTopologySnapshot(),
+      isProviderActive: (pluginId) => this.registry.get(pluginId)?.state === PluginState.ACTIVE,
+      policies: options.routingPolicies ?? {}
+    });
     this.activationCatalog = new Map();
     this.healthMonitor = options.healthMonitor ?? new HealthMonitor({
       diagnosticsChannel: this.diagnosticsChannel,
@@ -45,7 +53,8 @@ export class PluginRuntime {
       registry: this.registry,
       logger: this.logger,
       capabilityTrace: this.capabilityTrace,
-      healthReporter: (failure) => this.healthMonitor.recordFailure(failure)
+      healthReporter: (failure) => this.healthMonitor.recordFailure(failure),
+      router: this.capabilityRouter
     });
     this.eventSystem = options.eventSystem ?? new EventSystem({
       logger: this.logger,
@@ -77,7 +86,8 @@ export class PluginRuntime {
       diagnosticsChannel: this.diagnosticsChannel,
       topologyProvider: () => this.getTopologySnapshot(),
       healthProvider: () => this.healthMonitor.snapshot(),
-      versionProvider: () => this.lastVersionSnapshot
+      versionProvider: () => this.lastVersionSnapshot,
+      routingProvider: () => this.capabilityRouter.snapshot()
     });
   }
 
