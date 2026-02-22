@@ -136,6 +136,7 @@ export class PluginRuntime {
     this.runtimeStarted = false;
     this.adminExecutor = options.adminExecutor ?? (async () => ({ success: false, outcome: 'unsupported' }));
     this.adminStatusProvider = options.adminStatusProvider ?? (() => Object.freeze({ lastCommands: Object.freeze([]), commandHistory: Object.freeze([]), adminHealth: 'idle' }));
+    this.contentStatusProvider = options.contentStatusProvider ?? (() => Object.freeze({ registeredTypes: Object.freeze([]), schemaHashes: Object.freeze([]), validation: Object.freeze({ valid: true, errors: Object.freeze([]) }) }));
     this.inspector = options.inspector ?? new RuntimeInspector({
       registry: this.registry,
       eventTrace: this.eventTrace,
@@ -156,7 +157,8 @@ export class PluginRuntime {
       bootstrapProvider: () => this.bootstrapSnapshot,
       persistenceProvider: () => this.persistenceStatus,
       authProvider: () => this.authStatus,
-      adminProvider: () => this.getAdminStatus()
+      adminProvider: () => this.getAdminStatus(),
+      contentProvider: () => this.getContentStatus()
     });
   }
 
@@ -232,6 +234,18 @@ export class PluginRuntime {
       : (() => Object.freeze({ lastCommands: Object.freeze([]), commandHistory: Object.freeze([]), adminHealth: 'idle' }));
 
     return this.adminStatusProvider;
+  }
+
+  setContentStatusProvider(provider) {
+    this.contentStatusProvider = typeof provider === 'function'
+      ? provider
+      : (() => Object.freeze({ registeredTypes: Object.freeze([]), schemaHashes: Object.freeze([]), validation: Object.freeze({ valid: true, errors: Object.freeze([]) }) }));
+
+    return this.contentStatusProvider;
+  }
+
+  getContentStatus() {
+    return this.contentStatusProvider?.() ?? Object.freeze({ registeredTypes: Object.freeze([]), schemaHashes: Object.freeze([]), validation: Object.freeze({ valid: true, errors: Object.freeze([]) }) });
   }
 
   async executeAdminCommand(command) {

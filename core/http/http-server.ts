@@ -57,13 +57,13 @@ const trySendAdminAsset = (response, requestPath) => {
   return true;
 };
 
-export const createHttpServer = ({ runtime, config, startupTimestamp, port = 3000, clock = () => new Date().toISOString(), authService, authMiddleware, adminController }) => {
+export const createHttpServer = ({ runtime, config, startupTimestamp, port = 3000, clock = () => new Date().toISOString(), authService, authMiddleware, adminController, contentRegistry, persistContentTypes }) => {
   const router = createRouter([
     createHealthRoute(),
     createRuntimeRoute({ config, runtime, startupTimestamp, clock }),
     createInspectorRoute({ runtime })
   ]);
-  const apiRouter = createApiRouter({ runtime, authService, authMiddleware, adminController });
+  const apiRouter = createApiRouter({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes });
 
   const server = http.createServer((request, response) => {
     const context = createRequestContext(request, { clock });

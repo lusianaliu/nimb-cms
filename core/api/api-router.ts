@@ -35,7 +35,7 @@ const readJsonBody = async (request: { method?: string, headers: Record<string, 
   return JSON.parse(raw);
 };
 
-export const createApiRouter = ({ runtime, authService, authMiddleware, adminController }: { runtime: { getInspector: () => unknown }, authService?: { login: (input: { username: string, password: string }) => Promise<unknown>, logout: (token: string) => Promise<boolean>, getSession: (token: string) => unknown }, authMiddleware?: { attach: (context: { request: { headers: Record<string, string | string[] | undefined> } }) => { token: string | null, authenticated: boolean, session: unknown } }, adminController?: { restartRuntime: (input: { requestId: string, payload: unknown }) => Promise<unknown>, persistRuntime: (input: { requestId: string, payload: unknown }) => Promise<unknown>, reconcileGoals: (input: { requestId: string, payload: unknown }) => Promise<unknown>, status: () => unknown } }) => {
+export const createApiRouter = ({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes }: { runtime: { getInspector: () => unknown }, authService?: { login: (input: { username: string, password: string }) => Promise<unknown>, logout: (token: string) => Promise<boolean>, getSession: (token: string) => unknown }, authMiddleware?: { attach: (context: { request: { headers: Record<string, string | string[] | undefined> } }) => { token: string | null, authenticated: boolean, session: unknown } }, adminController?: { restartRuntime: (input: { requestId: string, payload: unknown }) => Promise<unknown>, persistRuntime: (input: { requestId: string, payload: unknown }) => Promise<unknown>, reconcileGoals: (input: { requestId: string, payload: unknown }) => Promise<unknown>, status: () => unknown }, contentRegistry?: { register: (schema: unknown, options?: { source?: string }) => unknown, list: () => unknown[], get: (name: string) => unknown } , persistContentTypes?: () => Promise<unknown> }) => {
   const routes = defaultRoutes();
   const adminRouter = adminController
     ? createAdminRouter({ controller: adminController, authMiddleware })
@@ -84,7 +84,38 @@ export const createApiRouter = ({ runtime, authService, authMiddleware, adminCon
         return jsonResponse({ success: true, data: { session: auth.session }, meta: {} }, { statusCode: 200 });
       }
 
+
+      if (context.path === '/api/content-types' && context.method === 'GET' && contentRegistry) {
+        return jsonResponse({ success: true, data: { contentTypes: contentRegistry.list() }, meta: {} }, { statusCode: 200 });
+      }
+
+      if (context.path.startsWith('/api/content-types/') && context.method === 'GET' && contentRegistry) {
+        const name = decodeURIComponent(context.path.slice('/api/content-types/'.length));
+        const schema = contentRegistry.get(name);
+        if (!schema) {
+          return jsonResponse(createApiError({ code: 'NOT_FOUND', message: `Content type not found: ${name}` }), { statusCode: 404 });
+        }
+
+        return jsonResponse({ success: true, data: { contentType: schema }, meta: {} }, { statusCode: 200 });
+      }
+
       const requestBody = await readJsonBody(context.request);
+
+
+      if (context.path === '/api/admin/content-types' && context.method === 'POST' && contentRegistry && authMiddleware) {
+        const auth = authMiddleware.attach(context);
+        if (!auth.authenticated) {
+          return jsonResponse(createApiError({ code: 'INVALID_REQUEST', message: 'Invalid token' }), { statusCode: 401 });
+        }
+
+        try {
+          const schema = contentRegistry.register(requestBody, { source: 'admin.command' });
+          await persistContentTypes?.();
+          return jsonResponse({ success: true, data: { contentType: schema }, meta: {} }, { statusCode: 200 });
+        } catch (error) {
+          return jsonResponse(createApiError({ code: 'INVALID_REQUEST', message: error instanceof Error ? error.message : 'Invalid schema' }), { statusCode: 400 });
+        }
+      }
 
       if (adminRouter) {
         const adminPayload = await adminRouter.handle(context, requestBody);
