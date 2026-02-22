@@ -38,6 +38,7 @@ export const definePlugin = (definition: PluginDefinition): SDKPlugin => {
     name: definition.name,
     version: definition.version,
     capabilities: definition.capabilities ?? [],
+    exportedEvents: definition.exportedEvents ?? [],
     exportedCapabilities: definition.exportedCapabilities ?? {},
     schemas: definition.schemas ?? [],
     lifecycle: definition.lifecycle

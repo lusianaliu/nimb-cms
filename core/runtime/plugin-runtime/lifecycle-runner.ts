@@ -1,4 +1,5 @@
 import { CapabilityResolver } from '../capability-resolver/capability-resolver.ts';
+import { EventSystem } from '../event-system/event-system.ts';
 import { ManifestValidator } from './manifest-validator.ts';
 import { PluginLoader } from './plugin-loader.ts';
 import { PluginRegistry } from './plugin-registry.ts';
@@ -20,19 +21,22 @@ export class PluginRuntime {
       registry: this.registry,
       logger: this.logger
     });
+    this.eventSystem = options.eventSystem ?? new EventSystem({
+      logger: this.logger
+    });
   }
 
   async start() {
     const descriptors = await this.loader.discover();
 
-    for (const descriptor of descriptors) {
-      await this.runLifecycle(descriptor);
+    for (const [index, descriptor] of descriptors.entries()) {
+      await this.runLifecycle(descriptor, index);
     }
 
     return this.registry.list();
   }
 
-  async runLifecycle(descriptor) {
+  async runLifecycle(descriptor, loadOrder = 0) {
     this.registry.registerDescriptor(descriptor);
     this.logger?.info?.(RuntimeEvent.DISCOVER, { plugin: descriptor.id, manifestPath: descriptor.manifestPath });
 
@@ -46,6 +50,8 @@ export class PluginRuntime {
         capabilities: manifest.declaredCapabilities.length
       });
 
+      this.eventSystem.registerPlugin(descriptor.id, manifest.exportedEvents, loadOrder);
+
       for (const [capabilityName, interfaceFactory] of Object.entries(manifest.exportedCapabilities ?? {})) {
         this.capabilityResolver.bindProvider(descriptor.id, capabilityName, interfaceFactory);
       }
@@ -56,7 +62,9 @@ export class PluginRuntime {
       const runtimeContext = this.capabilityResolver.createConsumer(descriptor.id);
       const runtimeContracts = {
         ...this.contracts,
-        useCapability: runtimeContext.useCapability
+        useCapability: runtimeContext.useCapability,
+        emit: (eventName, payload) => this.eventSystem.emit(descriptor.id, eventName, payload),
+        on: (eventName, handler) => this.eventSystem.on(descriptor.id, eventName, handler)
       };
 
       const disposer = await Promise.resolve(register(runtimeContracts));
@@ -67,6 +75,7 @@ export class PluginRuntime {
       this.registry.setActive(descriptor.id, disposer ?? noopDisposer);
       this.logger?.info?.(RuntimeEvent.ACTIVATE, { plugin: manifest.id });
     } catch (error) {
+      this.eventSystem.unregisterPlugin(descriptor.id);
       this.capabilityResolver.unbindProvider(descriptor.id);
       this.registry.setFailed(descriptor.id, createStructuredError(error));
       this.logger?.error?.(RuntimeEvent.FAILURE, {
@@ -85,11 +94,14 @@ export class PluginRuntime {
 
     try {
       await Promise.resolve(record.disposer());
+      this.eventSystem.unregisterPlugin(pluginId);
       this.capabilityResolver.unbindProvider(pluginId);
       this.registry.setDiscovered(pluginId);
       this.logger?.info?.(RuntimeEvent.UNLOAD, { plugin: pluginId });
       return true;
     } catch (error) {
+      this.eventSystem.unregisterPlugin(pluginId);
+      this.capabilityResolver.unbindProvider(pluginId);
       this.registry.setFailed(pluginId, createStructuredError(error));
       this.logger?.error?.(RuntimeEvent.FAILURE, {
         plugin: pluginId,

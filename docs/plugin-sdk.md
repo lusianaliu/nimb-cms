@@ -13,7 +13,7 @@ The SDK is intentionally constrained:
 - It does **not** introduce plugin-specific behavior.
 - It does **not** bypass platform contracts.
 
-Plugin authors only describe intent (`capabilities`, `exportedCapabilities`, `schemas`, `lifecycle`) and the SDK adapter maps that intent to contract calls like `registerCapability`, `registerSchema`, `registerLifecycleHook`, and `useCapability`.
+Plugin authors only describe intent (`capabilities`, `exportedEvents`, `exportedCapabilities`, `schemas`, `lifecycle`) and the SDK adapter maps that intent to contract calls like `registerCapability`, `registerSchema`, `registerLifecycleHook`, `useCapability`, `emit`, and `on`.
 
 ## Why wrap contracts instead of replacing them
 
@@ -41,6 +41,7 @@ import { definePlugin } from '../../packages/plugin-sdk/index.ts';
 export default definePlugin({
   name: 'example-plugin',
   version: '1.0.0',
+  exportedEvents: ['content:created'],
   capabilities: [
     { key: 'example:read', version: '1.0.0', description: 'Example capability' }
   ],

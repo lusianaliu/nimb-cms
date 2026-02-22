@@ -15,12 +15,15 @@ Core remains domain-agnostic because runtime behavior depends only on manifest c
   - plugin `version`
   - lifecycle entrypoint `entrypoints.register`
   - `declaredCapabilities`
+  - `exportedEvents` (when provided)
   - `requiredPlatformContracts`
 - Register and activate plugins through a deterministic sequence.
 - Resolve capability composition through `ctx.useCapability(name)` without exposing provider identity.
+- Route plugin events through runtime-owned `ctx.emit(name, payload)` and `ctx.on(name, handler)` with deterministic ordering.
 - Track plugin state via registry (`discovered`, `validated`, `active`, `failed`).
 - Track and execute unload disposers for safe teardown.
 - Validate explicit `exportedCapabilities` contracts and reject duplicate providers.
+- Enforce explicit event contracts: only events declared via `exportedEvents` can be emitted or subscribed to.
 
 ## Lifecycle model
 

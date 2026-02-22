@@ -26,6 +26,12 @@ export class ManifestValidator {
       throw new Error('manifest.declaredCapabilities must be a string array');
     }
 
+    if (manifest.exportedEvents !== undefined) {
+      if (!Array.isArray(manifest.exportedEvents) || manifest.exportedEvents.some((eventName) => typeof eventName !== 'string' || eventName.trim().length === 0)) {
+        throw new Error('manifest.exportedEvents must be a string array when provided');
+      }
+    }
+
     if (manifest.exportedCapabilities !== undefined) {
       if (!isRecord(manifest.exportedCapabilities)) {
         throw new Error('manifest.exportedCapabilities must be an object when provided');
@@ -61,6 +67,9 @@ export class ManifestValidator {
         register: manifest.entrypoints.register
       },
       declaredCapabilities: [...manifest.declaredCapabilities],
+      exportedEvents: manifest.exportedEvents
+        ? [...new Set(manifest.exportedEvents)].sort()
+        : [],
       exportedCapabilities: manifest.exportedCapabilities
         ? { ...manifest.exportedCapabilities }
         : {},
