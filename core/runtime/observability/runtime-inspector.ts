@@ -12,7 +12,8 @@ export class RuntimeInspector {
     versionProvider?: () => unknown,
     routingProvider?: () => unknown,
     sandboxProvider?: () => unknown,
-    policyProvider?: () => unknown
+    policyProvider?: () => unknown,
+    schedulerProvider?: () => unknown
   } = {}) {
     this.registry = options.registry;
     this.eventTrace = options.eventTrace;
@@ -25,6 +26,7 @@ export class RuntimeInspector {
     this.routingProvider = options.routingProvider;
     this.sandboxProvider = options.sandboxProvider;
     this.policyProvider = options.policyProvider;
+    this.schedulerProvider = options.schedulerProvider;
   }
 
   health() {
@@ -68,6 +70,15 @@ export class RuntimeInspector {
   policy() {
     return this.policyProvider?.() ?? Object.freeze({
       evaluations: Object.freeze([])
+    });
+  }
+
+  scheduler() {
+    return this.schedulerProvider?.() ?? Object.freeze({
+      queue: Object.freeze([]),
+      executed: Object.freeze([]),
+      skipped: Object.freeze([]),
+      plans: Object.freeze([])
     });
   }
 
