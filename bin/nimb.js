@@ -8,6 +8,16 @@ import { createHttpServer } from '../core/http/index.ts';
 const projectRoot = process.cwd();
 const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const startupTimestamp = new Date().toISOString();
+const BUILD_DIRECTORY_NAME = '.nimb-build';
+
+const BUILD_ALLOWLIST = Object.freeze([
+  Object.freeze({ type: 'directory', source: 'bin', required: true }),
+  Object.freeze({ type: 'directory', source: 'core', required: true }),
+  Object.freeze({ type: 'directory', source: 'ui', required: true }),
+  Object.freeze({ type: 'file', source: 'package.json', required: true }),
+  Object.freeze({ type: 'file', source: 'nimb.config.json', required: true, fromProjectRoot: true }),
+  Object.freeze({ type: 'directory', source: 'public', required: false, fromProjectRoot: true })
+]);
 
 const DEFAULT_CONFIG = {
   server: {
@@ -110,6 +120,98 @@ const createProject = (projectName) => {
   process.stdout.write('npx nimb\n');
 };
 
+const ensureRemoved = (targetPath) => {
+  if (fs.existsSync(targetPath)) {
+    fs.rmSync(targetPath, { recursive: true, force: true });
+  }
+};
+
+const copyFileDeterministic = (sourcePath, targetPath) => {
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.copyFileSync(sourcePath, targetPath);
+};
+
+const copyDirectoryDeterministic = (sourceDirectory, targetDirectory) => {
+  fs.mkdirSync(targetDirectory, { recursive: true });
+  const entries = fs.readdirSync(sourceDirectory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name));
+
+  for (const entry of entries) {
+    const sourcePath = path.join(sourceDirectory, entry.name);
+    const targetPath = path.join(targetDirectory, entry.name);
+
+    if (entry.isDirectory()) {
+      copyDirectoryDeterministic(sourcePath, targetPath);
+      continue;
+    }
+
+    if (entry.isFile()) {
+      copyFileDeterministic(sourcePath, targetPath);
+    }
+  }
+};
+
+const validateBuildSource = ({ sourcePath, expectedType, required }) => {
+  if (!fs.existsSync(sourcePath)) {
+    if (required) {
+      throw new Error(`Required build asset is missing: ${sourcePath}`);
+    }
+
+    return false;
+  }
+
+  const stats = fs.statSync(sourcePath);
+  if (expectedType === 'directory' && !stats.isDirectory()) {
+    throw new Error(`Expected directory build asset but found non-directory: ${sourcePath}`);
+  }
+
+  if (expectedType === 'file' && !stats.isFile()) {
+    throw new Error(`Expected file build asset but found non-file: ${sourcePath}`);
+  }
+
+  return true;
+};
+
+const runBuild = () => {
+  process.stdout.write('Build start.\n');
+  process.stdout.write(`Project root: ${projectRoot}\n`);
+  process.stdout.write(`Runtime root: ${runtimeRoot}\n`);
+
+  const configPath = path.join(projectRoot, 'nimb.config.json');
+  if (!fs.existsSync(configPath)) {
+    throw new Error(`nimb.config.json is required for build: ${configPath}`);
+  }
+
+  const config = loadConfig({ cwd: projectRoot });
+  validateAdminStaticDir(config, runtimeRoot);
+  process.stdout.write('Config validation: ok.\n');
+
+  const outputRoot = path.join(projectRoot, BUILD_DIRECTORY_NAME);
+  ensureRemoved(outputRoot);
+  fs.mkdirSync(outputRoot, { recursive: true });
+
+  for (const rule of BUILD_ALLOWLIST) {
+    const sourceRoot = rule.fromProjectRoot ? projectRoot : runtimeRoot;
+    const sourcePath = path.join(sourceRoot, rule.source);
+    const shouldCopy = validateBuildSource({ sourcePath, expectedType: rule.type, required: rule.required });
+
+    if (!shouldCopy) {
+      continue;
+    }
+
+    const targetPath = path.join(outputRoot, rule.source);
+    if (rule.type === 'directory') {
+      copyDirectoryDeterministic(sourcePath, targetPath);
+      process.stdout.write(`Copied directory: ${rule.source}\n`);
+      continue;
+    }
+
+    copyFileDeterministic(sourcePath, targetPath);
+    process.stdout.write(`Copied file: ${rule.source}\n`);
+  }
+
+  process.stdout.write(`Build complete: ${outputRoot}\n`);
+};
+
 const startServer = async () => {
   let httpServer;
 
@@ -168,6 +270,13 @@ if (args[0] === 'init') {
     createProject(args[1]);
   } catch (error) {
     process.stderr.write(`Init failed: ${error?.message ?? String(error)}\n`);
+    process.exitCode = 1;
+  }
+} else if (args[0] === 'build') {
+  try {
+    runBuild();
+  } catch (error) {
+    process.stderr.write(`Build failed: ${error?.message ?? String(error)}\n`);
     process.exitCode = 1;
   }
 } else {
