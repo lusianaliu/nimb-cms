@@ -5,7 +5,7 @@ import { BootstrapSnapshot } from './bootstrap-snapshot.ts';
 import { FileSystemStorageAdapter, PersistenceEngine } from '../persistence/index.ts';
 import { AuthService, SessionStore, createAuthMiddleware } from '../auth/index.ts';
 import { CommandDispatcher, createAdminController } from '../admin/index.ts';
-import { ContentRegistry, ContentStore, EntryRegistry, EntryStore } from '../content/index.ts';
+import { ContentRegistry, ContentStore, EntryRegistry } from '../content/index.ts';
 
 const toRuntimeStatus = (runtime) => {
   const state = runtime.getState?.();
@@ -27,8 +27,7 @@ export const createBootstrap = async ({ cwd = process.cwd(), startupTimestamp = 
   const authMiddleware = createAuthMiddleware({ authService });
   const contentRegistry = new ContentRegistry();
   const contentStore = new ContentStore({ storageAdapter });
-  const entryRegistry = new EntryRegistry({ contentRegistry });
-  const entryStore = new EntryStore({ storageAdapter });
+  const entryRegistry = new EntryRegistry({ contentRegistry, rootDirectory: cwd });
 
 
   const restore = async () => {
@@ -41,8 +40,7 @@ export const createBootstrap = async ({ cwd = process.cwd(), startupTimestamp = 
       contentRegistry.register(schema, { source: 'restore' });
     }
 
-    const restoredEntries = await entryStore.restore();
-    entryRegistry.restore(restoredEntries.entries);
+    entryRegistry.restoreFromDisk();
   };
 
   const persist = async () => {
@@ -61,7 +59,7 @@ export const createBootstrap = async ({ cwd = process.cwd(), startupTimestamp = 
     types: contentRegistry.list()
   });
 
-  const persistEntries = async () => entryStore.persist(entryRegistry.snapshot());
+  const persistEntries = async () => entryRegistry.persist();
 
   await restore();
   await authService.restore();
@@ -144,7 +142,6 @@ export const createBootstrap = async ({ cwd = process.cwd(), startupTimestamp = 
     contentStore,
     persistContentTypes,
     entryRegistry,
-    entryStore,
     persistEntries
   });
 };
