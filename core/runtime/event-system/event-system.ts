@@ -30,6 +30,64 @@ export class EventSystem {
     this.subscriptionsByEvent = new Map();
     this.subscriptionSequence = 0;
     this.dispatchQueue = Promise.resolve();
+    this.internalSubscriptions = new Map();
+    this.internalSequence = 0;
+    this.internalDispatchQueue = Promise.resolve();
+  }
+
+  onInternal(eventName, handler) {
+    if (typeof eventName !== 'string' || eventName.trim().length === 0) {
+      throw new Error('internal event name must be a non-empty string');
+    }
+
+    if (typeof handler !== 'function') {
+      throw new Error(`internal event handler for "${eventName}" must be a function`);
+    }
+
+    const subscription = {
+      id: ++this.internalSequence,
+      eventName,
+      handler,
+      active: true
+    };
+
+    const subscriptions = this.internalSubscriptions.get(eventName) ?? [];
+    subscriptions.push(subscription);
+    this.internalSubscriptions.set(eventName, subscriptions);
+
+    return () => {
+      if (!subscription.active) {
+        return;
+      }
+
+      subscription.active = false;
+      this.internalSubscriptions.set(
+        eventName,
+        (this.internalSubscriptions.get(eventName) ?? []).filter((entry) => entry.id !== subscription.id)
+      );
+    };
+  }
+
+  async emitInternal(eventName, payload) {
+    const dispatch = async () => {
+      const subscriptions = [...(this.internalSubscriptions.get(eventName) ?? [])]
+        .filter((subscription) => subscription.active)
+        .sort((left, right) => left.id - right.id);
+
+      for (const subscription of subscriptions) {
+        try {
+          await Promise.resolve(subscription.handler(payload));
+        } catch (error) {
+          this.logger?.error?.('plugin.runtime.internal-event.failure', {
+            eventName,
+            error: createStructuredError(error)
+          });
+        }
+      }
+    };
+
+    this.internalDispatchQueue = this.internalDispatchQueue.then(dispatch);
+    return this.internalDispatchQueue;
   }
 
   registerPlugin(pluginId, exportedEvents = [], loadOrder = 0) {
@@ -188,4 +246,3 @@ export class EventSystem {
     }
   }
 }
-

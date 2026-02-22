@@ -16,7 +16,11 @@ const CONTRACT_VERSIONS = Object.freeze({
   'plugin.registerLifecycleHook': '^1.0.0',
   'plugin.useCapability': '^1.0.0',
   'plugin.emit': '^1.0.0',
-  'plugin.on': '^1.0.0'
+  'plugin.on': '^1.0.0',
+  'plugin.state.define': '^1.0.0',
+  'plugin.state.update': '^1.0.0',
+  'plugin.state.get': '^1.0.0',
+  'plugin.state.subscribe': '^1.0.0'
 });
 
 const assertRuntimeContract = <K extends keyof RuntimeContracts>(
@@ -103,6 +107,9 @@ export const createRuntimeCompatiblePlugin = (input: {
       assertRuntimeContract(contracts, 'useCapability', pluginId);
       assertRuntimeContract(contracts, 'emit', pluginId);
       assertRuntimeContract(contracts, 'on', pluginId);
+      if (!contracts.state || typeof contracts.state.define !== 'function' || typeof contracts.state.update !== 'function' || typeof contracts.state.get !== 'function' || typeof contracts.state.subscribe !== 'function') {
+        throw new Error(`[${pluginId}] missing required platform contract: state`);
+      }
       assertRuntimeContract(contracts, 'logger', pluginId);
 
       const context: PluginContext = {
@@ -111,6 +118,7 @@ export const createRuntimeCompatiblePlugin = (input: {
         useCapability: contracts.useCapability,
         emit: contracts.emit,
         on: contracts.on,
+        state: contracts.state,
         logger: contracts.logger
       };
 

@@ -19,6 +19,17 @@ export type SchemaDefinition = {
   properties: Record<string, unknown>;
 };
 
+
+export type PluginStateApi = {
+  define: (name: string, initialValue: unknown) => void;
+  update: (name: string, updater: (currentValue: unknown) => unknown | Promise<unknown>) => Promise<unknown>;
+  get: (name: string) => unknown;
+  subscribe: (
+    name: string,
+    handler: (value: unknown, metadata: { name: string; owner: string; previousValue: unknown }) => void | Promise<void>
+  ) => Disposable;
+};
+
 export type RuntimeLifecycleEvent = {
   hook: string;
   entityType: string;
@@ -53,6 +64,7 @@ export type PluginContext = {
   useCapability: (name: string) => CapabilityInterface;
   emit: (eventName: string, payload: unknown) => Promise<void>;
   on: (eventName: string, handler: (payload: unknown, metadata: { eventName: string; publisher: string; subscriber: string }) => void | Promise<void>) => Disposable;
+  state: PluginStateApi;
   logger: {
     info: (message: string, metadata?: Record<string, unknown>) => void;
     warn: (message: string, metadata?: Record<string, unknown>) => void;
@@ -72,6 +84,7 @@ export type RuntimeContracts = {
   useCapability: (name: string) => CapabilityInterface;
   emit: PluginContext['emit'];
   on: PluginContext['on'];
+  state: PluginContext['state'];
   logger: PluginContext['logger'];
 };
 
