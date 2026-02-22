@@ -17,6 +17,7 @@ export class RuntimeInspector {
     schedulerProvider?: () => unknown,
     reconcilerProvider?: () => unknown,
     orchestratorProvider?: () => unknown,
+    goalsProvider?: () => unknown,
     stateProvider?: () => unknown
   } = {}) {
     this.registry = options.registry;
@@ -33,6 +34,7 @@ export class RuntimeInspector {
     this.schedulerProvider = options.schedulerProvider;
     this.reconcilerProvider = options.reconcilerProvider;
     this.orchestratorProvider = options.orchestratorProvider;
+    this.goalsProvider = options.goalsProvider;
     this.stateProvider = options.stateProvider;
   }
 
@@ -107,6 +109,14 @@ export class RuntimeInspector {
         lastIntentId: null,
         pendingCount: 0
       })
+    });
+  }
+
+  goals() {
+    return this.goalsProvider?.() ?? Object.freeze({
+      activeGoals: Object.freeze([]),
+      evaluationResults: Object.freeze([]),
+      emittedIntents: Object.freeze([])
     });
   }
 

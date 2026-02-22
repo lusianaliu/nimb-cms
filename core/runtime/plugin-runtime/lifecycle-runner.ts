@@ -16,6 +16,7 @@ import { Scheduler } from '../scheduler/index.ts';
 import { Reconciler, ReconcileLoop } from '../reconciler/index.ts';
 import { StateProjector, RuntimeStateSnapshot } from '../state/index.ts';
 import { Orchestrator, OrchestratorSnapshot } from '../orchestrator/index.ts';
+import { GoalEngine, GoalSnapshot } from '../goals/index.ts';
 
 const noopDisposer = () => {};
 
@@ -85,6 +86,12 @@ export class PluginRuntime {
       policyEngine: this.policyEngine,
       topologyProvider: () => this.getTopologySnapshot()
     });
+    this.goalEngine = options.goalEngine ?? new GoalEngine({
+      runtimeStateProvider: () => this.getState(),
+      reconcilerProvider: () => this.reconciler.snapshot(),
+      schedulerProvider: () => this.scheduler.snapshot(),
+      emitIntent: (intent) => this.intent(intent)
+    });
     this.stateProjector = options.stateProjector ?? new StateProjector({
       topologyProvider: () => this.getTopologySnapshot(),
       healthProvider: () => this.healthMonitor.snapshot(),
@@ -136,6 +143,7 @@ export class PluginRuntime {
       schedulerProvider: () => this.scheduler.snapshot(),
       reconcilerProvider: () => this.reconciler.snapshot(),
       orchestratorProvider: () => this.orchestrator?.snapshot?.() ?? OrchestratorSnapshot.empty(),
+      goalsProvider: () => this.goalEngine?.snapshot?.() ?? GoalSnapshot.empty(),
       stateProvider: () => this.getState()
     });
   }
@@ -160,6 +168,15 @@ export class PluginRuntime {
     });
   }
 
+
+
+  registerGoal(goal) {
+    return this.goalEngine.register(goal);
+  }
+
+  registerGoals(goals = []) {
+    return this.goalEngine.registerMany(goals);
+  }
 
   async intent(input) {
     if (!this.orchestrator || typeof this.orchestrator.intent !== 'function') {
@@ -354,6 +371,7 @@ export class PluginRuntime {
         executeAction: (action) => this.executeReconcileAction(action),
         policyDecision: Object.freeze({ allowExecution: true, degradedMode: false, retryStrategy: 'none', reasons: Object.freeze([]) })
       });
+      await this.goalEngine.evaluateCycle();
 
       const disposer = scheduled.value;
       if (disposer !== undefined && typeof disposer !== 'function') {
