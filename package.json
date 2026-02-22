@@ -9,6 +9,6 @@
     "test": "node --test"
   },
   "bin": {
-    "nimb": "bin/nimb.js"
+    "nimb": "./bin/nimb.js"
   }
 }

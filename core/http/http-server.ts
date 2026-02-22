@@ -69,7 +69,7 @@ const trySendAdminAsset = (response, requestPath, adminMount) => {
   return true;
 };
 
-export const createHttpServer = ({ runtime, config, startupTimestamp, port = 3000, clock = () => new Date().toISOString(), authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries }) => {
+export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirectory = process.cwd(), port = 3000, clock = () => new Date().toISOString(), authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries }) => {
   const router = createRouter([
     createHealthRoute(),
     createRuntimeRoute({ config, runtime, startupTimestamp, clock }),
@@ -79,7 +79,7 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, port = 300
   const adminMount = Object.freeze({
     enabled: config?.admin?.enabled === true,
     basePath: normalizeAdminMount(config?.admin?.basePath),
-    uiRoot: path.resolve(process.cwd(), config?.admin?.staticDir ?? './ui/admin')
+    uiRoot: path.resolve(rootDirectory, config?.admin?.staticDir ?? './ui/admin')
   });
 
   const server = http.createServer((request, response) => {
@@ -118,12 +118,22 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, port = 300
   return Object.freeze({
     port,
     start() {
-      return new Promise((resolve) => {
-        server.listen(port, () => {
+      return new Promise((resolve, reject) => {
+        const onError = (error) => {
+          server.off('listening', onListening);
+          reject(new Error(`Failed to start HTTP server on port ${port}: ${error?.message ?? 'unknown error'}`));
+        };
+
+        const onListening = () => {
+          server.off('error', onError);
           const address = server.address();
           const activePort = typeof address === 'object' && address ? address.port : port;
           resolve({ port: activePort });
-        });
+        };
+
+        server.once('error', onError);
+        server.once('listening', onListening);
+        server.listen(port);
       });
     },
     stop() {
