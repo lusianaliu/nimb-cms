@@ -29,11 +29,12 @@ body {
 .stack {
   display: grid;
   gap: 8px;
-  max-width: 320px;
+  max-width: 560px;
 }
 
 input,
-button {
+button,
+textarea {
   font: inherit;
   padding: 8px;
 }
@@ -60,4 +61,35 @@ button {
 
 .status {
   min-height: 20px;
+}
+
+.inline-form {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.entry-form {
+  margin-bottom: 12px;
+}
+
+.entries-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.entries-table th,
+.entries-table td {
+  border: 1px solid #e5e7eb;
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }

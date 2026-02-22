@@ -71,11 +71,19 @@ test('phase 38: deterministic admin ui is served and uses auth api', async () =>
     assert.equal(adminRoot.status, 200);
     assert.equal(adminRoot.contentType, 'text/html; charset=utf-8');
     assert.equal(adminRoot.body.includes('Nimb Admin Login'), true);
+    assert.equal(adminRoot.body.includes('Content Management'), true);
+    assert.equal(adminRoot.body.includes('Entries'), true);
 
     const adminScript = await getText(`${baseUrl}/admin/login.js`);
     assert.equal(adminScript.status, 200);
     assert.equal(adminScript.contentType, 'application/javascript; charset=utf-8');
     assert.equal(adminScript.body.includes('apiClient.login'), true);
+
+    const dashboardScript = await getText(`${baseUrl}/admin/dashboard.js`);
+    assert.equal(dashboardScript.status, 200);
+    assert.equal(dashboardScript.body.includes('publish'), true);
+    assert.equal(dashboardScript.body.includes('archive'), true);
+    assert.equal(dashboardScript.body.includes('draft'), true);
 
     const login = await postJson(`${baseUrl}/api/auth/login`, { username: 'admin', password: 'admin' });
     assert.equal(login.status, 200);
