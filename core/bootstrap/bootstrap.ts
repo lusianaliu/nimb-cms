@@ -5,6 +5,7 @@ import { BootstrapSnapshot } from './bootstrap-snapshot.ts';
 import { FileSystemStorageAdapter, PersistenceEngine } from '../persistence/index.ts';
 import { AuthService, SessionStore, createAuthMiddleware } from '../auth/index.ts';
 import { CommandDispatcher, createAdminController } from '../admin/index.ts';
+import { ContentRegistry, ContentStore } from '../content/index.ts';
 
 const toRuntimeStatus = (runtime) => {
   const state = runtime.getState?.();
@@ -23,11 +24,19 @@ export const createBootstrap = async ({ cwd = process.cwd(), startupTimestamp = 
     onStateChange: (status) => runtime.setAuthStatus?.(status)
   });
   const authMiddleware = createAuthMiddleware({ authService });
+  const contentRegistry = new ContentRegistry();
+  const contentStore = new ContentStore({ storageAdapter });
+
 
   const restore = async () => {
     const restored = await persistenceEngine.restore();
     runtime.setRestoredState?.(restored.runtime);
     runtime.setPersistenceStatus?.(persistenceEngine.status());
+
+    const restoredSchemas = await contentStore.restore();
+    for (const schema of restoredSchemas.types) {
+      contentRegistry.register(schema, { source: 'restore' });
+    }
   };
 
   const persist = async () => {
@@ -40,6 +49,11 @@ export const createBootstrap = async ({ cwd = process.cwd(), startupTimestamp = 
     });
     runtime.setPersistenceStatus?.(persistenceEngine.status());
   };
+
+  const persistContentTypes = async () => contentStore.persist({
+    schemaVersion: 'v1',
+    types: contentRegistry.list()
+  });
 
   await restore();
   await authService.restore();
@@ -103,6 +117,8 @@ export const createBootstrap = async ({ cwd = process.cwd(), startupTimestamp = 
   runtime.setBootstrapSnapshot?.(bootstrapSnapshot);
 
   await persist();
+  await persistContentTypes();
+  runtime.setContentStatusProvider?.(() => contentRegistry.inspectorSnapshot());
 
   return Object.freeze({
     config,
@@ -112,6 +128,9 @@ export const createBootstrap = async ({ cwd = process.cwd(), startupTimestamp = 
     persistence: persistenceEngine.status(),
     authService,
     authMiddleware,
-    adminController
+    adminController,
+    contentRegistry,
+    contentStore,
+    persistContentTypes
   });
 };

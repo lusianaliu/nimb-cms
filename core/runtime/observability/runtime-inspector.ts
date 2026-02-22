@@ -29,7 +29,8 @@ export class RuntimeInspector {
     bootstrapProvider?: () => unknown,
     persistenceProvider?: () => unknown,
     authProvider?: () => unknown,
-    adminProvider?: () => unknown
+    adminProvider?: () => unknown,
+    contentProvider?: () => unknown
   } = {}) {
     this.registry = options.registry;
     this.eventTrace = options.eventTrace;
@@ -51,6 +52,7 @@ export class RuntimeInspector {
     this.persistenceProvider = options.persistenceProvider;
     this.authProvider = options.authProvider;
     this.adminProvider = options.adminProvider;
+    this.contentProvider = options.contentProvider;
   }
 
   health() {
@@ -165,6 +167,14 @@ export class RuntimeInspector {
       lastCommands: Object.freeze([]),
       commandHistory: Object.freeze([]),
       adminHealth: 'idle'
+    });
+  }
+
+  content() {
+    return this.contentProvider?.() ?? Object.freeze({
+      registeredTypes: Object.freeze([]),
+      schemaHashes: Object.freeze([]),
+      validation: Object.freeze({ valid: true, errors: Object.freeze([]) })
     });
   }
 
