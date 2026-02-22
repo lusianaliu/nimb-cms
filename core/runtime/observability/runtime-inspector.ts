@@ -16,6 +16,7 @@ export class RuntimeInspector {
     policyProvider?: () => unknown,
     schedulerProvider?: () => unknown,
     reconcilerProvider?: () => unknown,
+    orchestratorProvider?: () => unknown,
     stateProvider?: () => unknown
   } = {}) {
     this.registry = options.registry;
@@ -31,6 +32,7 @@ export class RuntimeInspector {
     this.policyProvider = options.policyProvider;
     this.schedulerProvider = options.schedulerProvider;
     this.reconcilerProvider = options.reconcilerProvider;
+    this.orchestratorProvider = options.orchestratorProvider;
     this.stateProvider = options.stateProvider;
   }
 
@@ -93,6 +95,18 @@ export class RuntimeInspector {
       stable: true,
       drift: Object.freeze([]),
       actions: Object.freeze([])
+    });
+  }
+
+  orchestrator() {
+    return this.orchestratorProvider?.() ?? Object.freeze({
+      pendingIntents: Object.freeze([]),
+      lastPlans: Object.freeze([]),
+      orchestrationStatus: Object.freeze({
+        state: 'idle',
+        lastIntentId: null,
+        pendingCount: 0
+      })
     });
   }
 

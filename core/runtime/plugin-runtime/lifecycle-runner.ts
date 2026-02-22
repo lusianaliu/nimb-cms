@@ -15,6 +15,7 @@ import { PolicyEngine } from '../policy/index.ts';
 import { Scheduler } from '../scheduler/index.ts';
 import { Reconciler, ReconcileLoop } from '../reconciler/index.ts';
 import { StateProjector, RuntimeStateSnapshot } from '../state/index.ts';
+import { Orchestrator, OrchestratorSnapshot } from '../orchestrator/index.ts';
 
 const noopDisposer = () => {};
 
@@ -78,6 +79,12 @@ export class PluginRuntime {
       scheduler: this.scheduler,
       diagnosticsChannel: this.diagnosticsChannel
     });
+    this.orchestrator = options.orchestrator ?? new Orchestrator({
+      diagnosticsChannel: this.diagnosticsChannel,
+      scheduler: this.scheduler,
+      policyEngine: this.policyEngine,
+      topologyProvider: () => this.getTopologySnapshot()
+    });
     this.stateProjector = options.stateProjector ?? new StateProjector({
       topologyProvider: () => this.getTopologySnapshot(),
       healthProvider: () => this.healthMonitor.snapshot(),
@@ -128,6 +135,7 @@ export class PluginRuntime {
       policyProvider: () => this.policyEngine.snapshot(),
       schedulerProvider: () => this.scheduler.snapshot(),
       reconcilerProvider: () => this.reconciler.snapshot(),
+      orchestratorProvider: () => this.orchestrator?.snapshot?.() ?? OrchestratorSnapshot.empty(),
       stateProvider: () => this.getState()
     });
   }
@@ -150,6 +158,15 @@ export class PluginRuntime {
       activationOrder: this.lastActivationPlan,
       validation: this.lastValidation
     });
+  }
+
+
+  async intent(input) {
+    if (!this.orchestrator || typeof this.orchestrator.intent !== 'function') {
+      throw new Error('runtime orchestrator unavailable');
+    }
+
+    return this.orchestrator.intent(input);
   }
 
   async start() {
