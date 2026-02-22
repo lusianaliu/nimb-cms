@@ -4,8 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node src/index.js",
+    "start": "node bin/nimb.js",
     "check": "node --check src/index.js",
     "test": "node --test"
+  },
+  "bin": {
+    "nimb": "bin/nimb.js"
   }
 }

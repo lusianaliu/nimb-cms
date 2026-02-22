@@ -17,6 +17,7 @@ import { Reconciler, ReconcileLoop } from '../reconciler/index.ts';
 import { StateProjector, RuntimeStateSnapshot } from '../state/index.ts';
 import { Orchestrator, OrchestratorSnapshot } from '../orchestrator/index.ts';
 import { GoalEngine, GoalSnapshot } from '../goals/index.ts';
+import { BootstrapSnapshot } from '../../bootstrap/bootstrap-snapshot.ts';
 
 const noopDisposer = () => {};
 
@@ -128,6 +129,7 @@ export class PluginRuntime {
       warnings: [],
       rejectedPlugins: []
     });
+    this.bootstrapSnapshot = BootstrapSnapshot.empty();
     this.inspector = options.inspector ?? new RuntimeInspector({
       registry: this.registry,
       eventTrace: this.eventTrace,
@@ -144,12 +146,18 @@ export class PluginRuntime {
       reconcilerProvider: () => this.reconciler.snapshot(),
       orchestratorProvider: () => this.orchestrator?.snapshot?.() ?? OrchestratorSnapshot.empty(),
       goalsProvider: () => this.goalEngine?.snapshot?.() ?? GoalSnapshot.empty(),
-      stateProvider: () => this.getState()
+      stateProvider: () => this.getState(),
+      bootstrapProvider: () => this.bootstrapSnapshot
     });
   }
 
   getInspector() {
     return this.inspector;
+  }
+
+  setBootstrapSnapshot(snapshot) {
+    this.bootstrapSnapshot = snapshot ?? BootstrapSnapshot.empty();
+    return this.bootstrapSnapshot;
   }
 
   getState() {
