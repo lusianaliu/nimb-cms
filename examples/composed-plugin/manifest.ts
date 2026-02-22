@@ -6,6 +6,7 @@ export const pluginManifest = {
     register: './register.ts'
   },
   declaredCapabilities: ['content:create'],
+  consumedCapabilities: ['content:create'],
   requiredPlatformContracts: {
     'plugin.registerCapability': '^1.0.0',
     'plugin.unregisterCapability': '^1.0.0',

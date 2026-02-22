@@ -45,6 +45,12 @@ export class ManifestValidator {
       }
     }
 
+    if (manifest.consumedCapabilities !== undefined) {
+      if (!Array.isArray(manifest.consumedCapabilities) || manifest.consumedCapabilities.some((capability) => typeof capability !== 'string' || capability.trim().length === 0)) {
+        throw new Error('manifest.consumedCapabilities must be a string array when provided');
+      }
+    }
+
     if (!isRecord(manifest.requiredPlatformContracts)) {
       throw new Error('manifest.requiredPlatformContracts must be an object');
     }
@@ -73,6 +79,9 @@ export class ManifestValidator {
       exportedCapabilities: manifest.exportedCapabilities
         ? { ...manifest.exportedCapabilities }
         : {},
+      consumedCapabilities: manifest.consumedCapabilities
+        ? [...new Set(manifest.consumedCapabilities)].sort()
+        : [],
       requiredPlatformContracts: { ...manifest.requiredPlatformContracts }
     };
   }

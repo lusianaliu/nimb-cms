@@ -5,6 +5,7 @@ import { RuntimeStateStore } from '../state-store/state-store.ts';
 import { PluginLoader } from './plugin-loader.ts';
 import { DiagnosticsChannel, RuntimeInspector, EventTrace, CapabilityTrace, StateTrace } from '../observability/index.ts';
 import { PluginRegistry } from './plugin-registry.ts';
+import { TopologyGraph, DependencyResolver, ActivationPlanner, TopologySnapshot } from '../topology/index.ts';
 import { PluginState, RuntimeEvent, createStructuredError } from './runtime-types.ts';
 
 const noopDisposer = () => {};
@@ -37,12 +38,22 @@ export class PluginRuntime {
       eventSystem: this.eventSystem,
       stateTrace: this.stateTrace
     });
+    this.topologyGraph = options.topologyGraph ?? new TopologyGraph();
+    this.dependencyResolver = options.dependencyResolver ?? new DependencyResolver();
+    this.activationPlanner = options.activationPlanner ?? new ActivationPlanner();
+    this.lastActivationPlan = [];
+    this.lastValidation = {
+      unresolvedDependencies: [],
+      duplicateProviders: [],
+      cycles: []
+    };
     this.inspector = options.inspector ?? new RuntimeInspector({
       registry: this.registry,
       eventTrace: this.eventTrace,
       capabilityTrace: this.capabilityTrace,
       stateTrace: this.stateTrace,
-      diagnosticsChannel: this.diagnosticsChannel
+      diagnosticsChannel: this.diagnosticsChannel,
+      topologyProvider: () => this.getTopologySnapshot()
     });
   }
 
@@ -50,32 +61,99 @@ export class PluginRuntime {
     return this.inspector;
   }
 
+  getTopologySnapshot() {
+    return TopologySnapshot.from({
+      graph: this.topologyGraph,
+      activationOrder: this.lastActivationPlan,
+      validation: this.lastValidation
+    });
+  }
+
   async start() {
     const descriptors = await this.loader.discover();
+    const validated = [];
 
     for (const [index, descriptor] of descriptors.entries()) {
-      await this.runLifecycle(descriptor, index);
+      this.registry.registerDescriptor(descriptor);
+      this.diagnosticsChannel.emit('plugin.runtime.diagnostics.lifecycle.discover', { plugin: descriptor.id, loadOrder: index });
+      this.logger?.info?.(RuntimeEvent.DISCOVER, { plugin: descriptor.id, manifestPath: descriptor.manifestPath });
+
+      try {
+        const manifestData = await this.loader.loadManifest(descriptor);
+        const manifest = this.validator.validate(manifestData, descriptor);
+        this.registry.setValidated(descriptor.id, manifest);
+        this.topologyGraph.registerPlugin(descriptor.id, manifest, index);
+        this.diagnosticsChannel.emit('plugin.runtime.diagnostics.lifecycle.validate', { plugin: descriptor.id });
+        this.logger?.info?.(RuntimeEvent.VALIDATE, {
+          plugin: manifest.id,
+          version: manifest.version,
+          capabilities: manifest.declaredCapabilities.length
+        });
+
+        validated.push({ descriptor, manifest, loadOrder: index });
+      } catch (error) {
+        this.registry.setFailed(descriptor.id, createStructuredError(error));
+        this.topologyGraph.unregisterPlugin(descriptor.id);
+        this.diagnosticsChannel.emit('plugin.runtime.diagnostics.lifecycle.failure', { plugin: descriptor.id, stage: 'validate' });
+        this.logger?.error?.(RuntimeEvent.FAILURE, {
+          plugin: descriptor.id,
+          stage: 'validate',
+          error: createStructuredError(error)
+        });
+      }
+    }
+
+    this.diagnosticsChannel.emit('plugin.runtime.diagnostics.topology:build', {
+      nodes: this.topologyGraph.getNodes().length,
+      edges: this.topologyGraph.getEdges().length
+    });
+
+    this.lastValidation = this.dependencyResolver.validate(this.topologyGraph);
+    this.diagnosticsChannel.emit('plugin.runtime.diagnostics.topology:validated', {
+      valid: this.lastValidation.valid,
+      unresolved: this.lastValidation.unresolvedDependencies.length,
+      duplicates: this.lastValidation.duplicateProviders.length,
+      cycles: this.lastValidation.cycles.length
+    });
+
+    if (!this.lastValidation.valid) {
+      const errors = [
+        ...this.lastValidation.unresolvedDependencies.map((entry) => `${entry.pluginId} -> missing ${entry.capability}`),
+        ...this.lastValidation.duplicateProviders.map((entry) => `${entry.pluginId} -> duplicate ${entry.capability}`),
+        ...this.lastValidation.cycles.map((cycle) => `cycle: ${cycle.join(' -> ')}`)
+      ];
+      const error = new Error(`topology validation failed: ${errors.join('; ')}`);
+
+      for (const item of validated) {
+        this.registry.setFailed(item.descriptor.id, createStructuredError(error));
+      }
+
+      this.lastActivationPlan = [];
+      this.diagnosticsChannel.emit('plugin.runtime.diagnostics.topology:activationPlan', { activationOrder: [] });
+      return this.registry.list();
+    }
+
+    this.lastActivationPlan = this.activationPlanner.plan(this.topologyGraph);
+    this.diagnosticsChannel.emit('plugin.runtime.diagnostics.topology:activationPlan', {
+      activationOrder: [...this.lastActivationPlan]
+    });
+
+    const activationById = new Map(validated.map((entry) => [entry.descriptor.id, entry]));
+
+    for (const pluginId of this.lastActivationPlan) {
+      const activationItem = activationById.get(pluginId);
+      if (!activationItem) {
+        continue;
+      }
+
+      await this.activatePlugin(activationItem.descriptor, activationItem.manifest, activationItem.loadOrder);
     }
 
     return this.registry.list();
   }
 
-  async runLifecycle(descriptor, loadOrder = 0) {
-    this.registry.registerDescriptor(descriptor);
-    this.diagnosticsChannel.emit('plugin.runtime.diagnostics.lifecycle.discover', { plugin: descriptor.id, loadOrder });
-    this.logger?.info?.(RuntimeEvent.DISCOVER, { plugin: descriptor.id, manifestPath: descriptor.manifestPath });
-
+  async activatePlugin(descriptor, manifest, loadOrder) {
     try {
-      const manifestData = await this.loader.loadManifest(descriptor);
-      const manifest = this.validator.validate(manifestData, descriptor);
-      this.registry.setValidated(descriptor.id, manifest);
-      this.diagnosticsChannel.emit('plugin.runtime.diagnostics.lifecycle.validate', { plugin: descriptor.id });
-      this.logger?.info?.(RuntimeEvent.VALIDATE, {
-        plugin: manifest.id,
-        version: manifest.version,
-        capabilities: manifest.declaredCapabilities.length
-      });
-
       this.eventSystem.registerPlugin(descriptor.id, manifest.exportedEvents, loadOrder);
 
       for (const [capabilityName, interfaceFactory] of Object.entries(manifest.exportedCapabilities ?? {})) {
@@ -133,6 +211,9 @@ export class PluginRuntime {
       this.eventSystem.unregisterPlugin(pluginId);
       this.capabilityResolver.unbindProvider(pluginId);
       this.registry.setDiscovered(pluginId);
+      this.topologyGraph.unregisterPlugin(pluginId);
+      this.lastValidation = this.dependencyResolver.validate(this.topologyGraph);
+      this.lastActivationPlan = this.activationPlanner.plan(this.topologyGraph);
       this.diagnosticsChannel.emit('plugin.runtime.diagnostics.lifecycle.unload', { plugin: pluginId, result: 'success' });
       this.logger?.info?.(RuntimeEvent.UNLOAD, { plugin: pluginId });
       return true;
