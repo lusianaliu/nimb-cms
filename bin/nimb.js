@@ -6,12 +6,14 @@ let httpServer;
 
 try {
   const startupTimestamp = new Date().toISOString();
-  const { config, runtime, snapshot } = await createBootstrap({ startupTimestamp });
+  const { config, runtime, snapshot, authService, authMiddleware } = await createBootstrap({ startupTimestamp });
   httpServer = createHttpServer({
     runtime,
     config,
     startupTimestamp,
-    port: 3000
+    port: 3000,
+    authService,
+    authMiddleware
   });
 
   await httpServer.start();

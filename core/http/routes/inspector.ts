@@ -13,6 +13,7 @@ export const createInspectorRoute = ({ runtime }) => {
       }
 
       return jsonResponse({
+        auth: inspector.auth(),
         goals: inspector.goals(),
         orchestrator: inspector.orchestrator(),
         persistence: inspector.persistence(),
