@@ -1,0 +1,23 @@
+import { jsonResponse } from '../response.ts';
+
+export const createInspectorRoute = ({ runtime }) => {
+  let cachedState = null;
+
+  return {
+    method: 'GET',
+    path: '/inspector',
+    handler: () => {
+      const inspector = runtime.getInspector();
+      if (!cachedState) {
+        cachedState = inspector.state();
+      }
+
+      return jsonResponse({
+        goals: inspector.goals(),
+        orchestrator: inspector.orchestrator(),
+        persistence: inspector.persistence(),
+        state: cachedState
+      });
+    }
+  };
+};
