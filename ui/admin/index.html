@@ -23,7 +23,7 @@
       </section>
 
       <section id="dashboard-panel" class="panel hidden">
-        <h1>Nimb Runtime Dashboard</h1>
+        <h1>Nimb Admin</h1>
         <p id="session-status" class="status"></p>
 
         <div class="grid">
@@ -51,6 +51,44 @@
             <button id="reconcile-goals" type="button">Reconcile Goals</button>
           </div>
           <p id="action-status" class="status"></p>
+        </section>
+
+        <section>
+          <h2>Content Management</h2>
+          <form id="content-type-form" class="inline-form">
+            <label for="content-type-name">Content Type</label>
+            <input id="content-type-name" name="contentType" type="text" value="article" required />
+            <button type="submit">Use Type</button>
+          </form>
+
+          <form id="entry-form" class="stack entry-form">
+            <label for="entry-title">Title</label>
+            <input id="entry-title" name="title" type="text" required />
+
+            <label for="entry-body">Body</label>
+            <textarea id="entry-body" name="body" rows="5" required></textarea>
+
+            <div class="actions">
+              <button id="create-entry" type="submit">Create Entry</button>
+              <button id="save-entry" type="button">Save Draft Changes</button>
+              <button id="reset-entry" type="button">Clear Form</button>
+            </div>
+          </form>
+
+          <p id="content-status" class="status"></p>
+
+          <h3>Entries</h3>
+          <table class="entries-table">
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>State</th>
+                <th>Updated</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="entries-list"></tbody>
+          </table>
         </section>
       </section>
     </main>

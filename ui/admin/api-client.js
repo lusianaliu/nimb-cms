@@ -24,6 +24,12 @@ const request = async (path, options = {}) => {
   };
 };
 
+const jsonPost = (path, body = {}) => request(path, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify(body)
+});
+
 export const apiClient = Object.freeze({
   clearToken() {
     state.token = null;
@@ -32,11 +38,7 @@ export const apiClient = Object.freeze({
     state.token = token;
   },
   async login({ username, password }) {
-    return request('/api/auth/login', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
+    return jsonPost('/api/auth/login', { username, password });
   },
   async getSystem() {
     return request('/api/system');
@@ -48,24 +50,36 @@ export const apiClient = Object.freeze({
     return request('/api/admin/status');
   },
   async restartRuntime() {
-    return request('/api/admin/runtime/restart', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}'
-    });
+    return jsonPost('/api/admin/runtime/restart');
   },
   async persistState() {
-    return request('/api/admin/runtime/persist', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}'
-    });
+    return jsonPost('/api/admin/runtime/persist');
   },
   async reconcileGoals() {
-    return request('/api/admin/goals/reconcile', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}'
-    });
+    return jsonPost('/api/admin/goals/reconcile');
+  },
+  async getContentTypes() {
+    return request('/api/content-types');
+  },
+  async createContentType(schema) {
+    return jsonPost('/api/admin/content-types', schema);
+  },
+  async listEntries(type) {
+    return request(`/api/entries/${encodeURIComponent(type)}`);
+  },
+  async getEntry(type, id) {
+    return request(`/api/entries/${encodeURIComponent(type)}/${encodeURIComponent(id)}`);
+  },
+  async createEntry(type, data) {
+    return jsonPost(`/api/admin/entries/${encodeURIComponent(type)}`, data);
+  },
+  async publishEntry(type, id) {
+    return jsonPost(`/api/admin/entries/${encodeURIComponent(type)}/${encodeURIComponent(id)}/publish`);
+  },
+  async archiveEntry(type, id) {
+    return jsonPost(`/api/admin/entries/${encodeURIComponent(type)}/${encodeURIComponent(id)}/archive`);
+  },
+  async draftEntry(type, id) {
+    return jsonPost(`/api/admin/entries/${encodeURIComponent(type)}/${encodeURIComponent(id)}/draft`);
   }
 });
