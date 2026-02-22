@@ -7,13 +7,13 @@ import { createInspectorRoute } from './routes/inspector.ts';
 import { createApiRouter } from '../api/index.ts';
 import { errorResponse, notFoundResponse } from './response.ts';
 
-export const createHttpServer = ({ runtime, config, startupTimestamp, port = 3000, clock = () => new Date().toISOString(), authService, authMiddleware }) => {
+export const createHttpServer = ({ runtime, config, startupTimestamp, port = 3000, clock = () => new Date().toISOString(), authService, authMiddleware, adminController }) => {
   const router = createRouter([
     createHealthRoute(),
     createRuntimeRoute({ config, runtime, startupTimestamp, clock }),
     createInspectorRoute({ runtime })
   ]);
-  const apiRouter = createApiRouter({ runtime, authService, authMiddleware });
+  const apiRouter = createApiRouter({ runtime, authService, authMiddleware, adminController });
 
   const server = http.createServer((request, response) => {
     const context = createRequestContext(request, { clock });

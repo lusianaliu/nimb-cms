@@ -1,10 +1,10 @@
-import { createRouter } from '../http/router.ts';
 import { jsonResponse } from '../http/response.ts';
 import { createApiError } from './api-error.ts';
 import { createGoalsApiRoute } from './routes/goals.ts';
 import { createPersistenceApiRoute } from './routes/persistence.ts';
 import { createRuntimeApiRoute } from './routes/runtime.ts';
 import { createSystemApiRoute } from './routes/system.ts';
+import { createAdminRouter } from '../admin/index.ts';
 
 const defaultRoutes = () => [
   createSystemApiRoute(),
@@ -35,12 +35,11 @@ const readJsonBody = async (request: { method?: string, headers: Record<string, 
   return JSON.parse(raw);
 };
 
-export const createApiRouter = ({ runtime, authService, authMiddleware }: { runtime: { getInspector: () => unknown }, authService?: { login: (input: { username: string, password: string }) => Promise<unknown>, logout: (token: string) => Promise<boolean>, getSession: (token: string) => unknown }, authMiddleware?: { attach: (context: { request: { headers: Record<string, string | string[] | undefined> } }) => { token: string | null, authenticated: boolean, session: unknown } } }) => {
-  const router = createRouter(defaultRoutes().map((route) => ({
-    method: route.method,
-    path: route.path,
-    handler: (context: { method: string, path: string, timestamp: string }) => route.controller(context, runtime)
-  })));
+export const createApiRouter = ({ runtime, authService, authMiddleware, adminController }: { runtime: { getInspector: () => unknown }, authService?: { login: (input: { username: string, password: string }) => Promise<unknown>, logout: (token: string) => Promise<boolean>, getSession: (token: string) => unknown }, authMiddleware?: { attach: (context: { request: { headers: Record<string, string | string[] | undefined> } }) => { token: string | null, authenticated: boolean, session: unknown } }, adminController?: { restartRuntime: (input: { requestId: string, payload: unknown }) => Promise<unknown>, persistRuntime: (input: { requestId: string, payload: unknown }) => Promise<unknown>, reconcileGoals: (input: { requestId: string, payload: unknown }) => Promise<unknown>, status: () => unknown } }) => {
+  const routes = defaultRoutes();
+  const adminRouter = adminController
+    ? createAdminRouter({ controller: adminController, authMiddleware })
+    : null;
 
   return Object.freeze({
     async handle(context: { method: string, path: string, timestamp: string, request: { headers: Record<string, string | string[] | undefined>, method?: string, [Symbol.asyncIterator]: () => AsyncIterableIterator<Buffer> } }) {
@@ -85,15 +84,31 @@ export const createApiRouter = ({ runtime, authService, authMiddleware }: { runt
         return jsonResponse({ success: true, data: { session: auth.session }, meta: {} }, { statusCode: 200 });
       }
 
-      const handler = router.dispatch(context);
-      if (!handler) {
+      const requestBody = await readJsonBody(context.request);
+
+      if (adminRouter) {
+        const adminPayload = await adminRouter.handle(context, requestBody);
+        if (adminPayload) {
+          const statusCode = adminPayload.success
+            ? 200
+            : adminPayload.error?.code === 'INVALID_REQUEST'
+              ? 401
+              : adminPayload.error?.code === 'NOT_FOUND'
+                ? 404
+                : 500;
+          return jsonResponse(adminPayload, { statusCode });
+        }
+      }
+
+      const route = routes.find((entry) => entry.method === context.method && entry.path === context.path);
+      if (!route) {
         return jsonResponse(createApiError({
           code: 'NOT_FOUND',
           message: `API route not found: ${context.path}`
         }), { statusCode: 404 });
       }
 
-      const payload = handler(context);
+      const payload = route.controller(context, runtime);
       const statusCode = payload.success ? 200 : 500;
       return jsonResponse(payload, { statusCode });
     }
