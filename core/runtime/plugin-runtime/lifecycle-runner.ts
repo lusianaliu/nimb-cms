@@ -12,6 +12,7 @@ import { VersionResolver, CompatibilityChecker, VersionSnapshot } from '../versi
 import { CapabilityRouter } from '../routing/index.ts';
 import { SandboxRunner } from '../sandbox/index.ts';
 import { PolicyEngine } from '../policy/index.ts';
+import { Scheduler } from '../scheduler/index.ts';
 
 const noopDisposer = () => {};
 
@@ -48,6 +49,11 @@ export class PluginRuntime {
       topologySnapshot: () => this.getTopologySnapshot(),
       healthSnapshot: () => this.healthMonitor.snapshot(),
       versionResolution: () => this.lastVersionSnapshot
+    });
+    this.scheduler = options.scheduler ?? new Scheduler({
+      diagnosticsChannel: this.diagnosticsChannel,
+      topologyProvider: () => this.getTopologySnapshot(),
+      healthProvider: () => this.healthMonitor.snapshot()
     });
     this.healthMonitor = options.healthMonitor ?? new HealthMonitor({
       diagnosticsChannel: this.diagnosticsChannel,
@@ -98,7 +104,8 @@ export class PluginRuntime {
       versionProvider: () => this.lastVersionSnapshot,
       routingProvider: () => this.capabilityRouter.snapshot(),
       sandboxProvider: () => this.sandboxRunner.snapshot(),
-      policyProvider: () => this.policyEngine.snapshot()
+      policyProvider: () => this.policyEngine.snapshot(),
+      schedulerProvider: () => this.scheduler.snapshot()
     });
   }
 
@@ -264,19 +271,38 @@ export class PluginRuntime {
         throw new Error(`policy blocked runtime lifecycle execution: ${policyDecision.reasons.join(', ')}`);
       }
 
-      const execution = await this.sandboxRunner.executeLifecycle({
+      const consumedCapabilities = Array.isArray(manifest.consumedCapabilities)
+        ? manifest.consumedCapabilities
+        : [];
+      const dependencies = consumedCapabilities
+        .map((capability) => this.capabilityRouter.selectProvider({ pluginId: descriptor.id, capability, required: false })?.providerId)
+        .filter((providerId) => typeof providerId === 'string')
+        .sort((left, right) => left.localeCompare(right));
+
+      this.scheduler.enqueueLifecycle({
         pluginId: descriptor.id,
         stage: 'register',
         loadOrder,
-        contracts: runtimeContracts,
-        operation: (sandboxContracts) => register(sandboxContracts)
+        operation: (sandboxContracts) => register(sandboxContracts),
+        policyDecision,
+        capability: manifest.declaredCapabilities?.[0] ?? null,
+        dependencies,
+        priority: policyDecision.degradedMode ? 1 : 2
       });
 
-      if (!execution.ok) {
-        throw execution.error;
+      const [scheduled] = await this.scheduler.drain((entry) => this.sandboxRunner.executeLifecycle({
+        pluginId: entry.pluginId,
+        stage: entry.stage,
+        loadOrder: entry.loadOrder,
+        contracts: runtimeContracts,
+        operation: entry.operation
+      }));
+
+      if (!scheduled?.ok) {
+        throw scheduled?.error ?? new Error(`scheduled lifecycle execution failed for plugin ${descriptor.id}`);
       }
 
-      const disposer = execution.value;
+      const disposer = scheduled.value;
       if (disposer !== undefined && typeof disposer !== 'function') {
         throw new Error('register entrypoint must return a disposer function when provided');
       }
