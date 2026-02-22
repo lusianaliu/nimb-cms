@@ -1,4 +1,4 @@
-import { loadConfig } from './config-loader.ts';
+import { loadConfig } from '../config/config-loader.ts';
 import { createRuntime } from './runtime-factory.ts';
 import path from 'node:path';
 import { BootstrapSnapshot } from './bootstrap-snapshot.ts';
@@ -15,6 +15,7 @@ const toRuntimeStatus = (runtime) => {
 export const createBootstrap = async ({ cwd = process.cwd(), startupTimestamp = new Date().toISOString() } = {}) => {
   const config = loadConfig({ cwd });
   const runtime = createRuntime(config);
+  runtime.setConfig?.(config);
   const storageAdapter = new FileSystemStorageAdapter({ rootDirectory: path.join(cwd, '.nimb') });
   const persistenceEngine = new PersistenceEngine({ storageAdapter });
   const sessionStore = new SessionStore({ storageAdapter });
