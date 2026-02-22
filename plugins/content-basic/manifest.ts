@@ -19,6 +19,9 @@ export const pluginManifest = {
     'content:update',
     'content:delete'
   ],
+  exportedEvents: [
+    'content:created'
+  ],
   exportedCapabilities: {
     'content:create': () => ({
       create: async (payload: { title?: string } = {}) => ({
@@ -37,7 +40,9 @@ export const pluginManifest = {
     'plugin.unregisterCapability': '^1.0.0',
     'plugin.registerSchema': '^1.0.0',
     'plugin.unregisterSchema': '^1.0.0',
-    'plugin.registerLifecycleHook': '^1.0.0'
+    'plugin.registerLifecycleHook': '^1.0.0',
+    'plugin.emit': '^1.0.0',
+    'plugin.on': '^1.0.0'
   }
 } as const;
 

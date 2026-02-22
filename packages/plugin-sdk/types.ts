@@ -41,6 +41,7 @@ export type PluginDefinition = {
   name: string;
   version: string;
   capabilities?: readonly CapabilityDefinition[];
+  exportedEvents?: readonly string[];
   exportedCapabilities?: Record<string, CapabilityProviderFactory>;
   schemas?: readonly SchemaDefinition[];
   lifecycle?: LifecycleDefinition;
@@ -50,6 +51,8 @@ export type PluginContext = {
   pluginId: string;
   pluginVersion: string;
   useCapability: (name: string) => CapabilityInterface;
+  emit: (eventName: string, payload: unknown) => Promise<void>;
+  on: (eventName: string, handler: (payload: unknown, metadata: { eventName: string; publisher: string; subscriber: string }) => void | Promise<void>) => Disposable;
   logger: {
     info: (message: string, metadata?: Record<string, unknown>) => void;
     warn: (message: string, metadata?: Record<string, unknown>) => void;
@@ -67,6 +70,8 @@ export type RuntimeContracts = {
     handler: (event: RuntimeLifecycleEvent) => Promise<void>;
   }) => Disposable;
   useCapability: (name: string) => CapabilityInterface;
+  emit: PluginContext['emit'];
+  on: PluginContext['on'];
   logger: PluginContext['logger'];
 };
 
@@ -78,6 +83,7 @@ export type SDKPlugin = {
       register: string;
     };
     declaredCapabilities: string[];
+    exportedEvents: string[];
     exportedCapabilities: Record<string, CapabilityProviderFactory>;
     requiredPlatformContracts: Record<string, string>;
   };

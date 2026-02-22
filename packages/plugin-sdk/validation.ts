@@ -37,6 +37,17 @@ export const validatePluginDefinition = (definition: PluginDefinition): void => 
   }
 
 
+  if (definition.exportedEvents !== undefined) {
+    if (!Array.isArray(definition.exportedEvents)) {
+      throw new Error('plugin-sdk: "exportedEvents" must be an array');
+    }
+
+    for (const [index, eventName] of definition.exportedEvents.entries()) {
+      assertNonEmptyString(eventName, `exportedEvents[${index}]`);
+    }
+  }
+
+
   if (definition.exportedCapabilities !== undefined) {
     if (!definition.exportedCapabilities || typeof definition.exportedCapabilities !== 'object' || Array.isArray(definition.exportedCapabilities)) {
       throw new Error('plugin-sdk: "exportedCapabilities" must be an object');
