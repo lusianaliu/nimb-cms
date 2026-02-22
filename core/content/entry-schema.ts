@@ -19,13 +19,20 @@ const toDeterministicUuid = (hex) => `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${
 
 export const canonicalizeEntryData = (value) => canonicalize(value ?? {});
 
+export const ENTRY_STATES = Object.freeze(['draft', 'published', 'archived']);
+
+export const normalizeEntryState = (state) => {
+  const normalized = String(state ?? 'draft').trim();
+  return ENTRY_STATES.includes(normalized) ? normalized : 'draft';
+};
+
 export const stableEntryId = ({ type, data }) => {
   const payload = JSON.stringify({ type: String(type ?? '').trim(), data: canonicalizeEntryData(data) });
   const digest = createHash('sha256').update(payload).digest('hex');
   return toDeterministicUuid(digest);
 };
 
-export const createEntry = ({ type, data, createdAt, updatedAt }) => {
+export const createEntry = ({ type, data, state = 'draft', createdAt, updatedAt }) => {
   const normalizedType = String(type ?? '').trim();
   const normalizedData = canonicalizeEntryData(data);
 
@@ -33,6 +40,7 @@ export const createEntry = ({ type, data, createdAt, updatedAt }) => {
     id: stableEntryId({ type: normalizedType, data: normalizedData }),
     type: normalizedType,
     data: normalizedData,
+    state: normalizeEntryState(state),
     createdAt: String(createdAt ?? ''),
     updatedAt: String(updatedAt ?? '')
   }));

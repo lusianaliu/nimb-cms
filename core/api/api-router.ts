@@ -35,7 +35,7 @@ const readJsonBody = async (request: { method?: string, headers: Record<string, 
   return JSON.parse(raw);
 };
 
-export const createApiRouter = ({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries }: { runtime: { getInspector: () => unknown }, authService?: { login: (input: { username: string, password: string }) => Promise<unknown>, logout: (token: string) => Promise<boolean>, getSession: (token: string) => unknown }, authMiddleware?: { attach: (context: { request: { headers: Record<string, string | string[] | undefined> } }) => { token: string | null, authenticated: boolean, session: unknown } }, adminController?: { restartRuntime: (input: { requestId: string, payload: unknown }) => Promise<unknown>, persistRuntime: (input: { requestId: string, payload: unknown }) => Promise<unknown>, reconcileGoals: (input: { requestId: string, payload: unknown }) => Promise<unknown>, status: () => unknown }, contentRegistry?: { register: (schema: unknown, options?: { source?: string }) => unknown, list: () => unknown[], get: (name: string) => unknown } , persistContentTypes?: () => Promise<unknown>, entryRegistry?: { create: (type: string, data: unknown, options?: { source?: string, timestamp?: string }) => unknown, list: (type: string) => unknown[], get: (type: string, id: string) => unknown }, persistEntries?: () => Promise<unknown> }) => {
+export const createApiRouter = ({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries }: { runtime: { getInspector: () => unknown }, authService?: { login: (input: { username: string, password: string }) => Promise<unknown>, logout: (token: string) => Promise<boolean>, getSession: (token: string) => unknown }, authMiddleware?: { attach: (context: { request: { headers: Record<string, string | string[] | undefined> } }) => { token: string | null, authenticated: boolean, session: unknown } }, adminController?: { restartRuntime: (input: { requestId: string, payload: unknown }) => Promise<unknown>, persistRuntime: (input: { requestId: string, payload: unknown }) => Promise<unknown>, reconcileGoals: (input: { requestId: string, payload: unknown }) => Promise<unknown>, status: () => unknown }, contentRegistry?: { register: (schema: unknown, options?: { source?: string }) => unknown, list: () => unknown[], get: (name: string) => unknown } , persistContentTypes?: () => Promise<unknown>, entryRegistry?: { create: (type: string, data: unknown, options?: { source?: string, timestamp?: string }) => unknown, list: (type: string) => unknown[], get: (type: string, id: string) => unknown, publish: (type: string, id: string, options?: { source?: string, timestamp?: string }) => unknown, archive: (type: string, id: string, options?: { source?: string, timestamp?: string }) => unknown, draft: (type: string, id: string, options?: { source?: string, timestamp?: string }) => unknown }, persistEntries?: () => Promise<unknown> }) => {
   const routes = defaultRoutes();
   const adminRouter = adminController
     ? createAdminRouter({ controller: adminController, authMiddleware })
@@ -138,10 +138,33 @@ export const createApiRouter = ({ runtime, authService, authMiddleware, adminCon
         }
       }
 
+
       if (context.path.startsWith('/api/admin/entries/') && context.method === 'POST' && entryRegistry && authMiddleware) {
         const auth = authMiddleware.attach(context);
         if (!auth.authenticated) {
           return jsonResponse(createApiError({ code: 'INVALID_REQUEST', message: 'Invalid token' }), { statusCode: 401 });
+        }
+
+        const lifecycleMatch = context.path.match(/^\/api\/admin\/entries\/([^/]+)\/([^/]+)\/(publish|archive|draft)$/);
+        if (lifecycleMatch) {
+          const type = decodeURIComponent(lifecycleMatch[1]);
+          const id = decodeURIComponent(lifecycleMatch[2]);
+          const transition = lifecycleMatch[3];
+
+          try {
+            const entry = transition === 'publish'
+              ? entryRegistry.publish(type, id, { source: 'admin.command', timestamp: context.timestamp })
+              : transition === 'archive'
+                ? entryRegistry.archive(type, id, { source: 'admin.command', timestamp: context.timestamp })
+                : entryRegistry.draft(type, id, { source: 'admin.command', timestamp: context.timestamp });
+            await persistEntries?.();
+            return jsonResponse({ success: true, data: { entry }, meta: {} }, { statusCode: 200 });
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Invalid entry transition';
+            const statusCode = message.startsWith('Entry not found:') ? 404 : 400;
+            const code = statusCode === 404 ? 'NOT_FOUND' : 'INVALID_REQUEST';
+            return jsonResponse(createApiError({ code, message }), { statusCode });
+          }
         }
 
         const type = decodeURIComponent(context.path.slice('/api/admin/entries/'.length));
