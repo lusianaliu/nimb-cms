@@ -10,6 +10,7 @@ import { PluginState, RuntimeEvent, createStructuredError } from './runtime-type
 import { HealthMonitor } from '../health/index.ts';
 import { VersionResolver, CompatibilityChecker, VersionSnapshot } from '../versioning/index.ts';
 import { CapabilityRouter } from '../routing/index.ts';
+import { SandboxRunner } from '../sandbox/index.ts';
 
 const noopDisposer = () => {};
 
@@ -40,6 +41,7 @@ export class PluginRuntime {
       policies: options.routingPolicies ?? {}
     });
     this.activationCatalog = new Map();
+    this.sandboxRunner = options.sandboxRunner ?? new SandboxRunner({ diagnosticsChannel: this.diagnosticsChannel });
     this.healthMonitor = options.healthMonitor ?? new HealthMonitor({
       diagnosticsChannel: this.diagnosticsChannel,
       recoveryHandlers: {
@@ -87,7 +89,8 @@ export class PluginRuntime {
       topologyProvider: () => this.getTopologySnapshot(),
       healthProvider: () => this.healthMonitor.snapshot(),
       versionProvider: () => this.lastVersionSnapshot,
-      routingProvider: () => this.capabilityRouter.snapshot()
+      routingProvider: () => this.capabilityRouter.snapshot(),
+      sandboxProvider: () => this.sandboxRunner.snapshot()
     });
   }
 
@@ -238,7 +241,19 @@ export class PluginRuntime {
         }
       };
 
-      const disposer = await Promise.resolve(register(runtimeContracts));
+      const execution = await this.sandboxRunner.executeLifecycle({
+        pluginId: descriptor.id,
+        stage: 'register',
+        loadOrder,
+        contracts: runtimeContracts,
+        operation: (sandboxContracts) => register(sandboxContracts)
+      });
+
+      if (!execution.ok) {
+        throw execution.error;
+      }
+
+      const disposer = execution.value;
       if (disposer !== undefined && typeof disposer !== 'function') {
         throw new Error('register entrypoint must return a disposer function when provided');
       }
