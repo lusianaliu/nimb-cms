@@ -10,7 +10,8 @@ export class RuntimeInspector {
     topologyProvider?: () => unknown,
     healthProvider?: () => unknown,
     versionProvider?: () => unknown,
-    routingProvider?: () => unknown
+    routingProvider?: () => unknown,
+    sandboxProvider?: () => unknown
   } = {}) {
     this.registry = options.registry;
     this.eventTrace = options.eventTrace;
@@ -21,6 +22,7 @@ export class RuntimeInspector {
     this.healthProvider = options.healthProvider;
     this.versionProvider = options.versionProvider;
     this.routingProvider = options.routingProvider;
+    this.sandboxProvider = options.sandboxProvider;
   }
 
   health() {
@@ -52,6 +54,12 @@ export class RuntimeInspector {
   routing() {
     return this.routingProvider?.() ?? Object.freeze({
       decisions: Object.freeze([])
+    });
+  }
+
+  sandbox() {
+    return this.sandboxProvider?.() ?? Object.freeze({
+      executions: Object.freeze([])
     });
   }
 
