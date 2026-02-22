@@ -11,6 +11,7 @@ import { HealthMonitor } from '../health/index.ts';
 import { VersionResolver, CompatibilityChecker, VersionSnapshot } from '../versioning/index.ts';
 import { CapabilityRouter } from '../routing/index.ts';
 import { SandboxRunner } from '../sandbox/index.ts';
+import { PolicyEngine } from '../policy/index.ts';
 
 const noopDisposer = () => {};
 
@@ -42,6 +43,12 @@ export class PluginRuntime {
     });
     this.activationCatalog = new Map();
     this.sandboxRunner = options.sandboxRunner ?? new SandboxRunner({ diagnosticsChannel: this.diagnosticsChannel });
+    this.policyEngine = options.policyEngine ?? new PolicyEngine({
+      diagnosticsChannel: this.diagnosticsChannel,
+      topologySnapshot: () => this.getTopologySnapshot(),
+      healthSnapshot: () => this.healthMonitor.snapshot(),
+      versionResolution: () => this.lastVersionSnapshot
+    });
     this.healthMonitor = options.healthMonitor ?? new HealthMonitor({
       diagnosticsChannel: this.diagnosticsChannel,
       recoveryHandlers: {
@@ -90,7 +97,8 @@ export class PluginRuntime {
       healthProvider: () => this.healthMonitor.snapshot(),
       versionProvider: () => this.lastVersionSnapshot,
       routingProvider: () => this.capabilityRouter.snapshot(),
-      sandboxProvider: () => this.sandboxRunner.snapshot()
+      sandboxProvider: () => this.sandboxRunner.snapshot(),
+      policyProvider: () => this.policyEngine.snapshot()
     });
   }
 
@@ -240,6 +248,21 @@ export class PluginRuntime {
           subscribe: (name, handler) => this.stateStore.subscribe(descriptor.id, name, handler)
         }
       };
+
+      const policyDecision = this.policyEngine.evaluate({
+        pluginId: descriptor.id,
+        stage: 'register',
+        routingDecision: {
+          required: false,
+          policy: 'single',
+          providerId: descriptor.id,
+          candidates: [descriptor.id]
+        }
+      });
+
+      if (!policyDecision.allowExecution) {
+        throw new Error(`policy blocked runtime lifecycle execution: ${policyDecision.reasons.join(', ')}`);
+      }
 
       const execution = await this.sandboxRunner.executeLifecycle({
         pluginId: descriptor.id,
