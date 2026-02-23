@@ -21,6 +21,18 @@ import { BootstrapSnapshot } from '../../bootstrap/bootstrap-snapshot.ts';
 
 const noopDisposer = () => {};
 
+const deepFreezeConfig = (value) => {
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+
+  for (const key of Object.keys(value)) {
+    deepFreezeConfig(value[key]);
+  }
+
+  return Object.freeze(value);
+};
+
 export class PluginRuntime {
   constructor(options = {}) {
     this.logger = options.logger;
@@ -169,7 +181,11 @@ export class PluginRuntime {
 
 
   setConfig(config) {
-    this.config = config ?? Object.freeze({});
+    const normalized = config && typeof config === 'object'
+      ? structuredClone(config)
+      : {};
+
+    this.config = deepFreezeConfig(normalized);
     return this.config;
   }
 

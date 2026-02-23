@@ -43,7 +43,10 @@ test('phase 34: deterministic http endpoints', async () => {
 
     const health = await getJson(`${baseUrl}/health`);
     assert.equal(health.status, 200);
-    assert.deepEqual(health.body, { status: 'ok', runtime: 'active' });
+    assert.equal(health.body.status, 'ok');
+    assert.equal(health.body.runtime, 'active');
+    assert.equal(typeof health.body.version, 'string');
+    assert.equal(['development', 'production'].includes(health.body.mode), true);
 
     const runtimeFirst = await getJson(`${baseUrl}/runtime`);
     const runtimeSecond = await getJson(`${baseUrl}/runtime`);
