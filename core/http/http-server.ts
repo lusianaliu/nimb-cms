@@ -71,7 +71,7 @@ const trySendAdminAsset = (response, requestPath, adminMount) => {
 
 export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirectory = process.cwd(), port = 3000, clock = () => new Date().toISOString(), authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries }) => {
   const router = createRouter([
-    createHealthRoute(),
+    createHealthRoute({ config }),
     createRuntimeRoute({ config, runtime, startupTimestamp, clock }),
     createInspectorRoute({ runtime })
   ]);

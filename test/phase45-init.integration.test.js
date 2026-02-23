@@ -109,7 +109,11 @@ test('phase 45: nimb init scaffolds a runnable project', async () => {
 
     const response = await fetch('http://127.0.0.1:3211/health');
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { status: 'ok', runtime: 'active' });
+    const body = await response.json();
+    assert.equal(body.status, 'ok');
+    assert.equal(body.runtime, 'active');
+    assert.equal(typeof body.version, 'string');
+    assert.equal(['development', 'production'].includes(body.mode), true);
   } finally {
     if (child.exitCode === null) {
       await terminate(child);

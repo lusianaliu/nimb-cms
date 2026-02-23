@@ -17,6 +17,7 @@ const DEFAULT_CONFIG = Object.freeze({
 });
 
 const ALLOWED_LOG_LEVELS = new Set(['debug', 'info', 'warn', 'error']);
+const ALLOWED_RUNTIME_MODES = new Set(['development', 'production']);
 
 const deepFreeze = (value) => {
   if (value === null || typeof value !== 'object') {
@@ -46,6 +47,10 @@ const normalizeRuntime = (runtime) => {
 
   if (!ALLOWED_LOG_LEVELS.has(logLevel)) {
     throw new Error(`invalid runtime.logLevel: ${logLevel}`);
+  }
+
+  if (!ALLOWED_RUNTIME_MODES.has(mode)) {
+    throw new Error(`invalid runtime.mode: ${mode}`);
   }
 
   return Object.freeze({

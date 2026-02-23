@@ -2,8 +2,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadConfig, createRuntime, createBootstrap } from '../core/bootstrap/index.ts';
+import { loadConfig, createBootstrap, validateAdminStaticDir, validateStartupInvariants } from '../core/bootstrap/index.ts';
 import { createHttpServer } from '../core/http/index.ts';
+import { version, resolveRuntimeMode } from '../core/runtime/version.ts';
 
 const projectRoot = process.cwd();
 const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -47,26 +48,6 @@ const resolvePort = (config) => {
   }
 
   return 3000;
-};
-
-const resolveAdminStaticDir = (config, rootDirectory) => {
-  const staticDir = config?.admin?.staticDir ?? './ui/admin';
-  return path.isAbsolute(staticDir) ? staticDir : path.resolve(rootDirectory, staticDir);
-};
-
-const validateAdminStaticDir = (config, rootDirectory) => {
-  if (config?.admin?.enabled !== true) {
-    return;
-  }
-
-  const adminDir = resolveAdminStaticDir(config, rootDirectory);
-  if (!fs.existsSync(adminDir)) {
-    throw new Error(`Admin staticDir does not exist: ${adminDir}`);
-  }
-
-  if (!fs.statSync(adminDir).isDirectory()) {
-    throw new Error(`Admin staticDir is not a directory: ${adminDir}`);
-  }
 };
 
 const createProject = (projectName) => {
@@ -217,10 +198,9 @@ const startServer = async () => {
 
   try {
     const config = loadConfig({ cwd: projectRoot });
-    validateAdminStaticDir(config, runtimeRoot);
     const port = resolvePort(config);
+    await validateStartupInvariants({ config, projectRoot, runtimeRoot, port });
 
-    createRuntime(config);
     const bootstrap = await createBootstrap({ cwd: projectRoot, startupTimestamp });
 
     httpServer = createHttpServer({
@@ -240,11 +220,14 @@ const startServer = async () => {
 
     const { port: activePort } = await httpServer.start();
 
-    process.stdout.write('Nimb CMS starting...\n');
-    process.stdout.write('Mode: standalone\n');
+    const mode = resolveRuntimeMode(bootstrap.config.runtime.mode);
+    const adminEnabled = bootstrap.config.admin.enabled === true;
+
+    process.stdout.write(`Nimb v${version}\n`);
+    process.stdout.write(`Mode: ${mode}\n`);
+    process.stdout.write(`Admin: ${adminEnabled ? `enabled (${bootstrap.config.admin.basePath})` : 'disabled'}\n`);
+    process.stdout.write('Storage: active\n');
     process.stdout.write(`Port: ${activePort}\n`);
-    process.stdout.write(`Admin path: ${bootstrap.config.admin.basePath}\n`);
-    process.stdout.write(`Plugins loaded: ${bootstrap.snapshot.loadedPlugins.length}\n`);
     process.stdout.write('Ready.\n');
   } catch (error) {
     process.stderr.write(`Startup failed: ${error?.message ?? String(error)}\n`);
