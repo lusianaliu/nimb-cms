@@ -152,7 +152,7 @@ const tryHandleAdminDashboardRequest = ({ context, response, runtime, adminBaseP
     return true;
   }
 
-  const body = Buffer.from(renderDashboardPage(runtime), 'utf8');
+  const body = Buffer.from(renderDashboardPage({ runtime, adminBasePath }), 'utf8');
   response.writeHead(200, {
     'content-length': body.byteLength,
     'content-type': 'text/html; charset=utf-8'
