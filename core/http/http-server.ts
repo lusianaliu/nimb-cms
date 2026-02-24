@@ -8,6 +8,7 @@ import { createRuntimeRoute } from './routes/runtime.ts';
 import { createInspectorRoute } from './routes/inspector.ts';
 import { createApiRouter } from '../api/index.ts';
 import { errorResponse, notFoundResponse } from './response.ts';
+import { installerGate } from './installer-gate.ts';
 
 const adminContentTypeMap = Object.freeze({
   '.css': 'text/css; charset=utf-8',
@@ -81,12 +82,20 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
     basePath: normalizeAdminMount(config?.admin?.basePath),
     uiRoot: path.resolve(rootDirectory, config?.admin?.staticDir ?? './ui/admin')
   });
+  const gateRequest = installerGate(runtime);
 
   const server = http.createServer((request, response) => {
     const context = createRequestContext(request, { clock });
 
-    Promise.resolve(apiRouter.handle(context))
-      .then((apiResponse) => {
+    Promise.resolve()
+      .then(async () => {
+        const gateResponse = await gateRequest(context, () => null);
+        if (gateResponse) {
+          gateResponse.send(response);
+          return;
+        }
+
+        const apiResponse = await apiRouter.handle(context);
         if (apiResponse) {
           apiResponse.send(response);
           return;
@@ -128,6 +137,11 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
           server.off('error', onError);
           const address = server.address();
           const activePort = typeof address === 'object' && address ? address.port : port;
+
+          if (runtime?.getRuntimeMode?.() === 'installer') {
+            process.stdout.write('installer HTTP gate: active\n');
+          }
+
           resolve({ port: activePort });
         };
 

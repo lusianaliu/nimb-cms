@@ -47,3 +47,16 @@ export const notFoundResponse = ({ path, timestamp }) => jsonResponse({
   },
   timestamp
 }, { statusCode: 404 });
+
+
+export const redirectResponse = (location, { statusCode = 302 } = {}) => ({
+  statusCode,
+  location,
+  send(response) {
+    response.writeHead(statusCode, {
+      location,
+      'content-length': '0'
+    });
+    response.end();
+  }
+});
