@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, createBootstrap, validateAdminStaticDir, validateStartupInvariants } from '../core/bootstrap/index.ts';
 import { createHttpServer } from '../core/http/index.ts';
-import { createProjectModel, createProjectPaths, PROJECT_DIRECTORY_NAMES } from '../core/project/index.ts';
+import { createProjectModel, createProjectPaths, PROJECT_DIRECTORY_NAMES, isProjectInstalled } from '../core/project/index.ts';
 import { version, resolveRuntimeMode } from '../core/runtime/version.ts';
 
 const invocationCwd = process.cwd();
@@ -261,9 +261,12 @@ const startServer = async () => {
 
     const mode = resolveRuntimeMode(bootstrap.config.runtime.mode);
     const adminEnabled = bootstrap.config.admin.enabled === true;
+    const installed = isProjectInstalled(project);
 
     process.stdout.write(`Nimb v${version}\n`);
-    process.stdout.write(`Mode: ${mode}\n`);
+    process.stdout.write(`mode: ${mode}\n`);
+    process.stdout.write(`project: ${project.projectRoot}\n`);
+    process.stdout.write(`installed: ${installed ? 'yes' : 'no'}\n`);
     process.stdout.write(`Admin: ${adminEnabled ? `enabled (${bootstrap.config.admin.basePath})` : 'disabled'}\n`);
     process.stdout.write('Storage: active\n');
     process.stdout.write(`Port: ${activePort}\n`);
