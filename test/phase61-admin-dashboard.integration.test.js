@@ -52,7 +52,19 @@ const createServer = async (cwd) => {
   return { server, port };
 };
 
-test('phase 61: authenticated admin sees dashboard shell on /admin', async () => {
+const loginAndReadSessionCookie = async ({ port, basePath = '/admin' }) => {
+  const login = await fetch(`http://127.0.0.1:${port}${basePath}/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ username: 'admin', password: 'admin' }).toString(),
+    redirect: 'manual'
+  });
+
+  assert.equal(login.status, 302);
+  return (login.headers.get('set-cookie') ?? '').split(';')[0];
+};
+
+test('phase 61: unauthenticated dashboard request redirects to admin login', async () => {
   const cwd = mkdtemp();
   writeConfig(cwd);
   writeInstallState(cwd);
@@ -61,14 +73,25 @@ test('phase 61: authenticated admin sees dashboard shell on /admin', async () =>
   const { server, port } = await createServer(cwd);
 
   try {
-    const login = await fetch(`http://127.0.0.1:${port}/admin/login`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ username: 'admin', password: 'admin' }).toString(),
-      redirect: 'manual'
-    });
+    const response = await fetch(`http://127.0.0.1:${port}/admin`, { redirect: 'manual' });
 
-    const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0];
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get('location'), '/admin/login');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('phase 61: authenticated admin sees dashboard HTML on default path', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+  writeInstallState(cwd);
+  writeAdminState(cwd);
+
+  const { server, port } = await createServer(cwd);
+
+  try {
+    const cookie = await loginAndReadSessionCookie({ port });
     const response = await fetch(`http://127.0.0.1:${port}/admin`, { headers: { cookie } });
 
     assert.equal(response.status, 200);
@@ -84,7 +107,7 @@ test('phase 61: authenticated admin sees dashboard shell on /admin', async () =>
   }
 });
 
-test('phase 61: dashboard route section respects custom admin base path', async () => {
+test('phase 61: authenticated dashboard request works on custom /panel admin path', async () => {
   const cwd = mkdtemp();
   writeConfig(cwd, { basePath: '/panel' });
   writeInstallState(cwd);
@@ -93,20 +116,69 @@ test('phase 61: dashboard route section respects custom admin base path', async 
   const { server, port } = await createServer(cwd);
 
   try {
-    const login = await fetch(`http://127.0.0.1:${port}/panel/login`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ username: 'admin', password: 'admin' }).toString(),
-      redirect: 'manual'
-    });
+    const cookie = await loginAndReadSessionCookie({ port, basePath: '/panel' });
+    const panelResponse = await fetch(`http://127.0.0.1:${port}/panel`, { headers: { cookie } });
 
-    const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0];
-    const response = await fetch(`http://127.0.0.1:${port}/panel`, { headers: { cookie } });
+    assert.equal(panelResponse.status, 200);
+    const html = await panelResponse.text();
+    assert.equal(html.includes('<li>adminBasePath: <code>/panel</code></li>'), true);
+
+    const oldPathResponse = await fetch(`http://127.0.0.1:${port}/admin`, { redirect: 'manual' });
+    assert.equal(oldPathResponse.status, 404);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('phase 61: installer mode keeps dashboard inaccessible', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+
+  const { server, port } = await createServer(cwd);
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/admin`, { redirect: 'manual' });
+
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get('location'), '/install');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('phase 61: dashboard endpoint remains cwd-independent at startup', async () => {
+  const workspaceRoot = mkdtemp();
+  const firstProjectRoot = path.join(workspaceRoot, 'site-a');
+  const secondProjectRoot = path.join(workspaceRoot, 'site-b');
+  fs.mkdirSync(firstProjectRoot, { recursive: true });
+  fs.mkdirSync(secondProjectRoot, { recursive: true });
+
+  writeConfig(firstProjectRoot);
+  writeInstallState(firstProjectRoot, '2.0.0');
+  writeAdminState(firstProjectRoot);
+
+  writeConfig(secondProjectRoot, { basePath: '/panel' });
+  writeInstallState(secondProjectRoot, '3.0.0');
+
+  const originalCwd = process.cwd();
+  process.chdir(secondProjectRoot);
+
+  let started;
+
+  try {
+    started = await createServer(firstProjectRoot);
+
+    const cookie = await loginAndReadSessionCookie({ port: started.port });
+    const response = await fetch(`http://127.0.0.1:${started.port}/admin`, { headers: { cookie } });
 
     assert.equal(response.status, 200);
     const html = await response.text();
-    assert.equal(html.includes('<li>adminBasePath: <code>/panel</code></li>'), true);
+    assert.equal(html.includes('<li>adminBasePath: <code>/admin</code></li>'), true);
+    assert.equal(html.includes('<li>runtimeMode: <code>normal</code></li>'), true);
   } finally {
-    await server.stop();
+    process.chdir(originalCwd);
+    if (started?.server) {
+      await started.server.stop();
+    }
   }
 });
