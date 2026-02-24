@@ -50,6 +50,38 @@ const resolveAdminAssetPath = ({ requestPath, adminBasePath, adminUiRoot }) => {
   return path.join(adminUiRoot, 'index.html');
 };
 
+
+const resolvePublicRoot = ({ runtime, rootDirectory }) => {
+  const projectRoot = runtime?.projectPaths?.projectRoot ?? runtime?.project?.projectRoot;
+  const publicDir = runtime?.projectPaths?.publicDir ?? runtime?.project?.publicDir;
+
+  if (typeof publicDir === 'string' && publicDir.trim() !== '') {
+    return publicDir;
+  }
+
+  const baseRoot = typeof projectRoot === 'string' && projectRoot.trim() !== '' ? projectRoot : rootDirectory;
+  return path.resolve(baseRoot, 'public');
+};
+
+const trySendPublicIndex = (response, requestPath, publicRoot) => {
+  if (requestPath !== '/') {
+    return false;
+  }
+
+  const filePath = path.join(publicRoot, 'index.html');
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+    return false;
+  }
+
+  const body = fs.readFileSync(filePath);
+  response.writeHead(200, {
+    'content-length': body.byteLength,
+    'content-type': 'text/html; charset=utf-8'
+  });
+  response.end(body);
+  return true;
+};
+
 const trySendAdminAsset = (response, requestPath, adminMount) => {
   if (!adminMount.enabled) {
     return false;
@@ -85,6 +117,7 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
     uiRoot: path.resolve(rootDirectory, config?.admin?.staticDir ?? './ui/admin')
   });
   const gateRequest = installerGate(runtime);
+  const publicRoot = resolvePublicRoot({ runtime, rootDirectory });
 
   const server = http.createServer((request, response) => {
     const context = createRequestContext(request, { clock });
@@ -114,7 +147,7 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
           }
 
           if (context.method === 'POST') {
-            handleInstall(context.request, runtime).send(response);
+            (await handleInstall(context.request, runtime)).send(response);
             return;
           }
         }
@@ -122,6 +155,10 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
         const apiResponse = await apiRouter.handle(context);
         if (apiResponse) {
           apiResponse.send(response);
+          return;
+        }
+
+        if (trySendPublicIndex(response, context.path, publicRoot)) {
           return;
         }
 
