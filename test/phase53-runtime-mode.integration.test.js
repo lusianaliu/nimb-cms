@@ -143,8 +143,9 @@ test('phase 53: standalone startup compatibility is preserved', async () => {
 
   try {
     await waitForReady(child);
-    const response = await fetch('http://127.0.0.1:3234/health');
-    assert.equal(response.status, 200);
+    const response = await fetch('http://127.0.0.1:3234/health', { redirect: 'manual' });
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get('location'), '/install');
   } finally {
     if (child.exitCode === null) {
       await terminate(child);
