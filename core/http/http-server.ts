@@ -11,6 +11,7 @@ import { errorResponse, notFoundResponse } from './response.ts';
 import { installerGate } from './installer-gate.ts';
 import { handleInstall } from '../installer/install-controller.ts';
 import { renderInstallPage } from '../installer/install-page.ts';
+import { renderAdminPage } from '../admin/admin-page.ts';
 
 const adminContentTypeMap = Object.freeze({
   '.css': 'text/css; charset=utf-8',
@@ -155,6 +156,16 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
         const apiResponse = await apiRouter.handle(context);
         if (apiResponse) {
           apiResponse.send(response);
+          return;
+        }
+
+        if (runtime?.getRuntimeMode?.() === 'normal' && context.path === '/admin') {
+          const body = Buffer.from(renderAdminPage(), 'utf8');
+          response.writeHead(200, {
+            'content-length': body.byteLength,
+            'content-type': 'text/html; charset=utf-8'
+          });
+          response.end(body);
           return;
         }
 
