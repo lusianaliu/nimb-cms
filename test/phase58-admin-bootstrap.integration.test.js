@@ -52,7 +52,7 @@ test('phase 58: installer mode redirects /admin to /install', async () => {
   }
 });
 
-test('phase 58: normal mode returns admin bootstrap HTML at /admin', async () => {
+test('phase 58: normal mode redirects /admin to login and serves login page', async () => {
   const cwd = mkdtemp();
   writeConfig(cwd, 3271);
   writeInstallState(cwd, '2.0.0');
@@ -60,20 +60,23 @@ test('phase 58: normal mode returns admin bootstrap HTML at /admin', async () =>
   const { server, port } = await createServer(cwd);
 
   try {
-    const response = await fetch(`http://127.0.0.1:${port}/admin`);
-    assert.equal(response.status, 200);
-    assert.equal(response.headers.get('content-type'), 'text/html; charset=utf-8');
+    const adminResponse = await fetch(`http://127.0.0.1:${port}/admin`, { redirect: 'manual' });
+    assert.equal(adminResponse.status, 302);
+    assert.equal(adminResponse.headers.get('location'), '/admin/login');
 
-    const html = await response.text();
-    assert.equal(html.includes('<title>Nimb Admin</title>'), true);
-    assert.equal(html.includes('<h1>Nimb Admin</h1>'), true);
-    assert.equal(html.includes('<p>Site is ready.</p>'), true);
+    const loginResponse = await fetch(`http://127.0.0.1:${port}/admin/login`);
+    assert.equal(loginResponse.status, 200);
+    assert.equal(loginResponse.headers.get('content-type'), 'text/html; charset=utf-8');
+
+    const html = await loginResponse.text();
+    assert.equal(html.includes('<title>Nimb Admin Login</title>'), true);
+    assert.equal(html.includes('<h1>Nimb Admin Login</h1>'), true);
   } finally {
     await server.stop();
   }
 });
 
-test('phase 58: admin bootstrap endpoint remains cwd-independent', async () => {
+test('phase 58: admin login page endpoint remains cwd-independent', async () => {
   const workspaceRoot = mkdtemp();
   const firstProjectRoot = path.join(workspaceRoot, 'site-a');
   const secondProjectRoot = path.join(workspaceRoot, 'site-b');
@@ -92,11 +95,11 @@ test('phase 58: admin bootstrap endpoint remains cwd-independent', async () => {
     const started = await createServer(firstProjectRoot);
     server = started.server;
 
-    const response = await fetch(`http://127.0.0.1:${started.port}/admin`);
+    const response = await fetch(`http://127.0.0.1:${started.port}/admin/login`);
     assert.equal(response.status, 200);
 
     const html = await response.text();
-    assert.equal(html.includes('<h1>Nimb Admin</h1>'), true);
+    assert.equal(html.includes('<h1>Nimb Admin Login</h1>'), true);
   } finally {
     process.chdir(originalCwd);
 
@@ -106,7 +109,7 @@ test('phase 58: admin bootstrap endpoint remains cwd-independent', async () => {
   }
 });
 
-test('phase 58: admin bootstrap endpoint persists across restart', async () => {
+test('phase 58: admin login endpoint persists across restart', async () => {
   const cwd = mkdtemp();
   writeConfig(cwd, 3274);
 
@@ -125,13 +128,12 @@ test('phase 58: admin bootstrap endpoint persists across restart', async () => {
 
   const restarted = await createServer(cwd);
   try {
-    const response = await fetch(`http://127.0.0.1:${restarted.port}/admin`);
+    const response = await fetch(`http://127.0.0.1:${restarted.port}/admin/login`);
     assert.equal(response.status, 200);
 
     const html = await response.text();
-    assert.equal(html.includes('<title>Nimb Admin</title>'), true);
-    assert.equal(html.includes('<h1>Nimb Admin</h1>'), true);
-    assert.equal(html.includes('<p>Site is ready.</p>'), true);
+    assert.equal(html.includes('<title>Nimb Admin Login</title>'), true);
+    assert.equal(html.includes('<h1>Nimb Admin Login</h1>'), true);
   } finally {
     await restarted.server.stop();
   }
