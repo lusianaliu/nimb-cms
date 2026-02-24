@@ -122,7 +122,7 @@ test('phase 59: authenticated request can access /admin', async () => {
 
     assert.equal(response.status, 200);
     const html = await response.text();
-    assert.equal(html.includes('<h1>Nimb Admin</h1>'), true);
+    assert.equal(html.includes('<h1>Dashboard</h1>'), true);
   } finally {
     await server.stop();
   }

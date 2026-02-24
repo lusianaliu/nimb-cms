@@ -142,6 +142,29 @@ const parseLoginRequest = (body) => {
   });
 };
 
+const tryHandleAdminDashboardRequest = ({ context, response, runtime, adminBasePath, adminLoginPath, adminAuth }) => {
+  if (runtime?.getRuntimeMode?.() !== 'normal' || context.path !== adminBasePath) {
+    return false;
+  }
+
+  if (!adminAuth.getSessionFromRequest(context.request)) {
+    response.writeHead(302, {
+      location: adminLoginPath,
+      'content-length': '0'
+    });
+    response.end();
+    return true;
+  }
+
+  const body = Buffer.from(renderDashboardPage(runtime), 'utf8');
+  response.writeHead(200, {
+    'content-length': body.byteLength,
+    'content-type': 'text/html; charset=utf-8'
+  });
+  response.end(body);
+  return true;
+};
+
 export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirectory = process.cwd(), port = 3000, clock = () => new Date().toISOString(), authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries }) => {
   const router = createRouter([
     createHealthRoute({ config }),
@@ -196,6 +219,10 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
           }
         }
 
+        if (tryHandleAdminDashboardRequest({ context, response, runtime, adminBasePath, adminLoginPath, adminAuth })) {
+          return;
+        }
+
         const apiResponse = await apiRouter.handle(context);
         if (apiResponse) {
           apiResponse.send(response);
@@ -234,25 +261,6 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
             response.end();
             return;
           }
-        }
-
-        if (runtime?.getRuntimeMode?.() === 'normal' && context.path === adminBasePath) {
-          if (!adminAuth.getSessionFromRequest(context.request)) {
-            response.writeHead(302, {
-              location: adminLoginPath,
-              'content-length': '0'
-            });
-            response.end();
-            return;
-          }
-
-          const body = Buffer.from(renderDashboardPage(runtime), 'utf8');
-          response.writeHead(200, {
-            'content-length': body.byteLength,
-            'content-type': 'text/html; charset=utf-8'
-          });
-          response.end(body);
-          return;
         }
 
         if (trySendPublicIndex(response, context.path, publicRoot)) {
