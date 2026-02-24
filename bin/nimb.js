@@ -6,7 +6,7 @@ import { loadConfig, createBootstrap, validateAdminStaticDir, validateStartupInv
 import { createHttpServer } from '../core/http/index.ts';
 import { version, resolveRuntimeMode } from '../core/runtime/version.ts';
 
-const projectRoot = process.cwd();
+const invocationCwd = process.cwd();
 const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const startupTimestamp = new Date().toISOString();
 const BUILD_DIRECTORY_NAME = '.nimb-build';
@@ -50,12 +50,39 @@ const resolvePort = (config) => {
   return 3000;
 };
 
+const resolveProjectRoot = (argv, env = process.env) => {
+  let fromArg;
+  const cleaned = [];
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--project-root') {
+      fromArg = argv[index + 1];
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--project-root=')) {
+      fromArg = arg.slice('--project-root='.length);
+      continue;
+    }
+
+    cleaned.push(arg);
+  }
+
+  const fromEnv = env.NIMB_PROJECT_ROOT;
+  const configuredRoot = fromArg ?? fromEnv;
+  const projectRoot = configuredRoot ? path.resolve(invocationCwd, configuredRoot) : invocationCwd;
+
+  return Object.freeze({ projectRoot, args: Object.freeze(cleaned) });
+};
+
 const createProject = (projectName) => {
   if (!projectName || projectName.trim() === '') {
     throw new Error('Project name is required. Usage: nimb init <project-name>');
   }
 
-  const targetRoot = path.resolve(projectRoot, projectName);
+  const targetRoot = path.resolve(invocationCwd, projectName);
 
   if (fs.existsSync(targetRoot)) {
     throw new Error(`Target directory already exists: ${targetRoot}`);
@@ -246,7 +273,7 @@ const startServer = async () => {
   process.on('SIGTERM', shutdown);
 };
 
-const args = process.argv.slice(2);
+const { projectRoot, args } = resolveProjectRoot(process.argv.slice(2));
 
 if (args[0] === 'init') {
   try {
