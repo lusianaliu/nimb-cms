@@ -11,7 +11,7 @@ import { errorResponse, notFoundResponse } from './response.ts';
 import { installerGate } from './installer-gate.ts';
 import { handleInstall } from '../installer/install-controller.ts';
 import { renderInstallPage } from '../installer/install-page.ts';
-import { renderAdminPage } from '../admin/admin-page.ts';
+import { renderDashboardPage } from '../admin/dashboard-page.ts';
 import { createAdminAuth } from '../admin/admin-auth.ts';
 import { resolveAdminBasePath } from '../admin/resolve-admin-path.ts';
 
@@ -237,8 +237,7 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
         }
 
         if (runtime?.getRuntimeMode?.() === 'normal' && context.path === adminBasePath) {
-          const session = adminAuth.getSessionFromRequest(context.request);
-          if (!session) {
+          if (!adminAuth.getSessionFromRequest(context.request)) {
             response.writeHead(302, {
               location: adminLoginPath,
               'content-length': '0'
@@ -247,10 +246,7 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
             return;
           }
 
-          const body = Buffer.from(renderAdminPage({
-            adminBasePath,
-            username: session.username
-          }), 'utf8');
+          const body = Buffer.from(renderDashboardPage(runtime), 'utf8');
           response.writeHead(200, {
             'content-length': body.byteLength,
             'content-type': 'text/html; charset=utf-8'
