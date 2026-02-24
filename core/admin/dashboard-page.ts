@@ -23,8 +23,8 @@ const toRuntimeVersion = (runtime) => {
   return 'unknown';
 };
 
-const toAdminBasePath = (runtime) => {
-  const basePath = runtime?.adminBasePath;
+const toAdminBasePath = (runtime, resolvedBasePath) => {
+  const basePath = resolvedBasePath ?? runtime?.adminBasePath;
   if (typeof basePath === 'string' && basePath.trim() !== '') {
     return basePath;
   }
@@ -32,7 +32,7 @@ const toAdminBasePath = (runtime) => {
   return '/admin';
 };
 
-export const renderDashboardPage = (runtime) => `<!doctype html>
+export const renderDashboardPage = ({ runtime, adminBasePath }) => `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
@@ -49,7 +49,7 @@ export const renderDashboardPage = (runtime) => `<!doctype html>
         <ul>
           <li>runtime.version: <code>${escapeHtml(toRuntimeVersion(runtime))}</code></li>
           <li>runtimeMode: <code>${escapeHtml(toRuntimeMode(runtime))}</code></li>
-          <li>adminBasePath: <code>${escapeHtml(toAdminBasePath(runtime))}</code></li>
+          <li>adminBasePath: <code>${escapeHtml(toAdminBasePath(runtime, adminBasePath))}</code></li>
         </ul>
       </section>
     </main>
