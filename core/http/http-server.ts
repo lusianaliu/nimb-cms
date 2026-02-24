@@ -7,7 +7,7 @@ import { createHealthRoute } from './routes/health.ts';
 import { createRuntimeRoute } from './routes/runtime.ts';
 import { createInspectorRoute } from './routes/inspector.ts';
 import { createApiRouter } from '../api/index.ts';
-import { errorResponse, notFoundResponse } from './response.ts';
+import { errorResponse, notFoundResponse, redirectResponse } from './response.ts';
 import { installerGate } from './installer-gate.ts';
 import { handleInstall } from '../installer/install-controller.ts';
 import { renderInstallPage } from '../installer/install-page.ts';
@@ -148,11 +148,7 @@ const tryHandleAdminDashboardRequest = ({ context, response, runtime, adminBaseP
   }
 
   if (!adminAuth.getSessionFromRequest(context.request)) {
-    response.writeHead(302, {
-      location: adminLoginPath,
-      'content-length': '0'
-    });
-    response.end();
+    redirectResponse(adminLoginPath).send(response);
     return true;
   }
 
@@ -172,7 +168,7 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
     createInspectorRoute({ runtime })
   ]);
   const apiRouter = createApiRouter({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries });
-  const adminBasePath = resolveAdminBasePath(runtime);
+  const adminBasePath = runtime?.adminBasePath ?? resolveAdminBasePath(runtime);
   const adminLoginPath = `${adminBasePath}/login`;
   const adminMount = Object.freeze({
     enabled: config?.admin?.enabled === true,
