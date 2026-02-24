@@ -13,18 +13,13 @@ import { handleInstall } from '../installer/install-controller.ts';
 import { renderInstallPage } from '../installer/install-page.ts';
 import { renderAdminPage } from '../admin/admin-page.ts';
 import { createAdminAuth } from '../admin/admin-auth.ts';
+import { resolveAdminBasePath } from '../admin/resolve-admin-path.ts';
 
 const adminContentTypeMap = Object.freeze({
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8'
 });
-
-const normalizeAdminMount = (basePath) => {
-  const value = String(basePath ?? '/admin').trim() || '/admin';
-  const withLeadingSlash = value.startsWith('/') ? value : `/${value}`;
-  return withLeadingSlash.replace(/\/+$/g, '') || '/';
-};
 
 const resolveAdminAssetPath = ({ requestPath, adminBasePath, adminUiRoot }) => {
   if (requestPath === adminBasePath || requestPath === `${adminBasePath}/`) {
@@ -106,7 +101,7 @@ const trySendAdminAsset = (response, requestPath, adminMount) => {
   return true;
 };
 
-const renderAdminLoginPage = () => `<!doctype html>
+const renderAdminLoginPage = (adminLoginPath) => `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
@@ -116,7 +111,7 @@ const renderAdminLoginPage = () => `<!doctype html>
   <body>
     <main>
       <h1>Nimb Admin Login</h1>
-      <form method="post" action="/admin/login">
+      <form method="post" action="${adminLoginPath}">
         <label for="username">Username</label>
         <input id="username" name="username" type="text" value="admin" required>
 
@@ -154,14 +149,19 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
     createInspectorRoute({ runtime })
   ]);
   const apiRouter = createApiRouter({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries });
+  const adminBasePath = resolveAdminBasePath(runtime);
+  const adminLoginPath = `${adminBasePath}/login`;
   const adminMount = Object.freeze({
     enabled: config?.admin?.enabled === true,
-    basePath: normalizeAdminMount(config?.admin?.basePath),
+    basePath: adminBasePath,
     uiRoot: path.resolve(rootDirectory, config?.admin?.staticDir ?? './ui/admin')
   });
   const gateRequest = installerGate(runtime);
   const publicRoot = resolvePublicRoot({ runtime, rootDirectory });
-  const adminAuth = createAdminAuth({ projectPaths: runtime?.projectPaths ?? runtime?.project ?? { projectRoot: rootDirectory } });
+  const adminAuth = createAdminAuth({
+    projectPaths: runtime?.projectPaths ?? runtime?.project ?? { projectRoot: rootDirectory },
+    sessionCookiePath: adminBasePath
+  });
 
   const server = http.createServer((request, response) => {
     const context = createRequestContext(request, { clock });
@@ -202,9 +202,9 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
           return;
         }
 
-        if (runtime?.getRuntimeMode?.() === 'normal' && context.path === '/admin/login') {
+        if (runtime?.getRuntimeMode?.() === 'normal' && context.path === adminLoginPath) {
           if (context.method === 'GET') {
-            const body = Buffer.from(renderAdminLoginPage(), 'utf8');
+            const body = Buffer.from(renderAdminLoginPage(adminLoginPath), 'utf8');
             response.writeHead(200, {
               'content-length': body.byteLength,
               'content-type': 'text/html; charset=utf-8'
@@ -227,8 +227,8 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
             }
 
             response.writeHead(302, {
-              location: '/admin',
-              'set-cookie': `${adminAuth.cookieName}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax`,
+              location: adminBasePath,
+              'set-cookie': `${adminAuth.cookieName}=${encodeURIComponent(token)}; Path=${adminAuth.sessionCookiePath}; HttpOnly; SameSite=Lax`,
               'content-length': '0'
             });
             response.end();
@@ -236,11 +236,11 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
           }
         }
 
-        if (runtime?.getRuntimeMode?.() === 'normal' && context.path === '/admin') {
+        if (runtime?.getRuntimeMode?.() === 'normal' && context.path === adminBasePath) {
           const session = adminAuth.getSessionFromRequest(context.request);
           if (!session) {
             response.writeHead(302, {
-              location: '/admin/login',
+              location: adminLoginPath,
               'content-length': '0'
             });
             response.end();

@@ -69,7 +69,7 @@ const verifySessionToken = ({ token, secret }: { token: string, secret: string }
   return token;
 };
 
-export const createAdminAuth = ({ projectPaths, tokenSecret = 'nimb-admin-session-secret', now = () => new Date().toISOString() }: { projectPaths: { persistenceDir?: string, projectRoot?: string }, tokenSecret?: string, now?: () => string }) => {
+export const createAdminAuth = ({ projectPaths, tokenSecret = 'nimb-admin-session-secret', now = () => new Date().toISOString(), sessionCookiePath = '/admin' }: { projectPaths: { persistenceDir?: string, projectRoot?: string }, tokenSecret?: string, now?: () => string, sessionCookiePath?: string }) => {
   const adminState = readAdminState(projectPaths);
   const sessionMap = new Map<string, SessionRecord>();
 
@@ -106,6 +106,7 @@ export const createAdminAuth = ({ projectPaths, tokenSecret = 'nimb-admin-sessio
     login,
     getSessionFromRequest,
     cookieName: SESSION_COOKIE,
+    sessionCookiePath,
     hasAdminCredentials: Boolean(adminState)
   });
 };

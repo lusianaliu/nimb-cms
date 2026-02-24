@@ -8,6 +8,7 @@ import { ContentRegistry, ContentStore, EntryRegistry } from '../content/index.t
 import { createProjectModel, createProjectPaths } from '../project/index.ts';
 import { resolveRuntimeMode } from '../runtime/resolve-runtime-mode.ts';
 import { version } from '../runtime/version.ts';
+import { resolveAdminBasePath } from '../admin/resolve-admin-path.ts';
 
 const toRuntimeStatus = (runtime) => {
   const state = runtime.getState?.();
@@ -25,6 +26,7 @@ export const createBootstrap = async ({ project = createProjectModel(), cwd = un
   runtime.version = version;
   runtime.setRuntimeMode?.(runtimeMode);
   runtime.setConfig?.(config);
+  runtime.adminBasePath = resolveAdminBasePath(runtime);
   const storageAdapter = new FileSystemStorageAdapter({ rootDirectory: resolvedPaths.persistenceDir });
   const persistenceEngine = new PersistenceEngine({ storageAdapter });
   const sessionStore = new SessionStore({ storageAdapter });
