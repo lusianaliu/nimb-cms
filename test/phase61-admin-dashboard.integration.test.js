@@ -73,12 +73,12 @@ test('phase 61: authenticated admin sees dashboard shell on /admin', async () =>
 
     assert.equal(response.status, 200);
     const html = await response.text();
-    assert.equal(html.includes('<h1>Nimb Admin</h1>'), true);
-    assert.equal(html.includes('<p>Dashboard</p>'), true);
-    assert.equal(html.includes('Signed in as <strong>admin</strong>.'), true);
-    assert.equal(html.includes('<h2 id="dashboard-core-actions">Core actions</h2>'), true);
-    assert.equal(html.includes('<h2 id="dashboard-route">Admin route</h2>'), true);
-    assert.equal(html.includes('<code>/admin</code>'), true);
+    assert.equal(html.includes('<title>Nimb Dashboard</title>'), true);
+    assert.equal(html.includes('<h1>Dashboard</h1>'), true);
+    assert.equal(html.includes('<h2 id="system-info">System info</h2>'), true);
+    assert.equal(html.includes('<li>runtime.version: <code>0.1.0</code></li>'), true);
+    assert.equal(html.includes('<li>runtimeMode: <code>normal</code></li>'), true);
+    assert.equal(html.includes('<li>adminBasePath: <code>/admin</code></li>'), true);
   } finally {
     await server.stop();
   }
@@ -105,7 +105,7 @@ test('phase 61: dashboard route section respects custom admin base path', async 
 
     assert.equal(response.status, 200);
     const html = await response.text();
-    assert.equal(html.includes('<code>/panel</code>'), true);
+    assert.equal(html.includes('<li>adminBasePath: <code>/panel</code></li>'), true);
   } finally {
     await server.stop();
   }
