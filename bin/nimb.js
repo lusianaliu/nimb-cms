@@ -4,13 +4,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, createBootstrap, validateAdminStaticDir, validateStartupInvariants } from '../core/bootstrap/index.ts';
 import { createHttpServer } from '../core/http/index.ts';
+import { createProjectModel, PROJECT_DIRECTORY_NAMES } from '../core/project/index.ts';
 import { version, resolveRuntimeMode } from '../core/runtime/version.ts';
 
 const invocationCwd = process.cwd();
 const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const startupTimestamp = new Date().toISOString();
-const BUILD_DIRECTORY_NAME = '.nimb-build';
-
 const BUILD_ALLOWLIST = Object.freeze([
   Object.freeze({ type: 'directory', source: 'bin', required: true }),
   Object.freeze({ type: 'directory', source: 'core', required: true }),
@@ -30,7 +29,13 @@ const DEFAULT_CONFIG = {
   }
 };
 
-const INIT_DIRECTORIES = ['content', 'data', 'plugins', 'public'];
+const INIT_DIRECTORIES = [
+  PROJECT_DIRECTORY_NAMES.content,
+  PROJECT_DIRECTORY_NAMES.data,
+  PROJECT_DIRECTORY_NAMES.plugins,
+  PROJECT_DIRECTORY_NAMES.themes,
+  PROJECT_DIRECTORY_NAMES.public
+];
 
 const resolvePort = (config) => {
   const fromEnv = process.env.PORT;
@@ -83,6 +88,7 @@ const createProject = (projectName) => {
   }
 
   const targetRoot = path.resolve(invocationCwd, projectName);
+  const project = createProjectModel({ projectRoot: targetRoot });
 
   if (fs.existsSync(targetRoot)) {
     throw new Error(`Target directory already exists: ${targetRoot}`);
@@ -94,7 +100,7 @@ const createProject = (projectName) => {
     fs.mkdirSync(path.join(targetRoot, directory), { recursive: false });
   }
 
-  const configPath = path.join(targetRoot, 'nimb.config.json');
+  const configPath = project.configFile;
   fs.writeFileSync(configPath, `${JSON.stringify(DEFAULT_CONFIG, null, 2)}\n`);
 
   const packageJsonPath = path.join(targetRoot, 'package.json');
@@ -180,25 +186,26 @@ const validateBuildSource = ({ sourcePath, expectedType, required }) => {
 };
 
 const runBuild = () => {
+  const project = createProjectModel({ projectRoot });
   process.stdout.write('Build start.\n');
-  process.stdout.write(`Project root: ${projectRoot}\n`);
+  process.stdout.write(`Project root: ${project.root}\n`);
   process.stdout.write(`Runtime root: ${runtimeRoot}\n`);
 
-  const configPath = path.join(projectRoot, 'nimb.config.json');
+  const configPath = project.configFile;
   if (!fs.existsSync(configPath)) {
     throw new Error(`nimb.config.json is required for build: ${configPath}`);
   }
 
-  const config = loadConfig({ cwd: projectRoot });
+  const config = loadConfig({ cwd: project.root });
   validateAdminStaticDir(config, runtimeRoot);
   process.stdout.write('Config validation: ok.\n');
 
-  const outputRoot = path.join(projectRoot, BUILD_DIRECTORY_NAME);
+  const outputRoot = project.buildDirectory;
   ensureRemoved(outputRoot);
   fs.mkdirSync(outputRoot, { recursive: true });
 
   for (const rule of BUILD_ALLOWLIST) {
-    const sourceRoot = rule.fromProjectRoot ? projectRoot : runtimeRoot;
+    const sourceRoot = rule.fromProjectRoot ? project.root : runtimeRoot;
     const sourcePath = path.join(sourceRoot, rule.source);
     const shouldCopy = validateBuildSource({ sourcePath, expectedType: rule.type, required: rule.required });
 
@@ -221,14 +228,15 @@ const runBuild = () => {
 };
 
 const startServer = async () => {
+  const project = createProjectModel({ projectRoot });
   let httpServer;
 
   try {
-    const config = loadConfig({ cwd: projectRoot });
+    const config = loadConfig({ cwd: project.root });
     const port = resolvePort(config);
-    await validateStartupInvariants({ config, projectRoot, runtimeRoot, port });
+    await validateStartupInvariants({ config, project, runtimeRoot, port });
 
-    const bootstrap = await createBootstrap({ cwd: projectRoot, startupTimestamp });
+    const bootstrap = await createBootstrap({ project, startupTimestamp });
 
     httpServer = createHttpServer({
       runtime: bootstrap.runtime,

@@ -33,8 +33,8 @@ const ensureWritableDirectory = (directoryPath, label) => {
   }
 };
 
-export const validateDataDirectoryWritable = (projectRoot) => {
-  const dataDirectory = path.join(projectRoot, 'data');
+export const validateDataDirectoryWritable = (project) => {
+  const dataDirectory = project.dataDirectory;
 
   try {
     ensureWritableDirectory(dataDirectory, 'data directory');
@@ -43,8 +43,8 @@ export const validateDataDirectoryWritable = (projectRoot) => {
   }
 };
 
-export const validatePersistenceStorage = (projectRoot) => {
-  const persistenceRoot = path.join(projectRoot, '.nimb');
+export const validatePersistenceStorage = (project) => {
+  const persistenceRoot = project.persistenceDirectory;
 
   try {
     ensureWritableDirectory(persistenceRoot, 'persistence directory');
@@ -88,9 +88,9 @@ export const validatePortAvailable = async (port) => {
   });
 };
 
-export const validateStartupInvariants = async ({ config, projectRoot, runtimeRoot, port }) => {
+export const validateStartupInvariants = async ({ config, project, runtimeRoot, port }) => {
   validateAdminStaticDir(config, runtimeRoot);
-  validateDataDirectoryWritable(projectRoot);
-  validatePersistenceStorage(projectRoot);
+  validateDataDirectoryWritable(project);
+  validatePersistenceStorage(project);
   await validatePortAvailable(port);
 };

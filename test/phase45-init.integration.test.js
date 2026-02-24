@@ -65,7 +65,7 @@ test('phase 45: nimb init scaffolds a runnable project', async () => {
 
   assert.equal(fs.existsSync(projectRoot), true);
 
-  const expectedDirectories = ['content', 'data', 'plugins', 'public'];
+  const expectedDirectories = ['content', 'data', 'plugins', 'themes', 'public'];
   for (const directory of expectedDirectories) {
     const directoryPath = path.join(projectRoot, directory);
     assert.equal(fs.existsSync(directoryPath), true, `Expected ${directory} to exist`);
