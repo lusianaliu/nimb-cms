@@ -10,6 +10,7 @@ import { createApiRouter } from '../api/index.ts';
 import { errorResponse, notFoundResponse } from './response.ts';
 import { installerGate } from './installer-gate.ts';
 import { handleInstall } from '../installer/install-controller.ts';
+import { renderInstallPage } from '../installer/install-page.ts';
 
 const adminContentTypeMap = Object.freeze({
   '.css': 'text/css; charset=utf-8',
@@ -96,9 +97,26 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
           return;
         }
 
-        if (context.method === 'POST' && context.path === '/install') {
-          handleInstall(context.request, runtime).send(response);
-          return;
+        if (context.path === '/install') {
+          if (context.method === 'GET') {
+            if (runtime?.getRuntimeMode?.() !== 'installer') {
+              notFoundResponse({ path: context.path, timestamp: context.timestamp }).send(response);
+              return;
+            }
+
+            const body = Buffer.from(renderInstallPage(), 'utf8');
+            response.writeHead(200, {
+              'content-length': body.byteLength,
+              'content-type': 'text/html; charset=utf-8'
+            });
+            response.end(body);
+            return;
+          }
+
+          if (context.method === 'POST') {
+            handleInstall(context.request, runtime).send(response);
+            return;
+          }
         }
 
         const apiResponse = await apiRouter.handle(context);
