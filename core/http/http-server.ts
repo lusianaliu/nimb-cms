@@ -247,7 +247,10 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
             return;
           }
 
-          const body = Buffer.from(renderAdminPage(), 'utf8');
+          const body = Buffer.from(renderAdminPage({
+            adminBasePath,
+            username: session.username
+          }), 'utf8');
           response.writeHead(200, {
             'content-length': body.byteLength,
             'content-type': 'text/html; charset=utf-8'
