@@ -147,6 +147,7 @@ export class PluginRuntime {
     this.restoredRuntimeState = null;
     this.runtimeStarted = false;
     this.config = options.config ?? Object.freeze({});
+    this.runtimeMode = options.runtimeMode ?? 'normal';
     this.adminExecutor = options.adminExecutor ?? (async () => ({ success: false, outcome: 'unsupported' }));
     this.adminStatusProvider = options.adminStatusProvider ?? (() => Object.freeze({ lastCommands: Object.freeze([]), commandHistory: Object.freeze([]), adminHealth: 'idle' }));
     this.contentStatusProvider = options.contentStatusProvider ?? (() => Object.freeze({ registeredTypes: Object.freeze([]), schemaHashes: Object.freeze([]), validation: Object.freeze({ valid: true, errors: Object.freeze([]) }) }));
@@ -177,6 +178,16 @@ export class PluginRuntime {
       entriesProvider: () => this.getEntryStatus(),
       entryQueryProvider: () => this.getEntryQueryStatus()
     });
+  }
+
+
+  setRuntimeMode(mode) {
+    this.runtimeMode = mode ?? 'normal';
+    return this.runtimeMode;
+  }
+
+  getRuntimeMode() {
+    return this.runtimeMode;
   }
 
 

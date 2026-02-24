@@ -6,6 +6,7 @@ import { AuthService, SessionStore, createAuthMiddleware } from '../auth/index.t
 import { CommandDispatcher, createAdminController } from '../admin/index.ts';
 import { ContentRegistry, ContentStore, EntryRegistry } from '../content/index.ts';
 import { createProjectModel, createProjectPaths } from '../project/index.ts';
+import { resolveRuntimeMode } from '../runtime/resolve-runtime-mode.ts';
 
 const toRuntimeStatus = (runtime) => {
   const state = runtime.getState?.();
@@ -16,7 +17,9 @@ export const createBootstrap = async ({ project = createProjectModel(), cwd = un
   const resolvedProject = cwd ? createProjectModel({ projectRoot: cwd }) : project;
   const resolvedPaths = createProjectPaths(resolvedProject.projectRoot ?? resolvedProject.root);
   const config = loadConfig({ cwd: resolvedPaths.projectRoot });
-  const runtime = createRuntime(config, resolvedPaths);
+  const runtimeMode = resolveRuntimeMode(resolvedPaths);
+  const runtime = createRuntime(config, resolvedPaths, { runtimeMode });
+  runtime.setRuntimeMode?.(runtimeMode);
   runtime.setConfig?.(config);
   const storageAdapter = new FileSystemStorageAdapter({ rootDirectory: resolvedPaths.persistenceDir });
   const persistenceEngine = new PersistenceEngine({ storageAdapter });
@@ -144,6 +147,7 @@ export const createBootstrap = async ({ project = createProjectModel(), cwd = un
     contentStore,
     persistContentTypes,
     entryRegistry,
-    persistEntries
+    persistEntries,
+    runtimeMode
   });
 };
