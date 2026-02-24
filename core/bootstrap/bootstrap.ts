@@ -7,6 +7,7 @@ import { CommandDispatcher, createAdminController } from '../admin/index.ts';
 import { ContentRegistry, ContentStore, EntryRegistry } from '../content/index.ts';
 import { createProjectModel, createProjectPaths } from '../project/index.ts';
 import { resolveRuntimeMode } from '../runtime/resolve-runtime-mode.ts';
+import { version } from '../runtime/version.ts';
 
 const toRuntimeStatus = (runtime) => {
   const state = runtime.getState?.();
@@ -19,6 +20,9 @@ export const createBootstrap = async ({ project = createProjectModel(), cwd = un
   const config = loadConfig({ cwd: resolvedPaths.projectRoot });
   const runtimeMode = resolveRuntimeMode(resolvedPaths);
   const runtime = createRuntime(config, resolvedPaths, { runtimeMode });
+  runtime.projectPaths = resolvedPaths;
+  runtime.project = resolvedPaths;
+  runtime.version = version;
   runtime.setRuntimeMode?.(runtimeMode);
   runtime.setConfig?.(config);
   const storageAdapter = new FileSystemStorageAdapter({ rootDirectory: resolvedPaths.persistenceDir });

@@ -9,6 +9,7 @@ import { createInspectorRoute } from './routes/inspector.ts';
 import { createApiRouter } from '../api/index.ts';
 import { errorResponse, notFoundResponse } from './response.ts';
 import { installerGate } from './installer-gate.ts';
+import { handleInstall } from '../installer/install-controller.ts';
 
 const adminContentTypeMap = Object.freeze({
   '.css': 'text/css; charset=utf-8',
@@ -92,6 +93,11 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
         const gateResponse = await gateRequest(context, () => null);
         if (gateResponse) {
           gateResponse.send(response);
+          return;
+        }
+
+        if (context.method === 'POST' && context.path === '/install') {
+          handleInstall(context.request, runtime).send(response);
           return;
         }
 
