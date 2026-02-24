@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 
 const resolveProjectRoot = (projectModel) => projectModel?.projectRoot ?? projectModel?.root;
 const resolveConfigDir = (projectModel) => projectModel?.configDir ?? path.join(resolveProjectRoot(projectModel), 'config');
 const resolvePublicDir = (projectModel) => projectModel?.publicDir ?? projectModel?.publicDirectory ?? path.join(resolveProjectRoot(projectModel), 'public');
 const resolveConfigFile = (projectModel) => projectModel?.configFile ?? path.join(resolveProjectRoot(projectModel), 'nimb.config.json');
+const resolvePersistenceDir = (projectModel) => projectModel?.persistenceDir ?? path.join(resolveProjectRoot(projectModel), '.nimb');
 
 const writeFileIfMissing = (filePath, content) => {
   if (fs.existsSync(filePath)) {
@@ -26,9 +28,12 @@ export const bootstrapDefaultSite = async (projectModel) => {
   const siteConfigPath = path.join(configDir, 'site.json');
   const indexPath = path.join(publicDir, 'index.html');
   const runtimeConfigPath = resolveConfigFile(projectModel);
+  const persistenceDir = resolvePersistenceDir(projectModel);
+  const adminStatePath = path.join(persistenceDir, 'admin.json');
 
   fs.mkdirSync(configDir, { recursive: true });
   fs.mkdirSync(publicDir, { recursive: true });
+  fs.mkdirSync(persistenceDir, { recursive: true });
 
   writeFileIfMissing(siteConfigPath, `${JSON.stringify({
     name: 'My Nimb Site',
@@ -43,5 +48,10 @@ export const bootstrapDefaultSite = async (projectModel) => {
       enabled: true,
       basePath: '/admin'
     }
+  }, null, 2)}\n`);
+
+  writeFileIfMissing(adminStatePath, `${JSON.stringify({
+    username: 'admin',
+    passwordHash: crypto.createHash('sha256').update('admin').digest('hex')
   }, null, 2)}\n`);
 };

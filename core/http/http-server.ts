@@ -12,6 +12,7 @@ import { installerGate } from './installer-gate.ts';
 import { handleInstall } from '../installer/install-controller.ts';
 import { renderInstallPage } from '../installer/install-page.ts';
 import { renderAdminPage } from '../admin/admin-page.ts';
+import { createAdminAuth } from '../admin/admin-auth.ts';
 
 const adminContentTypeMap = Object.freeze({
   '.css': 'text/css; charset=utf-8',
@@ -105,6 +106,47 @@ const trySendAdminAsset = (response, requestPath, adminMount) => {
   return true;
 };
 
+const renderAdminLoginPage = () => `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nimb Admin Login</title>
+  </head>
+  <body>
+    <main>
+      <h1>Nimb Admin Login</h1>
+      <form method="post" action="/admin/login">
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" value="admin" required>
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" value="admin" required>
+
+        <button type="submit">Login</button>
+      </form>
+    </main>
+  </body>
+</html>`;
+
+const readRequestBody = (request) => new Promise((resolve, reject) => {
+  let body = '';
+  request.setEncoding('utf8');
+  request.on('data', (chunk) => {
+    body += chunk;
+  });
+  request.on('end', () => resolve(body));
+  request.on('error', (error) => reject(error));
+});
+
+const parseLoginRequest = (body) => {
+  const params = new URLSearchParams(body ?? '');
+  return Object.freeze({
+    username: `${params.get('username') ?? ''}`,
+    password: `${params.get('password') ?? ''}`
+  });
+};
+
 export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirectory = process.cwd(), port = 3000, clock = () => new Date().toISOString(), authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries }) => {
   const router = createRouter([
     createHealthRoute({ config }),
@@ -119,6 +161,7 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
   });
   const gateRequest = installerGate(runtime);
   const publicRoot = resolvePublicRoot({ runtime, rootDirectory });
+  const adminAuth = createAdminAuth({ projectPaths: runtime?.projectPaths ?? runtime?.project ?? { projectRoot: rootDirectory } });
 
   const server = http.createServer((request, response) => {
     const context = createRequestContext(request, { clock });
@@ -159,7 +202,51 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
           return;
         }
 
+        if (runtime?.getRuntimeMode?.() === 'normal' && context.path === '/admin/login') {
+          if (context.method === 'GET') {
+            const body = Buffer.from(renderAdminLoginPage(), 'utf8');
+            response.writeHead(200, {
+              'content-length': body.byteLength,
+              'content-type': 'text/html; charset=utf-8'
+            });
+            response.end(body);
+            return;
+          }
+
+          if (context.method === 'POST') {
+            const body = await readRequestBody(context.request);
+            const credentials = parseLoginRequest(body);
+            const token = adminAuth.login(credentials);
+
+            if (!token) {
+              response.writeHead(401, {
+                'content-length': '0'
+              });
+              response.end();
+              return;
+            }
+
+            response.writeHead(302, {
+              location: '/admin',
+              'set-cookie': `${adminAuth.cookieName}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax`,
+              'content-length': '0'
+            });
+            response.end();
+            return;
+          }
+        }
+
         if (runtime?.getRuntimeMode?.() === 'normal' && context.path === '/admin') {
+          const session = adminAuth.getSessionFromRequest(context.request);
+          if (!session) {
+            response.writeHead(302, {
+              location: '/admin/login',
+              'content-length': '0'
+            });
+            response.end();
+            return;
+          }
+
           const body = Buffer.from(renderAdminPage(), 'utf8');
           response.writeHead(200, {
             'content-length': body.byteLength,
