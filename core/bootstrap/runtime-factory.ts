@@ -5,7 +5,7 @@ import { Reconciler, ReconcileLoop } from '../runtime/reconciler/index.ts';
 import { Orchestrator } from '../runtime/orchestrator/index.ts';
 import { GoalEngine } from '../runtime/goals/index.ts';
 
-export const createRuntime = (config) => {
+export const createRuntime = (config, project) => {
   const diagnosticsChannel = new DiagnosticsChannel();
   const eventTrace = new EventTrace({ diagnosticsChannel });
   const capabilityTrace = new CapabilityTrace({ diagnosticsChannel });
@@ -30,7 +30,7 @@ export const createRuntime = (config) => {
     reconcileLoop,
     orchestrator,
     goalEngine,
-    pluginsDirectory: config?.pluginsDirectory
+    pluginsDirectory: config?.pluginsDirectory ?? project?.pluginsDirectory
   });
 
   return runtime;

@@ -18,6 +18,7 @@ my-site/
   content/
   data/
   plugins/
+  themes/
   public/
   package.json
   README.md
@@ -54,6 +55,7 @@ You can then open the CMS and admin UI using the configured server port and admi
 - `content/`: content structure and authored resources.
 - `data/`: runtime and persistence data files.
 - `plugins/`: local plugin capability units for project extension.
+- `themes/`: presentation-only theme packages for rendering boundaries.
 - `public/`: static assets served by the project.
 
 ## Notes
