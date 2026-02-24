@@ -86,3 +86,38 @@ test('phase 44: standalone runtime boots and exposes /health', async () => {
     }
   }
 });
+
+test('phase 44: standalone runtime can boot from outside project root using --project-root', async () => {
+  const workspaceRoot = mkdtemp();
+  const projectRoot = path.join(workspaceRoot, 'site');
+  const invocationRoot = path.join(workspaceRoot, 'runner');
+  fs.mkdirSync(projectRoot, { recursive: true });
+  fs.mkdirSync(invocationRoot, { recursive: true });
+
+  writeConfig(projectRoot, {
+    name: 'nimb-app',
+    plugins: [],
+    runtime: { logLevel: 'info', mode: 'development' },
+    server: { port: 3213 },
+    admin: { basePath: '/admin', staticDir: '/workspace/nimb-cms/ui/admin' }
+  });
+
+  const child = spawn('node', ['/workspace/nimb-cms/bin/nimb.js', '--project-root', projectRoot], {
+    cwd: invocationRoot,
+    env: { ...process.env },
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+
+  try {
+    await waitForReady(child);
+
+    const response = await fetch('http://127.0.0.1:3213/health');
+    assert.equal(response.status, 200);
+    assert.equal(fs.existsSync(path.join(projectRoot, '.nimb', 'runtime.json')), true);
+    assert.equal(fs.existsSync(path.join(invocationRoot, '.nimb', 'runtime.json')), false);
+  } finally {
+    if (child.exitCode === null) {
+      await terminate(child);
+    }
+  }
+});
