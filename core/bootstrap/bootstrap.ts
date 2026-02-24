@@ -5,7 +5,7 @@ import { FileSystemStorageAdapter, PersistenceEngine } from '../persistence/inde
 import { AuthService, SessionStore, createAuthMiddleware } from '../auth/index.ts';
 import { CommandDispatcher, createAdminController } from '../admin/index.ts';
 import { ContentRegistry, ContentStore, EntryRegistry } from '../content/index.ts';
-import { createProjectModel } from '../project/index.ts';
+import { createProjectModel, createProjectPaths } from '../project/index.ts';
 
 const toRuntimeStatus = (runtime) => {
   const state = runtime.getState?.();
@@ -14,10 +14,11 @@ const toRuntimeStatus = (runtime) => {
 
 export const createBootstrap = async ({ project = createProjectModel(), cwd = undefined, startupTimestamp = new Date().toISOString() } = {}) => {
   const resolvedProject = cwd ? createProjectModel({ projectRoot: cwd }) : project;
-  const config = loadConfig({ cwd: resolvedProject.root });
-  const runtime = createRuntime(config, resolvedProject);
+  const resolvedPaths = createProjectPaths(resolvedProject.projectRoot ?? resolvedProject.root);
+  const config = loadConfig({ cwd: resolvedPaths.projectRoot });
+  const runtime = createRuntime(config, resolvedPaths);
   runtime.setConfig?.(config);
-  const storageAdapter = new FileSystemStorageAdapter({ rootDirectory: resolvedProject.persistenceDirectory });
+  const storageAdapter = new FileSystemStorageAdapter({ rootDirectory: resolvedPaths.persistenceDir });
   const persistenceEngine = new PersistenceEngine({ storageAdapter });
   const sessionStore = new SessionStore({ storageAdapter });
   const authService = new AuthService({
@@ -28,7 +29,7 @@ export const createBootstrap = async ({ project = createProjectModel(), cwd = un
   const authMiddleware = createAuthMiddleware({ authService });
   const contentRegistry = new ContentRegistry();
   const contentStore = new ContentStore({ storageAdapter });
-  const entryRegistry = new EntryRegistry({ contentRegistry, rootDirectory: resolvedProject.root });
+  const entryRegistry = new EntryRegistry({ contentRegistry, rootDirectory: resolvedPaths.projectRoot });
 
 
   const restore = async () => {
