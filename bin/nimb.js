@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, createBootstrap, validateAdminStaticDir, validateStartupInvariants } from '../core/bootstrap/index.ts';
 import { createHttpServer } from '../core/http/index.ts';
-import { createProjectModel, PROJECT_DIRECTORY_NAMES } from '../core/project/index.ts';
+import { createProjectModel, createProjectPaths, PROJECT_DIRECTORY_NAMES } from '../core/project/index.ts';
 import { version, resolveRuntimeMode } from '../core/runtime/version.ts';
 
 const invocationCwd = process.cwd();
@@ -76,10 +76,12 @@ const resolveProjectRoot = (argv, env = process.env) => {
   }
 
   const fromEnv = env.NIMB_PROJECT_ROOT;
-  const configuredRoot = fromArg ?? fromEnv;
+  const fromStartCommand = cleaned[0] === 'start' && cleaned[1] && !cleaned[1].startsWith('-') ? cleaned[1] : undefined;
+  const normalizedArgs = fromStartCommand ? [cleaned[0], ...cleaned.slice(2)] : cleaned;
+  const configuredRoot = fromArg ?? fromEnv ?? fromStartCommand;
   const projectRoot = configuredRoot ? path.resolve(invocationCwd, configuredRoot) : invocationCwd;
 
-  return Object.freeze({ projectRoot, args: Object.freeze(cleaned) });
+  return Object.freeze({ projectRoot, args: Object.freeze(normalizedArgs) });
 };
 
 const createProject = (projectName) => {
@@ -186,7 +188,8 @@ const validateBuildSource = ({ sourcePath, expectedType, required }) => {
 };
 
 const runBuild = () => {
-  const project = createProjectModel({ projectRoot });
+  const projectPaths = createProjectPaths(projectRoot);
+  const project = createProjectModel({ projectRoot: projectPaths.projectRoot });
   process.stdout.write('Build start.\n');
   process.stdout.write(`Project root: ${project.root}\n`);
   process.stdout.write(`Runtime root: ${runtimeRoot}\n`);
@@ -228,15 +231,16 @@ const runBuild = () => {
 };
 
 const startServer = async () => {
-  const project = createProjectModel({ projectRoot });
+  const projectPaths = createProjectPaths(projectRoot);
+  const project = createProjectModel({ projectRoot: projectPaths.projectRoot });
   let httpServer;
 
   try {
-    const config = loadConfig({ cwd: project.root });
+    const config = loadConfig({ cwd: projectPaths.projectRoot });
     const port = resolvePort(config);
-    await validateStartupInvariants({ config, project, runtimeRoot, port });
+    await validateStartupInvariants({ config, project: projectPaths, runtimeRoot, port });
 
-    const bootstrap = await createBootstrap({ project, startupTimestamp });
+    const bootstrap = await createBootstrap({ project: projectPaths, startupTimestamp });
 
     httpServer = createHttpServer({
       runtime: bootstrap.runtime,

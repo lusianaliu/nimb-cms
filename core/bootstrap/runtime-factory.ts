@@ -30,7 +30,7 @@ export const createRuntime = (config, project) => {
     reconcileLoop,
     orchestrator,
     goalEngine,
-    pluginsDirectory: config?.pluginsDirectory ?? project?.pluginsDirectory
+    pluginsDirectory: config?.pluginsDirectory ?? project?.pluginsDir ?? project?.pluginsDirectory
   });
 
   return runtime;

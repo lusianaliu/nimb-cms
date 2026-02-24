@@ -33,21 +33,33 @@ const ensureWritableDirectory = (directoryPath, label) => {
   }
 };
 
-export const validateDataDirectoryWritable = (project) => {
-  const dataDirectory = project.dataDirectory;
+const startupLog = (log, message) => {
+  if (typeof log === 'function') {
+    log(message);
+  }
+};
+
+const ensureDirectory = (directoryPath, label, log) => {
+  const existedBefore = fs.existsSync(directoryPath);
+  ensureWritableDirectory(directoryPath, label);
+  startupLog(log, `Startup invariant: ${existedBefore ? 'verified' : 'created'} ${label}: ${directoryPath}`);
+};
+
+export const validateDataDirectoryWritable = (project, options = {}) => {
+  const dataDirectory = project.dataDir ?? project.dataDirectory;
 
   try {
-    ensureWritableDirectory(dataDirectory, 'data directory');
+    ensureDirectory(dataDirectory, 'data directory', options.log);
   } catch (error) {
     throw new Error(`Startup invariant failed: data directory is not writable: ${dataDirectory}`);
   }
 };
 
-export const validatePersistenceStorage = (project) => {
-  const persistenceRoot = project.persistenceDirectory;
+export const validatePersistenceStorage = (project, options = {}) => {
+  const persistenceRoot = project.persistenceDir ?? project.persistenceDirectory;
 
   try {
-    ensureWritableDirectory(persistenceRoot, 'persistence directory');
+    ensureDirectory(persistenceRoot, 'persistence directory', options.log);
   } catch (error) {
     throw new Error(`Startup invariant failed: persistence directory is not writable: ${persistenceRoot}`);
   }
@@ -89,8 +101,9 @@ export const validatePortAvailable = async (port) => {
 };
 
 export const validateStartupInvariants = async ({ config, project, runtimeRoot, port }) => {
+  const log = (message) => process.stdout.write(`${message}\n`);
   validateAdminStaticDir(config, runtimeRoot);
-  validateDataDirectoryWritable(project);
-  validatePersistenceStorage(project);
+  validateDataDirectoryWritable(project, { log });
+  validatePersistenceStorage(project, { log });
   await validatePortAvailable(port);
 };
