@@ -10,6 +10,20 @@ import { resolveRuntimeMode } from '../runtime/resolve-runtime-mode.ts';
 import { version } from '../runtime/version.ts';
 import { resolveAdminBasePath } from '../admin/resolve-admin-path.ts';
 
+
+const CONTENT_TYPES_STORAGE_KEY = 'content-types';
+
+const normalizeContentTypeSnapshot = (snapshot) => {
+  const types = Array.isArray(snapshot?.types)
+    ? [...snapshot.types].sort((left, right) => String(left?.name ?? '').localeCompare(String(right?.name ?? '')))
+    : [];
+
+  return Object.freeze({
+    schemaVersion: String(snapshot?.schemaVersion ?? 'v1'),
+    types: Object.freeze(types)
+  });
+};
+
 const SYSTEM_PAGE_CONTENT_TYPE = Object.freeze({
   name: 'Page',
   slug: 'page',
@@ -62,8 +76,9 @@ export const createBootstrap = async ({ project = createProjectModel(), cwd = un
   });
   const authMiddleware = createAuthMiddleware({ authService });
   const contentRegistry = new ContentRegistry();
-  const contentStore = new ContentStore({ storageAdapter });
   const entryRegistry = new EntryRegistry({ contentRegistry, rootDirectory: resolvedPaths.projectRoot });
+
+  runtime.contentStore = new ContentStore(runtime.contentTypes);
 
 
   const restore = async () => {
@@ -71,7 +86,7 @@ export const createBootstrap = async ({ project = createProjectModel(), cwd = un
     runtime.setRestoredState?.(restored.runtime);
     runtime.setPersistenceStatus?.(persistenceEngine.status());
 
-    const restoredSchemas = await contentStore.restore();
+    const restoredSchemas = normalizeContentTypeSnapshot(await storageAdapter.read(CONTENT_TYPES_STORAGE_KEY));
     for (const schema of restoredSchemas.types) {
       contentRegistry.register(schema, { source: 'restore' });
     }
@@ -90,10 +105,15 @@ export const createBootstrap = async ({ project = createProjectModel(), cwd = un
     runtime.setPersistenceStatus?.(persistenceEngine.status());
   };
 
-  const persistContentTypes = async () => contentStore.persist({
-    schemaVersion: 'v1',
-    types: contentRegistry.list()
-  });
+  const persistContentTypes = async () => {
+    const snapshot = normalizeContentTypeSnapshot({
+      schemaVersion: 'v1',
+      types: contentRegistry.list()
+    });
+
+    await storageAdapter.write(CONTENT_TYPES_STORAGE_KEY, snapshot);
+    return snapshot;
+  };
 
   const persistEntries = async () => entryRegistry.persist();
 
@@ -175,7 +195,7 @@ export const createBootstrap = async ({ project = createProjectModel(), cwd = un
     authMiddleware,
     adminController,
     contentRegistry,
-    contentStore,
+    contentStore: runtime.contentStore,
     persistContentTypes,
     entryRegistry,
     persistEntries,
