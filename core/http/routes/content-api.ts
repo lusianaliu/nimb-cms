@@ -39,6 +39,35 @@ const resolveTypeError = (error, type) => {
   throw error;
 };
 
+const parseFieldsPayload = async (request) => {
+  let payload;
+  try {
+    payload = await readJsonBody(request);
+  } catch {
+    return {
+      error: jsonResponse({
+        error: {
+          code: 'INVALID_REQUEST',
+          message: 'Invalid JSON body'
+        }
+      }, { statusCode: 400 })
+    };
+  }
+
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !('fields' in payload) || typeof payload.fields !== 'object' || payload.fields === null || Array.isArray(payload.fields)) {
+    return {
+      error: jsonResponse({
+        error: {
+          code: 'INVALID_REQUEST',
+          message: 'Request body must include a "fields" object'
+        }
+      }, { statusCode: 400 })
+    };
+  }
+
+  return { fields: payload.fields };
+};
+
 export const registerContentApiRoutes = (router, runtime) => {
   router.register({
     method: 'GET',
@@ -70,31 +99,59 @@ export const registerContentApiRoutes = (router, runtime) => {
         }, { statusCode: 404 });
       }
 
-      let payload;
-      try {
-        payload = await readJsonBody(context.request);
-      } catch {
-        return jsonResponse({
-          error: {
-            code: 'INVALID_REQUEST',
-            message: 'Invalid JSON body'
-          }
-        }, { statusCode: 400 });
-      }
-
-      if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !('fields' in payload) || typeof payload.fields !== 'object' || payload.fields === null || Array.isArray(payload.fields)) {
-        return jsonResponse({
-          error: {
-            code: 'INVALID_REQUEST',
-            message: 'Request body must include a "fields" object'
-          }
-        }, { statusCode: 400 });
+      const parsed = await parseFieldsPayload(context.request);
+      if (parsed.error) {
+        return parsed.error;
       }
 
       try {
-        const entry = runtime.contentStore.create(type, payload.fields);
+        const entry = runtime.contentStore.create(type, parsed.fields);
         return jsonResponse(mapEntry(entry), { statusCode: 201 });
       } catch (error) {
+        return jsonResponse({
+          error: {
+            code: 'INVALID_REQUEST',
+            message: error instanceof Error ? error.message : 'Invalid content entry'
+          }
+        }, { statusCode: 400 });
+      }
+    }
+  });
+
+  router.register({
+    method: 'PATCH',
+    path: '/api/content/:type/:id',
+    handler: async (context) => {
+      const type = context.params?.type ?? '';
+      const id = context.params?.id ?? '';
+
+      if (!runtime.contentTypes.get(type)) {
+        return jsonResponse({
+          error: {
+            code: 'NOT_FOUND',
+            message: `Content type not found: ${type}`
+          }
+        }, { statusCode: 404 });
+      }
+
+      const parsed = await parseFieldsPayload(context.request);
+      if (parsed.error) {
+        return parsed.error;
+      }
+
+      try {
+        const updated = runtime.contentStore.update(type, id, parsed.fields);
+        return jsonResponse(mapEntry(updated), { statusCode: 200 });
+      } catch (error) {
+        if (error instanceof Error && error.message === `Entry not found: ${type}/${id}`) {
+          return jsonResponse({
+            error: {
+              code: 'NOT_FOUND',
+              message: `Entry not found: ${type}/${id}`
+            }
+          }, { statusCode: 404 });
+        }
+
         return jsonResponse({
           error: {
             code: 'INVALID_REQUEST',
