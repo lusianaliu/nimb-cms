@@ -276,7 +276,7 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
           return;
         }
 
-        const routeResponse = handler(context);
+        const routeResponse = await Promise.resolve(handler(context));
         routeResponse.send(response);
       })
       .catch((error) => {
