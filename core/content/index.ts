@@ -6,3 +6,4 @@ export { createEntry, stableEntryId, canonicalizeEntryData } from './entry-schem
 export { validateEntryData } from './entry-validator.ts';
 export { EntryRegistry } from './entry-registry.ts';
 export { EntryStore } from './entry-store.ts';
+export { ContentTypeRegistry } from './content-type-registry.ts';
