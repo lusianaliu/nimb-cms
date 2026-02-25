@@ -60,3 +60,14 @@ export const redirectResponse = (location, { statusCode = 302 } = {}) => ({
     response.end();
   }
 });
+
+
+export const noContentResponse = ({ statusCode = 204 } = {}) => ({
+  statusCode,
+  send(response) {
+    response.writeHead(statusCode, {
+      'content-length': '0'
+    });
+    response.end();
+  }
+});

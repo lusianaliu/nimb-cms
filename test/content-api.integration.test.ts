@@ -30,6 +30,14 @@ const requestJson = async (url, options = undefined) => {
   };
 };
 
+const requestRaw = async (url, options = undefined) => {
+  const response = await fetch(url, options);
+  return {
+    status: response.status,
+    body: await response.text()
+  };
+};
+
 test('content api: list empty, list entries, and fetch single entry', async () => {
   const cwd = mkdtemp();
   writeConfig(cwd);
@@ -608,6 +616,130 @@ test('content api update returns 400 when entry payload fails schema validation'
       error: {
         code: 'INVALID_REQUEST',
         message: 'Invalid type for field "title" on content type "article": expected string, received number'
+      }
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+
+test('content api deletes an entry via DELETE /api/content/:type/:id', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+  writeInstallState(cwd);
+
+  const startupTimestamp = '2026-01-01T00:00:00.000Z';
+  const bootstrap = await createBootstrap({ cwd, startupTimestamp });
+  const { runtime } = bootstrap;
+
+  runtime.contentTypes.register({
+    name: 'Article',
+    slug: 'article',
+    fields: [
+      { name: 'title', type: 'string', required: true }
+    ]
+  });
+
+  const created = runtime.contentStore.create('article', { title: 'To delete' });
+
+  const server = createHttpServer({
+    runtime,
+    config: bootstrap.config,
+    startupTimestamp,
+    port: 0
+  });
+
+  const { port } = await server.start();
+
+  try {
+    const baseUrl = `http://127.0.0.1:${port}`;
+
+    const deleted = await requestRaw(`${baseUrl}/api/content/article/${created.id}`, {
+      method: 'DELETE'
+    });
+
+    assert.equal(deleted.status, 204);
+    assert.equal(deleted.body, '');
+
+    const listed = await requestJson(`${baseUrl}/api/content/article`);
+    assert.equal(listed.status, 200);
+    assert.deepEqual(listed.body, { entries: [] });
+  } finally {
+    await server.stop();
+  }
+});
+
+test('content api delete returns 404 for unknown entry id', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+  writeInstallState(cwd);
+
+  const startupTimestamp = '2026-01-01T00:00:00.000Z';
+  const bootstrap = await createBootstrap({ cwd, startupTimestamp });
+  const { runtime } = bootstrap;
+
+  runtime.contentTypes.register({
+    name: 'Article',
+    slug: 'article',
+    fields: [
+      { name: 'title', type: 'string', required: true }
+    ]
+  });
+
+  const server = createHttpServer({
+    runtime,
+    config: bootstrap.config,
+    startupTimestamp,
+    port: 0
+  });
+
+  const { port } = await server.start();
+
+  try {
+    const response = await requestJson(`http://127.0.0.1:${port}/api/content/article/not-found`, {
+      method: 'DELETE'
+    });
+
+    assert.equal(response.status, 404);
+    assert.deepEqual(response.body, {
+      error: {
+        code: 'NOT_FOUND',
+        message: 'Entry not found: article/not-found'
+      }
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+test('content api delete returns 404 for unknown content type', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+  writeInstallState(cwd);
+
+  const startupTimestamp = '2026-01-01T00:00:00.000Z';
+  const bootstrap = await createBootstrap({ cwd, startupTimestamp });
+
+  const server = createHttpServer({
+    runtime: bootstrap.runtime,
+    config: bootstrap.config,
+    startupTimestamp,
+    port: 0
+  });
+
+  const { port } = await server.start();
+
+  try {
+    const response = await requestJson(`http://127.0.0.1:${port}/api/content/missing/entry-id`, {
+      method: 'DELETE'
+    });
+
+    assert.equal(response.status, 404);
+    assert.deepEqual(response.body, {
+      error: {
+        code: 'NOT_FOUND',
+        message: 'Content type not found: missing'
       }
     });
   } finally {

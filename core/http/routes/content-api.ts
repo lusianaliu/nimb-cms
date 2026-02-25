@@ -1,4 +1,4 @@
-import { jsonResponse } from '../response.ts';
+import { jsonResponse, noContentResponse } from '../response.ts';
 
 const readJsonBody = async (request) => {
   const contentType = request?.headers?.['content-type'] ?? '';
@@ -158,6 +158,41 @@ export const registerContentApiRoutes = (router, runtime) => {
             message: error instanceof Error ? error.message : 'Invalid content entry'
           }
         }, { statusCode: 400 });
+      }
+    }
+  });
+
+
+  router.register({
+    method: 'DELETE',
+    path: '/api/content/:type/:id',
+    handler: (context) => {
+      const type = context.params?.type ?? '';
+      const id = context.params?.id ?? '';
+
+      if (!runtime.contentTypes.get(type)) {
+        return jsonResponse({
+          error: {
+            code: 'NOT_FOUND',
+            message: `Content type not found: ${type}`
+          }
+        }, { statusCode: 404 });
+      }
+
+      try {
+        runtime.contentStore.delete(type, id);
+        return noContentResponse();
+      } catch (error) {
+        if (error instanceof Error && error.message === `Entry not found: ${type}/${id}`) {
+          return jsonResponse({
+            error: {
+              code: 'NOT_FOUND',
+              message: `Entry not found: ${type}/${id}`
+            }
+          }, { statusCode: 404 });
+        }
+
+        throw error;
       }
     }
   });
