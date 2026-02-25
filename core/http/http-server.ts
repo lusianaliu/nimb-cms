@@ -6,6 +6,7 @@ import { createRouter } from './router.ts';
 import { createHealthRoute } from './routes/health.ts';
 import { createRuntimeRoute } from './routes/runtime.ts';
 import { createInspectorRoute } from './routes/inspector.ts';
+import { registerContentApiRoutes } from './routes/content-api.ts';
 import { createApiRouter } from '../api/index.ts';
 import { errorResponse, notFoundResponse, redirectResponse } from './response.ts';
 import { installerGate } from './installer-gate.ts';
@@ -167,6 +168,7 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
     createRuntimeRoute({ config, runtime, startupTimestamp, clock }),
     createInspectorRoute({ runtime })
   ]);
+  registerContentApiRoutes(router, runtime);
   const apiRouter = createApiRouter({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries });
   const adminBasePath = runtime?.adminBasePath ?? resolveAdminBasePath(runtime);
   const adminLoginPath = `${adminBasePath}/login`;

@@ -47,6 +47,10 @@ export const createApiRouter = ({ runtime, authService, authMiddleware, adminCon
         return null;
       }
 
+      if (context.path.startsWith('/api/content/')) {
+        return null;
+      }
+
       if (context.path === '/api/auth/login' && context.method === 'POST' && authService) {
         try {
           const body = await readJsonBody(context.request);
