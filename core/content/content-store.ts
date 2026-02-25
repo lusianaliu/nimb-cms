@@ -56,6 +56,17 @@ export class ContentStore {
     return existing;
   }
 
+  delete(typeSlug: string, id: string): void {
+    this.ensureTypeExists(typeSlug);
+
+    const typeEntries = this.#entriesByType.get(typeSlug);
+    const existed = typeEntries?.delete(id) ?? false;
+
+    if (!existed) {
+      throw new Error(`Entry not found: ${typeSlug}/${id}`);
+    }
+  }
+
   private ensureTypeExists(typeSlug: string): void {
     if (!this.registry.get(typeSlug)) {
       throw new Error(`Unknown content type: ${typeSlug}`);
