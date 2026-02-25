@@ -1,4 +1,4 @@
-import { createContentEntry, type ContentEntry } from './content-entry.ts';
+import { createContentEntry, type ContentEntry, validateContentEntryData } from './content-entry.ts';
 import { ContentTypeRegistry } from './content-type-registry.ts';
 
 export class ContentStore {
@@ -36,6 +36,24 @@ export class ContentStore {
     }
 
     return [...typeEntries.values()];
+  }
+
+  update(typeSlug: string, id: string, data: Record<string, unknown>): ContentEntry {
+    this.ensureTypeExists(typeSlug);
+
+    const typeEntries = this.#entriesByType.get(typeSlug);
+    const existing = typeEntries?.get(id);
+
+    if (!existing) {
+      throw new Error(`Entry not found: ${typeSlug}/${id}`);
+    }
+
+    validateContentEntryData(this.registry, typeSlug, data);
+
+    existing.data = { ...data };
+    existing.updatedAt = new Date();
+
+    return existing;
   }
 
   private ensureTypeExists(typeSlug: string): void {

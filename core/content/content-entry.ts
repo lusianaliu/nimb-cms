@@ -49,11 +49,11 @@ const describeValueType = (value: unknown): string => {
   return typeof value;
 };
 
-export const createContentEntry = (
+export const validateContentEntryData = (
   registry: ContentTypeRegistry,
   typeSlug: string,
   data: Record<string, unknown>
-): ContentEntry => {
+): void => {
   const definition = registry.get(typeSlug);
   if (!definition) {
     throw new Error(`Unknown content type: ${typeSlug}`);
@@ -84,6 +84,14 @@ export const createContentEntry = (
       );
     }
   }
+};
+
+export const createContentEntry = (
+  registry: ContentTypeRegistry,
+  typeSlug: string,
+  data: Record<string, unknown>
+): ContentEntry => {
+  validateContentEntryData(registry, typeSlug, data);
 
   const now = new Date();
 
