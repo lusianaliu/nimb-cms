@@ -1,43 +1,46 @@
-const STORAGE_KEY = 'content-types';
-
-const normalizeSnapshot = (snapshot) => {
-  const types = Array.isArray(snapshot?.types)
-    ? [...snapshot.types].sort((left, right) => String(left?.name ?? '').localeCompare(String(right?.name ?? '')))
-    : [];
-
-  return Object.freeze({
-    schemaVersion: String(snapshot?.schemaVersion ?? 'v1'),
-    types: Object.freeze(types)
-  });
-};
+import { createContentEntry, type ContentEntry } from './content-entry.ts';
+import { ContentTypeRegistry } from './content-type-registry.ts';
 
 export class ContentStore {
-  constructor({ storageAdapter } = {}) {
-    if (!storageAdapter) {
-      throw new Error('ContentStore requires storageAdapter');
-    }
+  readonly #entriesByType: Map<string, Map<string, ContentEntry>>;
+  private readonly registry: ContentTypeRegistry;
 
-    this.storageAdapter = storageAdapter;
-    this.lastPersisted = null;
+  constructor(registry: ContentTypeRegistry) {
+    this.registry = registry;
+    this.#entriesByType = new Map();
   }
 
-  async persist(snapshot) {
-    const normalized = normalizeSnapshot(snapshot);
-    const serialized = JSON.stringify(normalized);
+  create(typeSlug: string, data: Record<string, unknown>): ContentEntry {
+    this.ensureTypeExists(typeSlug);
 
-    if (this.lastPersisted === serialized) {
-      return normalized;
-    }
+    const entry = createContentEntry(this.registry, typeSlug, data);
+    const typeEntries = this.#entriesByType.get(typeSlug) ?? new Map<string, ContentEntry>();
 
-    await this.storageAdapter.write(STORAGE_KEY, normalized);
-    this.lastPersisted = serialized;
-    return normalized;
+    typeEntries.set(entry.id, entry);
+    this.#entriesByType.set(typeSlug, typeEntries);
+
+    return entry;
   }
 
-  async restore() {
-    const payload = await this.storageAdapter.read(STORAGE_KEY);
-    const normalized = normalizeSnapshot(payload ?? {});
-    this.lastPersisted = JSON.stringify(normalized);
-    return normalized;
+  get(typeSlug: string, id: string): ContentEntry | undefined {
+    this.ensureTypeExists(typeSlug);
+    return this.#entriesByType.get(typeSlug)?.get(id);
+  }
+
+  list(typeSlug: string): ContentEntry[] {
+    this.ensureTypeExists(typeSlug);
+    const typeEntries = this.#entriesByType.get(typeSlug);
+
+    if (!typeEntries) {
+      return [];
+    }
+
+    return [...typeEntries.values()];
+  }
+
+  private ensureTypeExists(typeSlug: string): void {
+    if (!this.registry.get(typeSlug)) {
+      throw new Error(`Unknown content type: ${typeSlug}`);
+    }
   }
 }
