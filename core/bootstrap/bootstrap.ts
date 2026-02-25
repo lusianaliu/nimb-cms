@@ -10,6 +10,29 @@ import { resolveRuntimeMode } from '../runtime/resolve-runtime-mode.ts';
 import { version } from '../runtime/version.ts';
 import { resolveAdminBasePath } from '../admin/resolve-admin-path.ts';
 
+const SYSTEM_PAGE_CONTENT_TYPE = Object.freeze({
+  name: 'Page',
+  slug: 'page',
+  fields: Object.freeze([
+    Object.freeze({ name: 'title', type: 'string', required: true }),
+    Object.freeze({ name: 'slug', type: 'string', required: true }),
+    Object.freeze({ name: 'body', type: 'text' }),
+    Object.freeze({ name: 'published', type: 'boolean' })
+  ])
+});
+
+const registerSystemContentTypes = (runtimeMode, contentTypes) => {
+  if (runtimeMode !== 'normal') {
+    return;
+  }
+
+  if (contentTypes.get(SYSTEM_PAGE_CONTENT_TYPE.slug)) {
+    return;
+  }
+
+  contentTypes.register(SYSTEM_PAGE_CONTENT_TYPE);
+};
+
 const toRuntimeStatus = (runtime) => {
   const state = runtime.getState?.();
   return state?.derivedStatus?.systemHealthy === true ? 'healthy' : 'degraded';
@@ -22,6 +45,7 @@ export const createBootstrap = async ({ project = createProjectModel(), cwd = un
   const runtimeMode = resolveRuntimeMode(resolvedPaths);
   const runtime = createRuntime(config, resolvedPaths, { runtimeMode });
   runtime.contentTypes = new ContentTypeRegistry();
+  registerSystemContentTypes(runtimeMode, runtime.contentTypes);
   runtime.projectPaths = resolvedPaths;
   runtime.project = resolvedPaths;
   runtime.version = version;
