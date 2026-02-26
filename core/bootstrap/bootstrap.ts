@@ -16,6 +16,7 @@ import { HookRegistry } from '../hooks/index.ts';
 import { loadPlugins } from '../plugins/plugin-loader.ts';
 import type { BootstrapMode } from './bootstrap-mode.ts';
 import { isInstalled } from '../setup/setup-state.ts';
+import { seedSystem } from '../setup/system-seed.ts';
 
 
 const CONTENT_TYPES_STORAGE_KEY = 'content-types';
@@ -163,6 +164,9 @@ export const createBootstrap = async ({
   runtime.contentQuery = new ContentQueryService(runtime.contentStore);
   runtime.eventBus = new EventEmitter<ContentEvents>();
   runtime.events = runtime.eventBus as EventEmitter<SystemRuntimeEvents>;
+  runtime.events.on('system.installed', () => {
+    seedSystem(runtime);
+  });
   runtime.hooks = new HookRegistry(runtime.eventBus);
   const shouldLoadPlugins = selectedMode !== 'install';
 
@@ -221,6 +225,10 @@ export const createBootstrap = async ({
   await authService.restore();
   await runtime.start();
 
+  if (selectedMode === 'runtime' && isInstalled()) {
+    seedSystem(runtime);
+  }
+
   const dispatcher = new CommandDispatcher({
     executor: {
       execute: async (command) => runtime.executeAdminCommand({
@@ -228,6 +236,7 @@ export const createBootstrap = async ({
         execute: {
           restart: async () => {
             await runtime.start();
+
             return Object.freeze({ restarted: true });
           },
           persist: async () => {
