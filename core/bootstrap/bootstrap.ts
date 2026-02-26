@@ -19,6 +19,9 @@ import { isInstalled } from '../setup/setup-state.ts';
 
 
 const CONTENT_TYPES_STORAGE_KEY = 'content-types';
+type SystemRuntimeEvents = ContentEvents & {
+  'system.installed': { version: string }
+};
 
 const normalizeContentTypeSnapshot = (snapshot) => {
   const types = Array.isArray(snapshot?.types)
@@ -159,6 +162,7 @@ export const createBootstrap = async ({
   runtime.contentStore = new ContentStore(runtime.contentTypes);
   runtime.contentQuery = new ContentQueryService(runtime.contentStore);
   runtime.eventBus = new EventEmitter<ContentEvents>();
+  runtime.events = runtime.eventBus as EventEmitter<SystemRuntimeEvents>;
   runtime.hooks = new HookRegistry(runtime.eventBus);
   const shouldLoadPlugins = selectedMode !== 'install';
 
