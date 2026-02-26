@@ -9,6 +9,7 @@ import { createProjectModel, createProjectPaths } from '../project/index.ts';
 import { resolveRuntimeMode } from '../runtime/resolve-runtime-mode.ts';
 import { version } from '../runtime/version.ts';
 import { resolveAdminBasePath } from '../admin/resolve-admin-path.ts';
+import type { StorageAdapter as ContentStorageAdapter } from '../storage/storage-adapter.ts';
 
 
 const CONTENT_TYPES_STORAGE_KEY = 'content-types';
@@ -52,7 +53,18 @@ const toRuntimeStatus = (runtime) => {
   return state?.derivedStatus?.systemHealthy === true ? 'healthy' : 'degraded';
 };
 
-export const createBootstrap = async ({ project = createProjectModel(), cwd = undefined, startupTimestamp = new Date().toISOString() } = {}) => {
+export const createBootstrap = async ({
+  project = createProjectModel(),
+  cwd = undefined,
+  startupTimestamp = new Date().toISOString(),
+  contentStorageAdapter = undefined
+}: {
+  project?: ReturnType<typeof createProjectModel>
+  cwd?: string | undefined
+  startupTimestamp?: string
+  contentStorageAdapter?: ContentStorageAdapter
+} = {}) => {
+  void contentStorageAdapter;
   const resolvedProject = cwd ? createProjectModel({ projectRoot: cwd }) : project;
   const resolvedPaths = createProjectPaths(resolvedProject.projectRoot ?? resolvedProject.root);
   const config = loadConfig({ cwd: resolvedPaths.projectRoot });
