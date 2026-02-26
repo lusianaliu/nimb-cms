@@ -3,7 +3,16 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ContentTypeRegistry, ContentStore, ContentCommandService } from '../core/content/index.ts';
+import { EventEmitter } from '../core/events/event-bus.ts';
+import {
+  ContentTypeRegistry,
+  ContentStore,
+  ContentCommandService,
+  CONTENT_CREATED_EVENT,
+  CONTENT_UPDATED_EVENT,
+  CONTENT_DELETED_EVENT,
+  type ContentEvents
+} from '../core/content/index.ts';
 import { createBootstrap } from '../core/bootstrap/index.ts';
 import { createHttpServer } from '../core/http/index.ts';
 
@@ -50,6 +59,48 @@ test('content command service delegates mutations and persists snapshots', async
   await service.delete('article', created.id);
   assert.equal(store.get('article', created.id), undefined);
   assert.equal(persistCalls, 3);
+});
+
+test('content command service emits mutation events', async () => {
+  const types = new ContentTypeRegistry();
+  types.register({
+    name: 'Article',
+    slug: 'article',
+    fields: [{ name: 'title', type: 'string', required: true }]
+  });
+
+  const store = new ContentStore(types);
+  const eventBus = new EventEmitter<ContentEvents>();
+  const events: Array<{ eventName: string; payload: { type: string; entry: { id: string } } }> = [];
+
+  eventBus.on(CONTENT_CREATED_EVENT, (payload) => {
+    events.push({ eventName: CONTENT_CREATED_EVENT, payload });
+  });
+
+  eventBus.on(CONTENT_UPDATED_EVENT, (payload) => {
+    events.push({ eventName: CONTENT_UPDATED_EVENT, payload });
+  });
+
+  eventBus.on(CONTENT_DELETED_EVENT, (payload) => {
+    events.push({ eventName: CONTENT_DELETED_EVENT, payload });
+  });
+
+  const service = new ContentCommandService(store, async () => {}, eventBus);
+
+  const created = await service.create('article', { title: 'Created' });
+  await service.update('article', created.id, { title: 'Updated' });
+  await service.delete('article', created.id);
+
+  assert.equal(events.length, 3);
+  assert.deepEqual(events.map((event) => event.eventName), [
+    CONTENT_CREATED_EVENT,
+    CONTENT_UPDATED_EVENT,
+    CONTENT_DELETED_EVENT
+  ]);
+  assert.equal(events[0]?.payload.type, 'article');
+  assert.equal(events[0]?.payload.entry.id, created.id);
+  assert.equal(events[1]?.payload.entry.id, created.id);
+  assert.equal(events[2]?.payload.entry.id, created.id);
 });
 
 test('content API mutation routes call runtime.contentCommand without response changes', async () => {
