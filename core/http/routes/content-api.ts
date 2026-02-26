@@ -76,7 +76,7 @@ export const registerContentApiRoutes = (router, runtime) => {
       const type = context.params?.type ?? '';
 
       try {
-        const entries = runtime.contentStore.list(type).map((entry) => mapEntry(entry));
+        const entries = runtime.contentQuery.list(type).map((entry) => mapEntry(entry));
         return jsonResponse({ entries }, { statusCode: 200 });
       } catch (error) {
         return resolveTypeError(error, type);
@@ -208,7 +208,7 @@ export const registerContentApiRoutes = (router, runtime) => {
       const id = context.params?.id ?? '';
 
       try {
-        const entry = runtime.contentStore.get(type, id);
+        const entry = runtime.contentQuery.get(type, id);
 
         if (!entry) {
           return jsonResponse({
