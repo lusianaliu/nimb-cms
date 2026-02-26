@@ -24,8 +24,8 @@ const writeInstallState = (cwd, version = '1.0.0') => {
   fs.writeFileSync(path.join(nimbDir, 'install.json'), `${JSON.stringify({ installed: true, version, installedAt: '2026-01-01T00:00:00.000Z' }, null, 2)}\n`);
 };
 
-const createServer = async (cwd) => {
-  const bootstrap = await createBootstrap({ cwd });
+const createServer = async (cwd, bootstrapOptions = {}) => {
+  const bootstrap = await createBootstrap({ cwd, ...bootstrapOptions });
   const server = createHttpServer({
     runtime: bootstrap.runtime,
     config: bootstrap.config,
@@ -37,31 +37,33 @@ const createServer = async (cwd) => {
   return { server, port };
 };
 
-test('phase 54: installer mode redirects root requests to /install', async () => {
+test('phase 54: installer mode serves install response at root', async () => {
   const cwd = mkdtemp();
   writeConfig(cwd, 3240);
 
-  const { server, port } = await createServer(cwd);
+  const { server, port } = await createServer(cwd, { mode: 'install' });
 
   try {
-    const response = await fetch(`http://127.0.0.1:${port}/`, { redirect: 'manual' });
-    assert.equal(response.status, 302);
-    assert.equal(response.headers.get('location'), '/install');
+    const response = await fetch(`http://127.0.0.1:${port}/`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      status: 'install',
+      message: 'Nimb is not installed'
+    });
   } finally {
     await server.stop();
   }
 });
 
-test('phase 54: installer mode allows /install requests', async () => {
+test('phase 54: installer mode does not mount /install page route', async () => {
   const cwd = mkdtemp();
   writeConfig(cwd, 3241);
 
-  const { server, port } = await createServer(cwd);
+  const { server, port } = await createServer(cwd, { mode: 'install' });
 
   try {
     const response = await fetch(`http://127.0.0.1:${port}/install`, { redirect: 'manual' });
-    assert.notEqual(response.status, 302);
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 404);
   } finally {
     await server.stop();
   }
@@ -72,7 +74,7 @@ test('phase 54: normal mode preserves existing routing behavior', async () => {
   writeConfig(cwd, 3242);
   writeInstallState(cwd, '2.0.0');
 
-  const { server, port } = await createServer(cwd);
+  const { server, port } = await createServer(cwd, { mode: 'runtime' });
 
   try {
     const response = await fetch(`http://127.0.0.1:${port}/health`, { redirect: 'manual' });
@@ -82,7 +84,7 @@ test('phase 54: normal mode preserves existing routing behavior', async () => {
   }
 });
 
-test('phase 54: installer HTTP gate remains cwd-independent', async () => {
+test('phase 54: install router remains cwd-independent', async () => {
   const workspaceRoot = mkdtemp();
   const firstProjectRoot = path.join(workspaceRoot, 'site-a');
   const secondProjectRoot = path.join(workspaceRoot, 'site-b');
@@ -97,12 +99,11 @@ test('phase 54: installer HTTP gate remains cwd-independent', async () => {
   let server;
 
   try {
-    const started = await createServer(firstProjectRoot);
+    const started = await createServer(firstProjectRoot, { mode: 'install' });
     server = started.server;
 
     const response = await fetch(`http://127.0.0.1:${started.port}/runtime`, { redirect: 'manual' });
-    assert.equal(response.status, 302);
-    assert.equal(response.headers.get('location'), '/install');
+    assert.equal(response.status, 404);
   } finally {
     process.chdir(originalCwd);
 

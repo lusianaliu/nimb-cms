@@ -15,6 +15,7 @@ import { renderInstallPage } from '../installer/install-page.ts';
 import { renderDashboardPage } from '../admin/dashboard-page.ts';
 import { createAdminAuth } from '../admin/admin-auth.ts';
 import { resolveAdminBasePath } from '../admin/resolve-admin-path.ts';
+import { createInstallRouter } from '../install/install-router.ts';
 
 const adminContentTypeMap = Object.freeze({
   '.css': 'text/css; charset=utf-8',
@@ -163,13 +164,22 @@ const tryHandleAdminDashboardRequest = ({ context, response, runtime, adminBaseP
 };
 
 export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirectory = process.cwd(), port = 3000, clock = () => new Date().toISOString(), authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries }) => {
-  const router = createRouter([
+  const installMode = runtime?.mode === 'install';
+
+  const runtimeRouter = createRouter([
     createHealthRoute({ config }),
     createRuntimeRoute({ config, runtime, startupTimestamp, clock }),
     createInspectorRoute({ runtime })
   ]);
-  registerContentApiRoutes(router, runtime);
-  const apiRouter = createApiRouter({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries });
+  if (!installMode) {
+    registerContentApiRoutes(runtimeRouter, runtime);
+  }
+
+  const installRouter = createInstallRouter(runtime);
+  const router = installMode ? installRouter : runtimeRouter;
+  const apiRouter = installMode
+    ? { handle: async () => null }
+    : createApiRouter({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries });
   const adminBasePath = runtime?.adminBasePath ?? resolveAdminBasePath(runtime);
   const adminLoginPath = `${adminBasePath}/login`;
   const adminMount = Object.freeze({
@@ -195,13 +205,15 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
           return;
         }
 
-        const gateResponse = await gateRequest(context, () => null);
-        if (gateResponse) {
-          gateResponse.send(response);
-          return;
+        if (!installMode) {
+          const gateResponse = await gateRequest(context, () => null);
+          if (gateResponse) {
+            gateResponse.send(response);
+            return;
+          }
         }
 
-        if (context.path === '/install') {
+        if (!installMode && context.path === '/install') {
           if (context.method === 'GET') {
             if (runtime?.getRuntimeMode?.() !== 'installer') {
               notFoundResponse({ path: context.path, timestamp: context.timestamp }).send(response);
