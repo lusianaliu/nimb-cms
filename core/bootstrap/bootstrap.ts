@@ -10,6 +10,7 @@ import { resolveRuntimeMode } from '../runtime/resolve-runtime-mode.ts';
 import { version } from '../runtime/version.ts';
 import { resolveAdminBasePath } from '../admin/resolve-admin-path.ts';
 import type { StorageAdapter as ContentStorageAdapter } from '../storage/storage-adapter.ts';
+import { JsonStorageAdapter } from '../storage/json-storage-adapter.ts';
 
 
 const CONTENT_TYPES_STORAGE_KEY = 'content-types';
@@ -53,6 +54,60 @@ const toRuntimeStatus = (runtime) => {
   return state?.derivedStatus?.systemHealthy === true ? 'healthy' : 'degraded';
 };
 
+const serializeContentStore = (contentStore, contentTypes) => {
+  const entries = {};
+
+  for (const type of contentTypes.list()) {
+    const typeSlug = String(type?.slug ?? '');
+    if (!typeSlug) {
+      continue;
+    }
+
+    const serializedEntries = {};
+    for (const entry of contentStore.list(typeSlug)) {
+      serializedEntries[entry.id] = {
+        id: entry.id,
+        type: entry.type,
+        data: { ...(entry.data ?? {}) },
+        createdAt: entry.createdAt instanceof Date ? entry.createdAt.toISOString() : entry.createdAt,
+        updatedAt: entry.updatedAt instanceof Date ? entry.updatedAt.toISOString() : entry.updatedAt
+      };
+    }
+
+    if (Object.keys(serializedEntries).length > 0) {
+      entries[typeSlug] = serializedEntries;
+    }
+  }
+
+  return Object.freeze({ entries: Object.freeze(entries) });
+};
+
+const restoreContentStore = async (contentStore, snapshot) => {
+  const entriesByType = snapshot?.entries ?? {};
+
+  for (const [typeSlug, entries] of Object.entries(entriesByType)) {
+    if (!entries || typeof entries !== 'object') {
+      continue;
+    }
+
+    for (const [entryId, serialized] of Object.entries(entries)) {
+      if (!serialized || typeof serialized !== 'object') {
+        continue;
+      }
+
+      try {
+        const restored = contentStore.create(typeSlug, { ...(serialized as { data?: Record<string, unknown> }).data ?? {} });
+        restored.createdAt = new Date((serialized as { createdAt?: string }).createdAt ?? restored.createdAt);
+        restored.updatedAt = new Date((serialized as { updatedAt?: string }).updatedAt ?? restored.updatedAt);
+      } catch (error) {
+        if (!(error instanceof Error) || !error.message.startsWith('Unknown content type:')) {
+          throw error;
+        }
+      }
+    }
+  }
+};
+
 export const createBootstrap = async ({
   project = createProjectModel(),
   cwd = undefined,
@@ -64,7 +119,6 @@ export const createBootstrap = async ({
   startupTimestamp?: string
   contentStorageAdapter?: ContentStorageAdapter
 } = {}) => {
-  void contentStorageAdapter;
   const resolvedProject = cwd ? createProjectModel({ projectRoot: cwd }) : project;
   const resolvedPaths = createProjectPaths(resolvedProject.projectRoot ?? resolvedProject.root);
   const config = loadConfig({ cwd: resolvedPaths.projectRoot });
@@ -78,6 +132,7 @@ export const createBootstrap = async ({
   runtime.setRuntimeMode?.(runtimeMode);
   runtime.setConfig?.(config);
   runtime.adminBasePath = resolveAdminBasePath(runtime);
+  const resolvedContentStorageAdapter = contentStorageAdapter ?? new JsonStorageAdapter({ rootDirectory: resolvedPaths.dataDir });
   const storageAdapter = new FileSystemStorageAdapter({ rootDirectory: resolvedPaths.persistenceDir });
   const persistenceEngine = new PersistenceEngine({ storageAdapter });
   const sessionStore = new SessionStore({ storageAdapter });
@@ -92,6 +147,12 @@ export const createBootstrap = async ({
 
   runtime.contentStore = new ContentStore(runtime.contentTypes);
 
+  const persistContentSnapshot = async () => {
+    await resolvedContentStorageAdapter.saveContentSnapshot(serializeContentStore(runtime.contentStore, runtime.contentTypes));
+  };
+
+  runtime.persistContentSnapshot = persistContentSnapshot;
+
 
   const restore = async () => {
     const restored = await persistenceEngine.restore();
@@ -104,6 +165,9 @@ export const createBootstrap = async ({
     }
 
     entryRegistry.restoreFromDisk();
+
+    const snapshot = await resolvedContentStorageAdapter.loadContentSnapshot();
+    await restoreContentStore(runtime.contentStore, snapshot);
   };
 
   const persist = async () => {
@@ -191,6 +255,7 @@ export const createBootstrap = async ({
   runtime.setBootstrapSnapshot?.(bootstrapSnapshot);
 
   await persist();
+  await persistContentSnapshot();
   await persistContentTypes();
   await persistEntries();
   runtime.setContentStatusProvider?.(() => contentRegistry.inspectorSnapshot());
@@ -208,6 +273,7 @@ export const createBootstrap = async ({
     adminController,
     contentRegistry,
     contentStore: runtime.contentStore,
+    persistContentSnapshot,
     persistContentTypes,
     entryRegistry,
     persistEntries,
