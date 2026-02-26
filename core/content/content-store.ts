@@ -14,6 +14,7 @@ export class ContentStore {
     this.ensureTypeExists(typeSlug);
 
     const entry = createContentEntry(this.registry, typeSlug, data);
+    entry.status = entry.status ?? 'published';
     const typeEntries = this.#entriesByType.get(typeSlug) ?? new Map<string, ContentEntry>();
 
     typeEntries.set(entry.id, entry);

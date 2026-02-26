@@ -6,6 +6,7 @@ export interface ContentEntry {
   id: string;
   type: string;
   data: Record<string, unknown>;
+  status?: 'draft' | 'published' | 'archived';
   createdAt: Date;
   updatedAt: Date;
 }

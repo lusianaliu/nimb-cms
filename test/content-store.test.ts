@@ -35,6 +35,15 @@ test('content store creates entries for a registered content type', () => {
   assert.equal(store.list('article').length, 1);
 });
 
+
+test('content store defaults status to published when missing', () => {
+  const store = new ContentStore(createRegistry());
+
+  const entry = store.create('article', { title: 'Hello world' });
+
+  assert.equal(entry.status, 'published');
+});
+
 test('content store retrieves entries by id within the same content type', () => {
   const store = new ContentStore(createRegistry());
   const created = store.create('article', { title: 'Find me' });
