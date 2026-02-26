@@ -235,15 +235,12 @@ const startServer = async () => {
   const projectPaths = createProjectPaths(projectRoot);
   const project = createProjectModel({ projectRoot: projectPaths.projectRoot });
   let httpServer;
+  let currentBootstrap;
+  let restartHandled = false;
 
-  try {
-    const config = loadConfig({ cwd: projectPaths.projectRoot });
-    const port = resolvePort(config);
-    await validateStartupInvariants({ config, project: projectPaths, runtimeRoot, port });
-
-    const bootstrap = await createBootstrap({ project: projectPaths, startupTimestamp });
-
-    httpServer = createHttpServer({
+  const startBootstrapServer = async (bootstrapOptions = {}) => {
+    const bootstrap = await createBootstrap({ project: projectPaths, startupTimestamp, ...bootstrapOptions });
+    const server = createHttpServer({
       runtime: bootstrap.runtime,
       config: bootstrap.config,
       startupTimestamp,
@@ -258,19 +255,54 @@ const startServer = async () => {
       persistEntries: bootstrap.persistEntries
     });
 
-    const { port: activePort } = await httpServer.start();
+    const transitionHandler = async () => {
+      if (restartHandled) {
+        return;
+      }
 
-    const mode = resolveEnvironmentMode(bootstrap.config.runtime.mode);
-    const adminEnabled = bootstrap.config.admin.enabled === true;
+      restartHandled = true;
+
+      try {
+        await server.stop();
+        const restarted = await startBootstrapServer({ mode: 'runtime' });
+        httpServer = restarted.server;
+        currentBootstrap = restarted.bootstrap;
+      } catch (error) {
+        process.stderr.write(`Runtime transition failed: ${error?.message ?? String(error)}\n`);
+      }
+    };
+
+    bootstrap.runtime?.events?.on?.('system.installed', () => {
+      void transitionHandler();
+    });
+
+    const { port: activePort } = await server.start();
+    return { bootstrap, server, activePort };
+  };
+
+  let port;
+
+  try {
+    const config = loadConfig({ cwd: projectPaths.projectRoot });
+    port = resolvePort(config);
+    await validateStartupInvariants({ config, project: projectPaths, runtimeRoot, port });
+
+    const started = await startBootstrapServer();
+    currentBootstrap = started.bootstrap;
+    httpServer = started.server;
+    const activePort = started.activePort;
+
+    const mode = resolveEnvironmentMode(currentBootstrap.config.runtime.mode);
+    const adminEnabled = currentBootstrap.config.admin.enabled === true;
     const installed = isProjectInstalled(project);
-    const runtimeMode = bootstrap.runtimeMode ?? resolveRuntimeMode(project);
+    const runtimeMode = currentBootstrap.runtimeMode ?? resolveRuntimeMode(project);
 
     process.stdout.write(`Nimb v${version}\n`);
     process.stdout.write(`mode: ${mode}\n`);
     process.stdout.write(`project: ${project.projectRoot}\n`);
     process.stdout.write(`installed: ${installed ? 'yes' : 'no'}\n`);
     process.stdout.write(`runtimeMode: ${runtimeMode}\n`);
-    process.stdout.write(`Admin: ${adminEnabled ? `enabled (${bootstrap.config.admin.basePath})` : 'disabled'}\n`);
+    process.stdout.write(`Admin: ${adminEnabled ? `enabled (${currentBootstrap.config.admin.basePath})` : 'disabled'}\n`);
     process.stdout.write('Storage: active\n');
     process.stdout.write(`Port: ${activePort}\n`);
     process.stdout.write('Ready.\n');

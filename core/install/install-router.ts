@@ -2,7 +2,7 @@ import { createRouter } from '../http/router.ts';
 import { jsonResponse } from '../http/response.ts';
 import { isInstalled, markInstalled } from '../setup/setup-state.ts';
 
-export const createInstallRouter = (_runtime) => createRouter([
+export const createInstallRouter = (runtime) => createRouter([
   {
     method: 'GET',
     path: '/',
@@ -20,6 +20,7 @@ export const createInstallRouter = (_runtime) => createRouter([
       }
 
       markInstalled({ version: '0.1.0' });
+      runtime?.events?.emit?.('system.installed', { version: '0.1.0' });
 
       return jsonResponse({
         status: 'installed',
