@@ -1,4 +1,5 @@
 import type { HookRegistry } from '../hooks/index.ts';
+import type { PluginContext } from './plugin-context.ts';
 
 export interface NimbRuntime {
   hooks: HookRegistry;
@@ -6,5 +7,5 @@ export interface NimbRuntime {
 
 export interface NimbPlugin {
   name: string;
-  setup(runtime: NimbRuntime): void | Promise<void>;
+  setup(context: PluginContext): void | Promise<void>;
 }
