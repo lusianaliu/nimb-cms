@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { NimbPlugin, NimbRuntime } from './plugin.ts';
+import { createPluginContext } from './plugin-context.ts';
 
 type PluginLoaderLogger = {
   error?: (message: string, context?: Record<string, unknown>) => void;
@@ -56,7 +57,13 @@ export const loadPlugins = async (
         throw new Error('plugin entry must export a plugin object with a setup function');
       }
 
-      await plugin.setup(runtime);
+      const context = createPluginContext(runtime, plugin.name ?? pluginName);
+
+      if (plugin.setup.length !== 1) {
+        throw new Error('plugin setup must accept a single PluginContext argument');
+      }
+
+      await plugin.setup(context);
       loadedPlugins.push(plugin.name ?? pluginName);
     } catch (error) {
       logger?.error?.('plugin loader failed to load plugin', {

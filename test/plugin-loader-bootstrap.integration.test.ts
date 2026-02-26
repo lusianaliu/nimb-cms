@@ -31,17 +31,17 @@ test('bootstrap loads plugins and exposes hook registrations', async () => {
   fs.writeFileSync(path.join(pluginsDirectory, 'index.ts'), `
     export default {
       name: 'sample',
-      setup(runtime) {
-        runtime.pluginEventCount = 0;
-        runtime.hooks.on('content.created', () => {
-          runtime.pluginEventCount += 1;
+      setup(context) {
+        globalThis.pluginEventCount = 0;
+        context.hooks.on('content.created', () => {
+          globalThis.pluginEventCount += 1;
         });
       }
     };
   `);
 
   const bootstrap = await createBootstrap({ cwd, startupTimestamp: '2026-01-01T00:00:00.000Z' });
-  const runtime = bootstrap.runtime as { contentTypes: { register: (value: unknown) => void }; contentCommand: { create: (type: string, data: Record<string, unknown>) => Promise<unknown> }; pluginEventCount?: number };
+  const runtime = bootstrap.runtime as { contentTypes: { register: (value: unknown) => void }; contentCommand: { create: (type: string, data: Record<string, unknown>) => Promise<unknown> } };
 
   runtime.contentTypes.register({
     name: 'Article',
@@ -51,5 +51,5 @@ test('bootstrap loads plugins and exposes hook registrations', async () => {
 
   await runtime.contentCommand.create('article', { title: 'plugin event' });
 
-  assert.equal(runtime.pluginEventCount, 1);
+  assert.equal((globalThis as { pluginEventCount?: number }).pluginEventCount, 1);
 });

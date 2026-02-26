@@ -16,40 +16,77 @@ const writePlugin = (pluginsDirectory: string, pluginName: string, source: strin
   fs.writeFileSync(path.join(pluginDirectory, 'index.ts'), source);
 };
 
-test('loadPlugins loads plugins and executes setup', async () => {
+test('loadPlugins passes PluginContext to plugin setup', async () => {
   const cwd = mkdtemp();
   const pluginsDirectory = path.join(cwd, 'plugins');
 
   writePlugin(pluginsDirectory, 'alpha', `
     export default {
       name: 'alpha',
-      setup(runtime) {
-        runtime.setupCount = (runtime.setupCount ?? 0) + 1;
+      setup(context) {
+        globalThis.receivedContext = {
+          hasHooks: Boolean(context?.hooks),
+          hasLog: Boolean(context?.log)
+        };
       }
     };
   `);
 
   const runtime = {
-    hooks: new HookRegistry(new EventEmitter<ContentEvents>()),
-    setupCount: 0
+    hooks: new HookRegistry(new EventEmitter<ContentEvents>())
   };
 
   const loaded = await loadPlugins(runtime, { pluginsDirectory });
+  const receivedContext = (globalThis as { receivedContext?: { hasHooks: boolean; hasLog: boolean } }).receivedContext;
 
   assert.deepEqual(loaded, ['alpha']);
-  assert.equal(runtime.setupCount, 1);
+  assert.deepEqual(receivedContext, { hasHooks: true, hasLog: true });
 });
 
-test('loadPlugins registers hooks from plugin setup', async () => {
+test('loadPlugins context logger prefixes plugin name', async () => {
+  const cwd = mkdtemp();
+  const pluginsDirectory = path.join(cwd, 'plugins');
+
+  writePlugin(pluginsDirectory, 'logged', `
+    export default {
+      name: 'logged',
+      setup(context) {
+        context.log.info('hello');
+      }
+    };
+  `);
+
+  const runtime = {
+    hooks: new HookRegistry(new EventEmitter<ContentEvents>())
+  };
+
+  const messages: string[] = [];
+  const originalInfo = console.info;
+  console.info = (message?: unknown, ...rest: unknown[]) => {
+    messages.push([String(message), ...rest.map(String)].join(' '));
+  };
+
+  try {
+    await loadPlugins(runtime, { pluginsDirectory });
+  } finally {
+    console.info = originalInfo;
+  }
+
+  assert.equal(messages.length, 1);
+  assert.match(messages[0], /^\[plugin:logged\] hello$/);
+});
+
+test('loadPlugins context hooks remain functional', async () => {
   const cwd = mkdtemp();
   const pluginsDirectory = path.join(cwd, 'plugins');
 
   writePlugin(pluginsDirectory, 'hooked', `
     export default {
       name: 'hooked',
-      setup(runtime) {
-        runtime.hooks.on('content.created', () => {
-          runtime.eventsSeen = (runtime.eventsSeen ?? 0) + 1;
+      setup(context) {
+        globalThis.eventsSeen = 0;
+        context.hooks.on('content.created', () => {
+          globalThis.eventsSeen += 1;
         });
       }
     };
@@ -57,8 +94,7 @@ test('loadPlugins registers hooks from plugin setup', async () => {
 
   const eventBus = new EventEmitter<ContentEvents>();
   const runtime = {
-    hooks: new HookRegistry(eventBus),
-    eventsSeen: 0
+    hooks: new HookRegistry(eventBus)
   };
 
   await loadPlugins(runtime, { pluginsDirectory });
@@ -68,7 +104,7 @@ test('loadPlugins registers hooks from plugin setup', async () => {
     entry: { id: 'entry-1' } as never
   });
 
-  assert.equal(runtime.eventsSeen, 1);
+  assert.equal((globalThis as { eventsSeen?: number }).eventsSeen, 1);
 });
 
 test('loadPlugins isolates plugin failures and continues loading', async () => {
@@ -87,16 +123,15 @@ test('loadPlugins isolates plugin failures and continues loading', async () => {
   writePlugin(pluginsDirectory, 'healthy', `
     export default {
       name: 'healthy',
-      setup(runtime) {
-        runtime.healthyLoaded = true;
+      setup(context) {
+        context.log.info('healthy loaded');
       }
     };
   `);
 
   const loggedErrors: string[] = [];
   const runtime = {
-    hooks: new HookRegistry(new EventEmitter<ContentEvents>()),
-    healthyLoaded: false
+    hooks: new HookRegistry(new EventEmitter<ContentEvents>())
   };
 
   const loaded = await loadPlugins(runtime, {
@@ -109,7 +144,6 @@ test('loadPlugins isolates plugin failures and continues loading', async () => {
   });
 
   assert.deepEqual(loaded, ['healthy']);
-  assert.equal(runtime.healthyLoaded, true);
   assert.equal(loggedErrors.length, 1);
   assert.match(loggedErrors[0], /broken/);
 });
