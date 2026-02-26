@@ -12,6 +12,7 @@ import { resolveAdminBasePath } from '../admin/resolve-admin-path.ts';
 import type { StorageAdapter as ContentStorageAdapter } from '../storage/storage-adapter.ts';
 import { JsonStorageAdapter } from '../storage/json-storage-adapter.ts';
 import { EventEmitter } from '../events/event-bus.ts';
+import { HookRegistry } from '../hooks/index.ts';
 
 
 const CONTENT_TYPES_STORAGE_KEY = 'content-types';
@@ -149,6 +150,7 @@ export const createBootstrap = async ({
   runtime.contentStore = new ContentStore(runtime.contentTypes);
   runtime.contentQuery = new ContentQueryService(runtime.contentStore);
   runtime.eventBus = new EventEmitter<ContentEvents>();
+  runtime.hooks = new HookRegistry(runtime.eventBus);
 
   const persistContentSnapshot = async () => {
     await resolvedContentStorageAdapter.saveContentSnapshot(serializeContentStore(runtime.contentStore, runtime.contentTypes));
@@ -269,6 +271,7 @@ export const createBootstrap = async ({
   return Object.freeze({
     config,
     runtime,
+    hooks: runtime.hooks,
     snapshot: bootstrapSnapshot,
     inspector,
     persistence: persistenceEngine.status(),
