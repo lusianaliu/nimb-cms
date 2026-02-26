@@ -106,6 +106,7 @@ export const registerContentApiRoutes = (router, runtime) => {
 
       try {
         const entry = runtime.contentStore.create(type, parsed.fields);
+        await runtime.persistContentSnapshot?.();
         return jsonResponse(mapEntry(entry), { statusCode: 201 });
       } catch (error) {
         return jsonResponse({
@@ -141,6 +142,7 @@ export const registerContentApiRoutes = (router, runtime) => {
 
       try {
         const updated = runtime.contentStore.update(type, id, parsed.fields);
+        await runtime.persistContentSnapshot?.();
         return jsonResponse(mapEntry(updated), { statusCode: 200 });
       } catch (error) {
         if (error instanceof Error && error.message === `Entry not found: ${type}/${id}`) {
@@ -166,7 +168,7 @@ export const registerContentApiRoutes = (router, runtime) => {
   router.register({
     method: 'DELETE',
     path: '/api/content/:type/:id',
-    handler: (context) => {
+    handler: async (context) => {
       const type = context.params?.type ?? '';
       const id = context.params?.id ?? '';
 
@@ -181,6 +183,7 @@ export const registerContentApiRoutes = (router, runtime) => {
 
       try {
         runtime.contentStore.delete(type, id);
+        await runtime.persistContentSnapshot?.();
         return noContentResponse();
       } catch (error) {
         if (error instanceof Error && error.message === `Entry not found: ${type}/${id}`) {
