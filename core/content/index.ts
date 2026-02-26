@@ -3,6 +3,7 @@ export { createContentSchema, computeSchemaHash, normalizeContentSchema, getSupp
 export { validateContentSchema } from './content-validator.ts';
 export { ContentStore } from './content-store.ts';
 export { ContentCommandService } from './content-command.ts';
+export { CONTENT_CREATED_EVENT, CONTENT_UPDATED_EVENT, CONTENT_DELETED_EVENT, type ContentEvents, type ContentMutationEventPayload } from './content-events.ts';
 export { ContentQueryService, type QueryOptions } from './content-query.ts';
 export { createEntry, stableEntryId, canonicalizeEntryData } from './entry-schema.ts';
 export { validateEntryData } from './entry-validator.ts';

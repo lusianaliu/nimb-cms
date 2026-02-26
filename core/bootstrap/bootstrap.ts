@@ -4,13 +4,14 @@ import { BootstrapSnapshot } from './bootstrap-snapshot.ts';
 import { FileSystemStorageAdapter, PersistenceEngine } from '../persistence/index.ts';
 import { AuthService, SessionStore, createAuthMiddleware } from '../auth/index.ts';
 import { CommandDispatcher, createAdminController } from '../admin/index.ts';
-import { ContentRegistry, ContentStore, ContentQueryService, ContentCommandService, EntryRegistry, ContentTypeRegistry } from '../content/index.ts';
+import { ContentRegistry, ContentStore, ContentQueryService, ContentCommandService, EntryRegistry, ContentTypeRegistry, type ContentEvents } from '../content/index.ts';
 import { createProjectModel, createProjectPaths } from '../project/index.ts';
 import { resolveRuntimeMode } from '../runtime/resolve-runtime-mode.ts';
 import { version } from '../runtime/version.ts';
 import { resolveAdminBasePath } from '../admin/resolve-admin-path.ts';
 import type { StorageAdapter as ContentStorageAdapter } from '../storage/storage-adapter.ts';
 import { JsonStorageAdapter } from '../storage/json-storage-adapter.ts';
+import { EventEmitter } from '../events/event-bus.ts';
 
 
 const CONTENT_TYPES_STORAGE_KEY = 'content-types';
@@ -147,13 +148,14 @@ export const createBootstrap = async ({
 
   runtime.contentStore = new ContentStore(runtime.contentTypes);
   runtime.contentQuery = new ContentQueryService(runtime.contentStore);
+  runtime.eventBus = new EventEmitter<ContentEvents>();
 
   const persistContentSnapshot = async () => {
     await resolvedContentStorageAdapter.saveContentSnapshot(serializeContentStore(runtime.contentStore, runtime.contentTypes));
   };
 
   runtime.persistContentSnapshot = persistContentSnapshot;
-  runtime.contentCommand = new ContentCommandService(runtime.contentStore, runtime.persistContentSnapshot);
+  runtime.contentCommand = new ContentCommandService(runtime.contentStore, runtime.persistContentSnapshot, runtime.eventBus);
 
 
   const restore = async () => {
