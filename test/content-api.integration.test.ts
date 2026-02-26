@@ -746,3 +746,69 @@ test('content api delete returns 404 for unknown content type', async () => {
     await server.stop();
   }
 });
+
+test('content api persists entries across bootstrap restart', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+  writeInstallState(cwd);
+
+  const startupTimestamp = '2026-01-01T00:00:00.000Z';
+  const firstBootstrap = await createBootstrap({ cwd, startupTimestamp });
+
+  const firstServer = createHttpServer({
+    runtime: firstBootstrap.runtime,
+    config: firstBootstrap.config,
+    startupTimestamp,
+    port: 0
+  });
+
+  const { port: firstPort } = await firstServer.start();
+
+
+  try {
+    const created = await requestJson(`http://127.0.0.1:${firstPort}/api/content/page`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        fields: {
+          title: 'Persist me',
+          slug: 'persist-me',
+          body: 'Hello',
+          published: true
+        }
+      })
+    });
+
+    assert.equal(created.status, 201);
+  } finally {
+    await firstServer.stop();
+  }
+
+  const secondBootstrap = await createBootstrap({ cwd, startupTimestamp: '2026-01-01T00:05:00.000Z' });
+
+  const secondServer = createHttpServer({
+    runtime: secondBootstrap.runtime,
+    config: secondBootstrap.config,
+    startupTimestamp,
+    port: 0
+  });
+
+  const { port: secondPort } = await secondServer.start();
+
+  try {
+    const listed = await requestJson(`http://127.0.0.1:${secondPort}/api/content/page`);
+    assert.equal(listed.status, 200);
+    assert.equal(Array.isArray(listed.body.entries), true);
+    assert.equal(listed.body.entries.length, 1);
+    assert.deepEqual(listed.body.entries[0].fields, {
+      title: 'Persist me',
+      slug: 'persist-me',
+      body: 'Hello',
+      published: true
+    });
+  } finally {
+    await secondServer.stop();
+  }
+});
