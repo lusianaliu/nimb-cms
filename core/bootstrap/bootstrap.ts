@@ -4,7 +4,7 @@ import { BootstrapSnapshot } from './bootstrap-snapshot.ts';
 import { FileSystemStorageAdapter, PersistenceEngine } from '../persistence/index.ts';
 import { AuthService, SessionStore, createAuthMiddleware } from '../auth/index.ts';
 import { CommandDispatcher, createAdminController } from '../admin/index.ts';
-import { ContentRegistry, ContentStore, ContentQueryService, EntryRegistry, ContentTypeRegistry } from '../content/index.ts';
+import { ContentRegistry, ContentStore, ContentQueryService, ContentCommandService, EntryRegistry, ContentTypeRegistry } from '../content/index.ts';
 import { createProjectModel, createProjectPaths } from '../project/index.ts';
 import { resolveRuntimeMode } from '../runtime/resolve-runtime-mode.ts';
 import { version } from '../runtime/version.ts';
@@ -153,6 +153,7 @@ export const createBootstrap = async ({
   };
 
   runtime.persistContentSnapshot = persistContentSnapshot;
+  runtime.contentCommand = new ContentCommandService(runtime.contentStore, runtime.persistContentSnapshot);
 
 
   const restore = async () => {
@@ -274,6 +275,7 @@ export const createBootstrap = async ({
     adminController,
     contentRegistry,
     contentStore: runtime.contentStore,
+    contentCommand: runtime.contentCommand,
     contentQuery: runtime.contentQuery,
     persistContentSnapshot,
     persistContentTypes,
