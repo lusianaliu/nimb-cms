@@ -14,6 +14,7 @@ import { JsonStorageAdapter } from '../storage/json-storage-adapter.ts';
 import { EventEmitter } from '../events/event-bus.ts';
 import { HookRegistry } from '../hooks/index.ts';
 import { loadPlugins } from '../plugins/plugin-loader.ts';
+import type { BootstrapMode } from './bootstrap-mode.ts';
 
 
 const CONTENT_TYPES_STORAGE_KEY = 'content-types';
@@ -111,22 +112,28 @@ const restoreContentStore = async (contentStore, snapshot) => {
   }
 };
 
-export const createBootstrap = async ({
-  project = createProjectModel(),
-  cwd = undefined,
-  startupTimestamp = new Date().toISOString(),
-  contentStorageAdapter = undefined
-}: {
+export type CreateBootstrapOptions = {
   project?: ReturnType<typeof createProjectModel>
   cwd?: string | undefined
   startupTimestamp?: string
   contentStorageAdapter?: ContentStorageAdapter
-} = {}) => {
+  mode?: BootstrapMode
+};
+
+export const createBootstrap = async ({
+  project = createProjectModel(),
+  cwd = undefined,
+  startupTimestamp = new Date().toISOString(),
+  contentStorageAdapter = undefined,
+  mode = 'runtime'
+}: CreateBootstrapOptions = {}) => {
+  const selectedMode = mode ?? 'runtime';
   const resolvedProject = cwd ? createProjectModel({ projectRoot: cwd }) : project;
   const resolvedPaths = createProjectPaths(resolvedProject.projectRoot ?? resolvedProject.root);
   const config = loadConfig({ cwd: resolvedPaths.projectRoot });
   const runtimeMode = resolveRuntimeMode(resolvedPaths);
   const runtime = createRuntime(config, resolvedPaths, { runtimeMode });
+  runtime.mode = selectedMode;
   runtime.contentTypes = new ContentTypeRegistry();
   registerSystemContentTypes(runtimeMode, runtime.contentTypes);
   runtime.projectPaths = resolvedPaths;
@@ -152,7 +159,11 @@ export const createBootstrap = async ({
   runtime.contentQuery = new ContentQueryService(runtime.contentStore);
   runtime.eventBus = new EventEmitter<ContentEvents>();
   runtime.hooks = new HookRegistry(runtime.eventBus);
-  await loadPlugins(runtime, { pluginsDirectory: resolvedPaths.pluginsDir });
+  const shouldLoadPlugins = selectedMode !== 'install';
+
+  if (shouldLoadPlugins) {
+    await loadPlugins(runtime, { pluginsDirectory: resolvedPaths.pluginsDir });
+  }
 
   const persistContentSnapshot = async () => {
     await resolvedContentStorageAdapter.saveContentSnapshot(serializeContentStore(runtime.contentStore, runtime.contentTypes));
@@ -291,3 +302,5 @@ export const createBootstrap = async ({
     runtimeMode
   });
 };
+
+export const bootstrap = async (options: { mode?: BootstrapMode } = {}) => createBootstrap(options);
