@@ -15,16 +15,20 @@ export class EventEmitter<TEvents extends Record<string, unknown>> {
     this.#listeners.set(eventName, listeners as ListenerSet<TEvents[keyof TEvents]>);
 
     return () => {
-      const eventListeners = this.#listeners.get(eventName);
-      if (!eventListeners) {
-        return;
-      }
-
-      eventListeners.delete(handler as EventHandler<TEvents[keyof TEvents]>);
-      if (eventListeners.size === 0) {
-        this.#listeners.delete(eventName);
-      }
+      this.off(eventName, handler);
     };
+  }
+
+  off<TEventName extends keyof TEvents>(eventName: TEventName, handler: EventHandler<TEvents[TEventName]>): void {
+    const eventListeners = this.#listeners.get(eventName);
+    if (!eventListeners) {
+      return;
+    }
+
+    eventListeners.delete(handler as EventHandler<TEvents[keyof TEvents]>);
+    if (eventListeners.size === 0) {
+      this.#listeners.delete(eventName);
+    }
   }
 
   emit<TEventName extends keyof TEvents>(eventName: TEventName, payload: TEvents[TEventName]): void {
