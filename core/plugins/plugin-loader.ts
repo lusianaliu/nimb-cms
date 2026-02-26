@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import type { PluginConfig } from './plugin-config.ts';
 import type { NimbPlugin, NimbRuntime } from './plugin.ts';
 import { createPluginContext } from './plugin-context.ts';
 
@@ -10,6 +11,28 @@ type PluginLoaderLogger = {
 };
 
 const PLUGIN_ENTRY_FILE = 'index.ts';
+const PLUGIN_CONFIG_FILE = 'config.json';
+
+const readPluginConfig = async (pluginDirectory: string): Promise<PluginConfig> => {
+  const configPath = path.join(pluginDirectory, PLUGIN_CONFIG_FILE);
+
+  try {
+    const configContent = await fs.readFile(configPath, 'utf8');
+    const parsed = JSON.parse(configContent) as unknown;
+
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as PluginConfig;
+    }
+
+    throw new Error('config.json must contain a JSON object at the top level');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return {};
+    }
+
+    throw error;
+  }
+};
 
 export const loadPlugins = async (
   runtime: NimbRuntime,
@@ -49,6 +72,8 @@ export const loadPlugins = async (
     }
 
     try {
+      const pluginDirectory = path.join(pluginsDirectory, pluginName);
+      const config = await readPluginConfig(pluginDirectory);
       const moduleUrl = pathToFileURL(pluginEntryPath).href;
       const imported = await import(moduleUrl);
       const plugin: NimbPlugin | undefined = imported.default ?? imported.plugin;
@@ -57,7 +82,7 @@ export const loadPlugins = async (
         throw new Error('plugin entry must export a plugin object with a setup function');
       }
 
-      const context = createPluginContext(runtime, plugin.name ?? pluginName);
+      const context = createPluginContext(runtime, plugin.name ?? pluginName, config);
 
       if (plugin.setup.length !== 1) {
         throw new Error('plugin setup must accept a single PluginContext argument');

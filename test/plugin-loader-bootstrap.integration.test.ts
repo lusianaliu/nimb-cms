@@ -32,6 +32,7 @@ test('bootstrap loads plugins and exposes hook registrations', async () => {
     export default {
       name: 'sample',
       setup(context) {
+        context.log.info('config loaded', context.config);
         globalThis.pluginEventCount = 0;
         context.hooks.on('content.created', () => {
           globalThis.pluginEventCount += 1;

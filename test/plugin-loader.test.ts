@@ -25,6 +25,7 @@ test('loadPlugins passes PluginContext to plugin setup', async () => {
       name: 'alpha',
       setup(context) {
         globalThis.receivedContext = {
+          config: context?.config,
           hasHooks: Boolean(context?.hooks),
           hasLog: Boolean(context?.log)
         };
@@ -37,10 +38,66 @@ test('loadPlugins passes PluginContext to plugin setup', async () => {
   };
 
   const loaded = await loadPlugins(runtime, { pluginsDirectory });
-  const receivedContext = (globalThis as { receivedContext?: { hasHooks: boolean; hasLog: boolean } }).receivedContext;
+  const receivedContext = (globalThis as {
+    receivedContext?: { config: Record<string, unknown>; hasHooks: boolean; hasLog: boolean };
+  }).receivedContext;
 
   assert.deepEqual(loaded, ['alpha']);
-  assert.deepEqual(receivedContext, { hasHooks: true, hasLog: true });
+  assert.deepEqual(receivedContext, { config: {}, hasHooks: true, hasLog: true });
+});
+
+test('loadPlugins loads plugin config from config.json', async () => {
+  const cwd = mkdtemp();
+  const pluginsDirectory = path.join(cwd, 'plugins');
+
+  writePlugin(pluginsDirectory, 'configured', `
+    export default {
+      name: 'configured',
+      setup(context) {
+        globalThis.receivedPluginConfig = context.config;
+      }
+    };
+  `);
+
+  fs.writeFileSync(path.join(pluginsDirectory, 'configured', 'config.json'), `${JSON.stringify({
+    enabled: true,
+    retries: 3,
+    nested: { mode: 'strict' }
+  }, null, 2)}\n`);
+
+  const runtime = {
+    hooks: new HookRegistry(new EventEmitter<ContentEvents>())
+  };
+
+  await loadPlugins(runtime, { pluginsDirectory });
+
+  assert.deepEqual((globalThis as { receivedPluginConfig?: unknown }).receivedPluginConfig, {
+    enabled: true,
+    retries: 3,
+    nested: { mode: 'strict' }
+  });
+});
+
+test('loadPlugins uses empty config when plugin config.json is missing', async () => {
+  const cwd = mkdtemp();
+  const pluginsDirectory = path.join(cwd, 'plugins');
+
+  writePlugin(pluginsDirectory, 'missing-config', `
+    export default {
+      name: 'missing-config',
+      setup(context) {
+        globalThis.missingConfigValue = context.config;
+      }
+    };
+  `);
+
+  const runtime = {
+    hooks: new HookRegistry(new EventEmitter<ContentEvents>())
+  };
+
+  await loadPlugins(runtime, { pluginsDirectory });
+
+  assert.deepEqual((globalThis as { missingConfigValue?: unknown }).missingConfigValue, {});
 });
 
 test('loadPlugins context logger prefixes plugin name', async () => {
@@ -124,7 +181,7 @@ test('loadPlugins isolates plugin failures and continues loading', async () => {
     export default {
       name: 'healthy',
       setup(context) {
-        context.log.info('healthy loaded');
+        context.log.info('config loaded', context.config);
       }
     };
   `);
