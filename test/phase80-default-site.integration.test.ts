@@ -8,7 +8,7 @@ import { createHttpServer } from '../core/http/index.ts';
 import { markInstalled } from '../core/setup/setup-state.ts';
 
 const INSTALL_STATE_PATH = '/data/system/install.json';
-const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase76-'));
+const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase80-'));
 
 const writeConfig = (cwd: string) => {
   fs.writeFileSync(path.join(cwd, 'nimb.config.json'), `${JSON.stringify({
@@ -22,7 +22,7 @@ const writeConfig = (cwd: string) => {
 const writeInstallState = (cwd: string) => {
   const nimbDir = path.join(cwd, '.nimb');
   fs.mkdirSync(nimbDir, { recursive: true });
-  fs.writeFileSync(path.join(nimbDir, 'install.json'), `${JSON.stringify({ installed: true, version: '76.0.0', installedAt: '2026-01-01T00:00:00.000Z' }, null, 2)}\n`);
+  fs.writeFileSync(path.join(nimbDir, 'install.json'), `${JSON.stringify({ installed: true, version: '80.0.0', installedAt: '2026-01-01T00:00:00.000Z' }, null, 2)}\n`);
 };
 
 const withInstallState = async (run: () => Promise<void> | void) => {
@@ -57,31 +57,9 @@ const createServer = async (cwd: string, clock = () => '2026-01-01T00:00:10.000Z
   return { server, port };
 };
 
-test('phase 76: bootstrap without install state serves install router at root', async () => {
+test('phase 80: runtime mode serves default HTML site at root', async () => {
   await withInstallState(async () => {
-    fs.rmSync(INSTALL_STATE_PATH, { force: true });
-
-    const cwd = mkdtemp();
-    writeConfig(cwd);
-
-    const { server, port } = await createServer(cwd);
-
-    try {
-      const response = await fetch(`http://127.0.0.1:${port}/`);
-      assert.equal(response.status, 200);
-      assert.deepEqual(await response.json(), {
-        status: 'install',
-        message: 'Nimb is not installed'
-      });
-    } finally {
-      await server.stop();
-    }
-  });
-});
-
-test('phase 76: bootstrap with install state serves normal runtime routing', async () => {
-  await withInstallState(async () => {
-    markInstalled({ version: '76.0.0' });
+    markInstalled({ version: '80.0.0' });
 
     const cwd = mkdtemp();
     writeConfig(cwd);
@@ -93,8 +71,35 @@ test('phase 76: bootstrap with install state serves normal runtime routing', asy
       const response = await fetch(`http://127.0.0.1:${port}/`);
       assert.equal(response.status, 200);
       assert.equal(response.headers.get('content-type'), 'text/html; charset=utf-8');
+
       const html = await response.text();
+      assert.equal(html.includes('<!doctype html>'), true);
+      assert.equal(html.includes('My Nimb Site'), true);
       assert.equal(html.includes('Welcome to Nimb'), true);
+      assert.equal(html.includes('Your site is ready. Start creating content.'), true);
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
+test('phase 80: install mode continues serving installer JSON at root', async () => {
+  await withInstallState(async () => {
+    fs.rmSync(INSTALL_STATE_PATH, { force: true });
+
+    const cwd = mkdtemp();
+    writeConfig(cwd);
+
+    const { server, port } = await createServer(cwd);
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/`);
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get('content-type'), 'application/json; charset=utf-8');
+      assert.deepEqual(await response.json(), {
+        status: 'install',
+        message: 'Nimb is not installed'
+      });
     } finally {
       await server.stop();
     }
