@@ -2,6 +2,7 @@ import type { ContentEntry } from './content-entry.ts';
 import { ContentStore } from './content-store.ts';
 
 export type QueryOptions = {
+  includeDrafts?: boolean
   limit?: number
   offset?: number
   sort?: {
@@ -50,7 +51,9 @@ export class ContentQueryService {
   }
 
   list(type: string, queryOptions: QueryOptions = {}): ContentEntry[] {
-    const entries = [...this.#contentStore.list(type)];
+    const entries = this.#contentStore
+      .list(type)
+      .filter((entry) => queryOptions.includeDrafts === true || (entry.status ?? 'published') === 'published');
 
     if (queryOptions.sort) {
       entries.sort((left, right) => compareEntries(left, right, queryOptions.sort!));

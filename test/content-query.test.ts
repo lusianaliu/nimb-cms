@@ -26,6 +26,41 @@ test('content query service lists entries from content store', () => {
   assert.deepEqual(entries.map((entry) => entry.id), [first.id, second.id]);
 });
 
+
+test('content query service hides draft entries by default', () => {
+  const { store, query } = createQuery();
+  const published = store.create('page', { title: 'Published', order: 1 });
+  const draft = store.create('page', { title: 'Draft', order: 2 });
+  draft.status = 'draft';
+
+  const entries = query.list('page');
+
+  assert.deepEqual(entries.map((entry) => entry.id), [published.id]);
+});
+
+test('content query service can include drafts when requested', () => {
+  const { store, query } = createQuery();
+  const published = store.create('page', { title: 'Published', order: 1 });
+  const draft = store.create('page', { title: 'Draft', order: 2 });
+  draft.status = 'draft';
+
+  const entries = query.list('page', { includeDrafts: true });
+
+  assert.deepEqual(entries.map((entry) => entry.id), [published.id, draft.id]);
+});
+
+test('content query service treats missing status as published for backward compatibility', () => {
+  const { store, query } = createQuery();
+  const published = store.create('page', { title: 'Published', order: 1 });
+  const archived = store.create('page', { title: 'Archived', order: 2 });
+  delete (published as { status?: 'draft' | 'published' | 'archived' }).status;
+  archived.status = 'archived';
+
+  const entries = query.list('page');
+
+  assert.deepEqual(entries.map((entry) => entry.id), [published.id]);
+});
+
 test('content query service supports deterministic sort and pagination', () => {
   const { store, query } = createQuery();
   store.create('page', { title: 'Charlie', order: 3 });
