@@ -13,6 +13,7 @@ import type { StorageAdapter as ContentStorageAdapter } from '../storage/storage
 import { JsonStorageAdapter } from '../storage/json-storage-adapter.ts';
 import { EventEmitter } from '../events/event-bus.ts';
 import { HookRegistry } from '../hooks/index.ts';
+import { loadPlugins } from '../plugins/plugin-loader.ts';
 
 
 const CONTENT_TYPES_STORAGE_KEY = 'content-types';
@@ -151,6 +152,7 @@ export const createBootstrap = async ({
   runtime.contentQuery = new ContentQueryService(runtime.contentStore);
   runtime.eventBus = new EventEmitter<ContentEvents>();
   runtime.hooks = new HookRegistry(runtime.eventBus);
+  await loadPlugins(runtime, { pluginsDirectory: resolvedPaths.pluginsDir });
 
   const persistContentSnapshot = async () => {
     await resolvedContentStorageAdapter.saveContentSnapshot(serializeContentStore(runtime.contentStore, runtime.contentTypes));
