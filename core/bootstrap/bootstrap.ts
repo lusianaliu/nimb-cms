@@ -17,6 +17,7 @@ import { loadPlugins } from '../plugins/plugin-loader.ts';
 import type { BootstrapMode } from './bootstrap-mode.ts';
 import { isInstalled } from '../setup/setup-state.ts';
 import { seedSystem } from '../setup/system-seed.ts';
+import { createThemeManager } from '../theme/theme-manager.ts';
 
 
 const CONTENT_TYPES_STORAGE_KEY = 'content-types';
@@ -168,6 +169,7 @@ export const createBootstrap = async ({
     seedSystem(runtime);
   });
   runtime.hooks = new HookRegistry(runtime.eventBus);
+  runtime.theme = createThemeManager(runtime);
   const shouldLoadPlugins = selectedMode !== 'install';
 
   if (shouldLoadPlugins) {

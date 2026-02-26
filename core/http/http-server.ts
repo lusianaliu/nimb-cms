@@ -16,6 +16,7 @@ import { renderDashboardPage } from '../admin/dashboard-page.ts';
 import { createAdminAuth } from '../admin/admin-auth.ts';
 import { resolveAdminBasePath } from '../admin/resolve-admin-path.ts';
 import { createInstallRouter } from '../install/install-router.ts';
+import { createSiteRouter } from './site-router.ts';
 
 const adminContentTypeMap = Object.freeze({
   '.css': 'text/css; charset=utf-8',
@@ -176,6 +177,7 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
   }
 
   const installRouter = createInstallRouter(runtime);
+  const siteRouter = !installMode && runtime?.mode === 'runtime' ? createSiteRouter(runtime) : null;
   const router = installMode ? installRouter : runtimeRouter;
   const apiRouter = installMode
     ? { handle: async () => null }
@@ -269,6 +271,15 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
               'content-length': '0'
             });
             response.end();
+            return;
+          }
+        }
+
+        if (siteRouter) {
+          const siteHandler = siteRouter.dispatch(context);
+          if (siteHandler) {
+            const siteResponse = await Promise.resolve(siteHandler(context));
+            siteResponse.send(response);
             return;
           }
         }
