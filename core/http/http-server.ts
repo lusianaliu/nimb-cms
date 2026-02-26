@@ -189,6 +189,12 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
 
     Promise.resolve()
       .then(async () => {
+        const apiResponse = await apiRouter.handle(context);
+        if (apiResponse) {
+          apiResponse.send(response);
+          return;
+        }
+
         const gateResponse = await gateRequest(context, () => null);
         if (gateResponse) {
           gateResponse.send(response);
@@ -218,12 +224,6 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
         }
 
         if (tryHandleAdminDashboardRequest({ context, response, runtime, adminBasePath, adminLoginPath, adminAuth })) {
-          return;
-        }
-
-        const apiResponse = await apiRouter.handle(context);
-        if (apiResponse) {
-          apiResponse.send(response);
           return;
         }
 
