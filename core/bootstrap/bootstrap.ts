@@ -15,6 +15,7 @@ import { EventEmitter } from '../events/event-bus.ts';
 import { HookRegistry } from '../hooks/index.ts';
 import { loadPlugins } from '../plugins/plugin-loader.ts';
 import type { BootstrapMode } from './bootstrap-mode.ts';
+import { isInstalled } from '../setup/setup-state.ts';
 
 
 const CONTENT_TYPES_STORAGE_KEY = 'content-types';
@@ -125,9 +126,9 @@ export const createBootstrap = async ({
   cwd = undefined,
   startupTimestamp = new Date().toISOString(),
   contentStorageAdapter = undefined,
-  mode = 'runtime'
+  mode
 }: CreateBootstrapOptions = {}) => {
-  const selectedMode = mode ?? 'runtime';
+  const selectedMode = mode ?? (isInstalled() ? 'runtime' : 'install');
   const resolvedProject = cwd ? createProjectModel({ projectRoot: cwd }) : project;
   const resolvedPaths = createProjectPaths(resolvedProject.projectRoot ?? resolvedProject.root);
   const config = loadConfig({ cwd: resolvedPaths.projectRoot });
