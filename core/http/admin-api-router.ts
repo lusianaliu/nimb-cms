@@ -8,6 +8,12 @@ export const createAdminApiRouter = (runtime) => Object.freeze({
       return null;
     }
 
+
+    if (context.path === `${ADMIN_API_BASE_PATH}/pages`) {
+      const pages = runtime?.adminRegistry?.getAdminPages?.() ?? [];
+      return () => jsonResponse(pages);
+    }
+
     if (context.path === `${ADMIN_API_BASE_PATH}/system`) {
       return () => jsonResponse({
         name: 'Nimb',
