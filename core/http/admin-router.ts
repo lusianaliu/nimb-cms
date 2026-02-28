@@ -5,39 +5,133 @@ const defaultAdminShell = `<!doctype html>
 <html>
 <head>
   <title>Nimb Admin</title>
+  <style>
+    #admin-root {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    #admin-body {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      min-height: 0;
+    }
+  </style>
 </head>
 <body>
-  <div id="app"></div>
+  <div id="admin-root">
+    <header id="admin-header"></header>
+    <div id="admin-body">
+      <aside id="admin-sidebar"></aside>
+      <main id="admin-main"></main>
+    </div>
+    <footer id="admin-footer"></footer>
+  </div>
   <script src="/admin/app.js"></script>
 </body>
 </html>
 `;
 
-const defaultAdminApp = `const renderNavigation = async () => {
-  const app = document.getElementById('app');
+const defaultAdminApp = `const createListElement = (items) => {
+  const list = document.createElement('ul');
 
-  if (!app) {
-    return;
-  }
+  items.forEach((item) => {
+    const listItem = document.createElement('li');
+    listItem.textContent = item;
+    list.append(listItem);
+  });
 
-  try {
-    const response = await fetch('/admin-api/pages');
-    if (!response.ok) {
-      throw new Error('Failed to load admin pages');
-    }
-
-    const pages = await response.json();
-    const titles = Array.isArray(pages)
-      ? pages.map((page) => \`- \${page.title}\`)
-      : [];
-
-    app.innerHTML = ['Nimb Admin', '-----------', ...titles].join('<br>');
-  } catch {
-    app.innerHTML = ['Nimb Admin', '-----------', 'Navigation unavailable.'].join('<br>');
-  }
+  return list;
 };
 
-void renderNavigation();
+const createSystemInfoElement = (system) => {
+  const container = document.createElement('section');
+
+  const lines = [
+    \`Name: \${system.name ?? 'Unknown'}\`,
+    \`Version: \${system.version ?? 'Unknown'}\`,
+    \`Mode: \${system.mode ?? 'Unknown'}\`,
+    \`Installed: \${system.installed === true ? 'Yes' : 'No'}\`
+  ];
+
+  container.innerHTML = lines.join('<br>');
+  return container;
+};
+
+const bootstrapLayout = () => {
+  const slots = {
+    header: document.getElementById('admin-header'),
+    sidebar: document.getElementById('admin-sidebar'),
+    main: document.getElementById('admin-main'),
+    footer: document.getElementById('admin-footer')
+  };
+
+  window.NimbAdmin = {
+    slots
+  };
+
+  const setSlot = (name, element) => {
+    const slot = window.NimbAdmin?.slots?.[name];
+
+    if (!slot) {
+      return;
+    }
+
+    slot.replaceChildren();
+    if (element) {
+      slot.append(element);
+    }
+  };
+
+  const clearSlot = (name) => {
+    const slot = window.NimbAdmin?.slots?.[name];
+
+    if (!slot) {
+      return;
+    }
+
+    slot.replaceChildren();
+  };
+
+  window.NimbAdmin.setSlot = setSlot;
+  window.NimbAdmin.clearSlot = clearSlot;
+
+  const header = document.createElement('strong');
+  header.textContent = 'Nimb Admin';
+  setSlot('header', header);
+
+  setSlot('sidebar', createListElement(['System']));
+
+  const footer = document.createElement('small');
+  footer.textContent = 'Nimb CMS Runtime';
+  setSlot('footer', footer);
+
+  const systemFallback = document.createElement('p');
+  systemFallback.textContent = 'System information unavailable.';
+  setSlot('main', systemFallback);
+
+  void fetch('/admin-api/system')
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(\`Failed to load system info: \${response.status}\`);
+      }
+
+      return response.json();
+    })
+    .then((system) => {
+      setSlot('main', createSystemInfoElement(system));
+    })
+    .catch(() => {
+      // Leave fallback content in place.
+    });
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootstrapLayout, { once: true });
+} else {
+  bootstrapLayout();
+}
 `;
 
 
