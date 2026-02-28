@@ -4,6 +4,7 @@ import { BootstrapSnapshot } from './bootstrap-snapshot.ts';
 import { FileSystemStorageAdapter, PersistenceEngine } from '../persistence/index.ts';
 import { AuthService, SessionStore, createAuthMiddleware } from '../auth/index.ts';
 import { CommandDispatcher, createAdminController } from '../admin/index.ts';
+import { registerAdminPage, getAdminPages } from '../admin/admin-registry.ts';
 import { ContentRegistry, ContentStore, ContentQueryService, ContentCommandService, EntryRegistry, ContentTypeRegistry, type ContentEvents } from '../content/index.ts';
 import { createProjectModel, createProjectPaths } from '../project/index.ts';
 import { resolveRuntimeMode } from '../runtime/resolve-runtime-mode.ts';
@@ -154,6 +155,8 @@ export const createBootstrap = async ({
   runtime.adminApi = Object.freeze({
     basePath: '/admin-api'
   });
+  registerAdminPage({ id: 'system', path: '/admin', title: 'System' });
+  runtime.adminRegistry = Object.freeze({ registerAdminPage, getAdminPages });
   const resolvedContentStorageAdapter = contentStorageAdapter ?? new JsonStorageAdapter({ rootDirectory: resolvedPaths.dataDir });
   const storageAdapter = new FileSystemStorageAdapter({ rootDirectory: resolvedPaths.persistenceDir });
   const persistenceEngine = new PersistenceEngine({ storageAdapter });

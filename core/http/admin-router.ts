@@ -13,7 +13,7 @@ const defaultAdminShell = `<!doctype html>
 </html>
 `;
 
-const defaultAdminApp = `const renderSystemPanel = async () => {
+const defaultAdminApp = `const renderNavigation = async () => {
   const app = document.getElementById('app');
 
   if (!app) {
@@ -21,27 +21,25 @@ const defaultAdminApp = `const renderSystemPanel = async () => {
   }
 
   try {
-    const response = await fetch('/admin-api/system');
+    const response = await fetch('/admin-api/pages');
     if (!response.ok) {
-      throw new Error('Failed to load system info');
+      throw new Error('Failed to load admin pages');
     }
 
-    const system = await response.json();
-    app.innerHTML = [
-      'Nimb Admin',
-      '-----------',
-      \`Name: \${system.name}\`,
-      \`Version: \${system.version}\`,
-      \`Mode: \${system.mode}\`,
-      \`Installed: \${system.installed}\`
-    ].join('<br>');
+    const pages = await response.json();
+    const titles = Array.isArray(pages)
+      ? pages.map((page) => \`- \${page.title}\`)
+      : [];
+
+    app.innerHTML = ['Nimb Admin', '-----------', ...titles].join('<br>');
   } catch {
-    app.innerHTML = ['Nimb Admin', '-----------', 'System status unavailable.'].join('<br>');
+    app.innerHTML = ['Nimb Admin', '-----------', 'Navigation unavailable.'].join('<br>');
   }
 };
 
-void renderSystemPanel();
+void renderNavigation();
 `;
+
 
 const toHtmlResponse = (html: string) => ({
   statusCode: 200,
