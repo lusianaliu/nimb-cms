@@ -72,6 +72,19 @@ const bootstrapLayout = () => {
   setSlot('footer', footer);
 
   const renderPageContent = (page) => {
+    const pageContext = {
+      slots: window.NimbAdmin?.slots,
+      router,
+      page,
+      apiBase: '/admin-api'
+    };
+
+    if (typeof page?.render === 'function') {
+      const rendered = page.render(pageContext);
+      setSlot('main', rendered ?? null);
+      return;
+    }
+
     if (page.id === 'system') {
       const systemFallback = document.createElement('p');
       systemFallback.textContent = 'System information unavailable.';
@@ -102,9 +115,32 @@ const bootstrapLayout = () => {
     setSlot('main', createPlaceholderElement(page));
   };
 
+  let currentPage = null;
+
   const activatePage = (page) => {
+    const previousPage = currentPage;
+
+    if (previousPage && previousPage.id !== page.id && typeof previousPage.onUnmount === 'function') {
+      previousPage.onUnmount({
+        slots: window.NimbAdmin?.slots,
+        router,
+        page: previousPage,
+        apiBase: '/admin-api'
+      });
+    }
+
     window.NimbAdmin.activePageId = page.id;
     renderPageContent(page);
+
+    currentPage = page;
+    if (typeof page.onMount === 'function') {
+      page.onMount({
+        slots: window.NimbAdmin?.slots,
+        router,
+        page,
+        apiBase: '/admin-api'
+      });
+    }
   };
 
   const router = {
