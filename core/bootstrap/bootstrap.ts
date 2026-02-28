@@ -21,6 +21,7 @@ import type { BootstrapMode } from './bootstrap-mode.ts';
 import { isInstalled } from '../setup/setup-state.ts';
 import { seedSystem } from '../setup/system-seed.ts';
 import { createThemeManager } from '../theme/theme-manager.ts';
+import { createSettingsModule } from '../system/settings.ts';
 
 
 const CONTENT_TYPES_STORAGE_KEY = 'content-types';
@@ -188,6 +189,7 @@ export const createBootstrap = async ({
 
   runtime.contentStore = new ContentStore(runtime.contentTypes);
   runtime.contentQuery = new ContentQueryService(runtime.contentStore);
+  runtime.settings = createSettingsModule(runtime);
   runtime.eventBus = new EventEmitter<ContentEvents>();
   runtime.events = runtime.eventBus as EventEmitter<SystemRuntimeEvents>;
   runtime.events.on('system.installed', () => {
