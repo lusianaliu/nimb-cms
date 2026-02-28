@@ -1,5 +1,6 @@
 const DEFAULT_ADMIN_THEME_ID = 'default';
 const DEFAULT_ADMIN_THEME_STYLE_ID = 'nimb-admin-theme-default';
+const ADMIN_THEME_VARIABLES_STYLE_ID = 'admin-theme-vars';
 const DEFAULT_ADMIN_BRANDING = Object.freeze({
   adminTitle: 'Nimb Admin',
   logoText: 'Nimb'
@@ -8,6 +9,14 @@ const DEFAULT_ADMIN_BRANDING = Object.freeze({
 const DEFAULT_ADMIN_THEME = {
   id: DEFAULT_ADMIN_THEME_ID,
   name: 'Default',
+  variables: {
+    colors: {
+      primary: '#4f46e5',
+      background: '#f9fafb',
+      surface: '#ffffff',
+      text: '#111827'
+    }
+  },
   apply({ document }) {
     const existingStyle = document.getElementById(DEFAULT_ADMIN_THEME_STYLE_ID);
     if (existingStyle) {
@@ -19,15 +28,15 @@ const DEFAULT_ADMIN_THEME = {
     style.textContent = `
 #admin-root {
   min-height: 100vh;
-  background: #f4f5f7;
-  color: #1f2933;
+  background: var(--nimb-color-background);
+  color: var(--nimb-color-text);
   font-family: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 #admin-header,
 #admin-footer {
   padding: 0.75rem 1rem;
-  background: #ffffff;
+  background: var(--nimb-color-surface);
   border-bottom: 1px solid #d8dee4;
 }
 
@@ -44,12 +53,12 @@ const DEFAULT_ADMIN_THEME = {
 }
 
 #admin-sidebar {
-  background: #ffffff;
+  background: var(--nimb-color-surface);
   border-right: 1px solid #d8dee4;
 }
 
 #admin-main {
-  background: #f8fafc;
+  background: var(--nimb-color-background);
 }
 
 #admin-nav {
@@ -65,7 +74,8 @@ const DEFAULT_ADMIN_THEME = {
 }
 
 #admin-nav li[data-active="true"] {
-  background: #d9e2ec;
+  background: var(--nimb-color-primary);
+  color: var(--nimb-color-surface);
   font-weight: 600;
 }
 `;
@@ -92,7 +102,7 @@ const createAdminThemeRegistry = () => {
       throw new Error(`Admin theme already registered: ${id}`);
     }
 
-    const normalizedTheme = Object.freeze({ id, name, apply: theme.apply });
+    const normalizedTheme = Object.freeze({ id, name, variables: theme.variables, apply: theme.apply });
     themes.set(id, normalizedTheme);
     return normalizedTheme;
   };
@@ -109,6 +119,56 @@ const createAdminThemeRegistry = () => {
   };
 
   return Object.freeze({ register, get, getDefault });
+};
+
+
+const DEFAULT_THEME_VARIABLES = Object.freeze({
+  colors: Object.freeze({
+    primary: '#4f46e5',
+    background: '#f9fafb',
+    surface: '#ffffff',
+    text: '#111827'
+  })
+});
+
+const normalizeThemeVariables = (variables) => {
+  const colors = variables?.colors ?? {};
+
+  return Object.freeze({
+    colors: Object.freeze({
+      primary: String(colors.primary ?? '').trim() || DEFAULT_THEME_VARIABLES.colors.primary,
+      background: String(colors.background ?? '').trim() || DEFAULT_THEME_VARIABLES.colors.background,
+      surface: String(colors.surface ?? '').trim() || DEFAULT_THEME_VARIABLES.colors.surface,
+      text: String(colors.text ?? '').trim() || DEFAULT_THEME_VARIABLES.colors.text
+    })
+  });
+};
+
+const applyThemeVariables = ({ document, variables }) => {
+  const resolved = normalizeThemeVariables(variables);
+  const cssText = `:root {
+  --nimb-color-primary: ${resolved.colors.primary};
+  --nimb-color-background: ${resolved.colors.background};
+  --nimb-color-surface: ${resolved.colors.surface};
+  --nimb-color-text: ${resolved.colors.text};
+}`;
+
+  const existingStyle = document.getElementById(ADMIN_THEME_VARIABLES_STYLE_ID);
+  if (existingStyle) {
+    existingStyle.textContent = cssText;
+    return resolved;
+  }
+
+  const style = document.createElement('style');
+  style.id = ADMIN_THEME_VARIABLES_STYLE_ID;
+  style.textContent = cssText;
+
+  const head = document.head ?? document.getElementsByTagName?.('head')?.[0] ?? document.getElementById('admin-root') ?? document.body;
+  if (head?.append) {
+    head.append(style);
+  }
+
+  return resolved;
 };
 
 const normalizeAdminBranding = (branding) => {
@@ -416,6 +476,11 @@ const bootstrapLayout = () => {
         slots
       });
 
+      applyThemeVariables({
+        document,
+        variables: theme.variables
+      });
+
       applyAdminBranding({
         document,
         branding: system?.adminBranding,
@@ -423,9 +488,15 @@ const bootstrapLayout = () => {
       });
     })
     .catch(() => {
-      adminThemes.getDefault().apply({
+      const fallbackTheme = adminThemes.getDefault();
+      fallbackTheme.apply({
         document,
         slots
+      });
+
+      applyThemeVariables({
+        document,
+        variables: fallbackTheme.variables
       });
 
       applyAdminBranding({

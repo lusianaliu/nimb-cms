@@ -5,15 +5,15 @@ const DEFAULT_THEME_STYLE_ID = 'nimb-admin-theme-default';
 const DEFAULT_THEME_CSS = `
 #admin-root {
   min-height: 100vh;
-  background: #f4f5f7;
-  color: #1f2933;
+  background: var(--nimb-color-background);
+  color: var(--nimb-color-text);
   font-family: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 #admin-header,
 #admin-footer {
   padding: 0.75rem 1rem;
-  background: #ffffff;
+  background: var(--nimb-color-surface);
   border-bottom: 1px solid #d8dee4;
 }
 
@@ -30,12 +30,12 @@ const DEFAULT_THEME_CSS = `
 }
 
 #admin-sidebar {
-  background: #ffffff;
+  background: var(--nimb-color-surface);
   border-right: 1px solid #d8dee4;
 }
 
 #admin-main {
-  background: #f8fafc;
+  background: var(--nimb-color-background);
 }
 
 #admin-nav {
@@ -51,7 +51,8 @@ const DEFAULT_THEME_CSS = `
 }
 
 #admin-nav li[data-active="true"] {
-  background: #d9e2ec;
+  background: var(--nimb-color-primary);
+  color: var(--nimb-color-surface);
   font-weight: 600;
 }
 `;
@@ -59,6 +60,14 @@ const DEFAULT_THEME_CSS = `
 export const createDefaultAdminTheme = (): AdminTheme => ({
   id: 'default',
   name: 'Default',
+  variables: {
+    colors: {
+      primary: '#4f46e5',
+      background: '#f9fafb',
+      surface: '#ffffff',
+      text: '#111827'
+    }
+  },
   apply({ document }) {
     if (!document) {
       return;

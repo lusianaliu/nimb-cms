@@ -1,10 +1,20 @@
 export interface AdminTheme {
   id: string
   name: string
+  variables?: ThemeVariables
   apply(context: {
     document: Document
     slots: Record<string, HTMLElement>
   }): void
+}
+
+export interface ThemeVariables {
+  colors?: {
+    primary?: string
+    background?: string
+    surface?: string
+    text?: string
+  }
 }
 
 const DEFAULT_ADMIN_THEME_ID = 'default';
@@ -29,6 +39,7 @@ const normalizeTheme = (theme: AdminTheme): AdminTheme => {
   return Object.freeze({
     id,
     name,
+    variables: theme.variables,
     apply: theme.apply
   });
 };
