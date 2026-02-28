@@ -1,3 +1,5 @@
+import type { Capability } from '../runtime/capabilities.ts';
+
 const SETTINGS_CONTENT_TYPE = 'settings';
 
 export const RESERVED_SETTINGS_KEYS = Object.freeze([
@@ -82,9 +84,25 @@ export const getAllSettings = (runtime): Record<ReservedSettingKey, unknown> => 
   }, {} as Record<ReservedSettingKey, unknown>)
 );
 
-export const createSettingsModule = (runtime) => Object.freeze({
-  get: (key: ReservedSettingKey) => getSetting(runtime, key),
-  set: (key: ReservedSettingKey, value: unknown) => setSetting(runtime, key, value),
-  getAll: () => getAllSettings(runtime)
-});
+type SettingsModuleOptions = {
+  requireCapability?: ((capability: Capability, operation: string) => void) | undefined
+};
 
+export const createSettingsModule = (runtime, options: SettingsModuleOptions = {}) => {
+  const requireCapability = options.requireCapability;
+
+  return Object.freeze({
+    get: (key: ReservedSettingKey) => {
+      requireCapability?.('settings.read', 'settings.get');
+      return getSetting(runtime, key);
+    },
+    set: (key: ReservedSettingKey, value: unknown) => {
+      requireCapability?.('settings.write', 'settings.set');
+      return setSetting(runtime, key, value);
+    },
+    getAll: () => {
+      requireCapability?.('settings.read', 'settings.getAll');
+      return getAllSettings(runtime);
+    }
+  });
+};
