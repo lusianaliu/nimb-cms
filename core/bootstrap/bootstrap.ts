@@ -151,6 +151,9 @@ export const createBootstrap = async ({
   runtime.admin = Object.freeze({
     basePath: runtime.adminBasePath
   });
+  runtime.adminApi = Object.freeze({
+    basePath: '/admin-api'
+  });
   const resolvedContentStorageAdapter = contentStorageAdapter ?? new JsonStorageAdapter({ rootDirectory: resolvedPaths.dataDir });
   const storageAdapter = new FileSystemStorageAdapter({ rootDirectory: resolvedPaths.persistenceDir });
   const persistenceEngine = new PersistenceEngine({ storageAdapter });
