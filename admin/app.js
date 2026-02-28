@@ -104,18 +104,57 @@ const bootstrapLayout = () => {
 
   const activatePage = (page) => {
     window.NimbAdmin.activePageId = page.id;
+    renderPageContent(page);
+  };
 
-    const navItems = window.NimbAdmin?.slots?.sidebar?.querySelectorAll?.('li[data-page]') ?? [];
-    navItems.forEach((item) => {
-      if (item.getAttribute('data-page') === page.id) {
-        item.setAttribute('data-active', 'true');
+  const router = {
+    getPageFromUrl: () => {
+      const pathname = window.location?.pathname ?? '';
+      const match = pathname.match(/^\/admin\/([^/]+)$/);
+
+      if (!match) {
+        return null;
+      }
+
+      return match[1];
+    },
+    syncNavigation: (pageId) => {
+      const navItems = window.NimbAdmin?.slots?.sidebar?.querySelectorAll?.('li[data-page]') ?? [];
+      navItems.forEach((item) => {
+        if (item.getAttribute('data-page') === pageId) {
+          item.setAttribute('data-active', 'true');
+          return;
+        }
+
+        item.removeAttribute('data-active');
+      });
+    },
+    handleLocation: () => {
+      const pages = window.NimbAdmin?.pages ?? [];
+
+      if (pages.length === 0) {
         return;
       }
 
-      item.removeAttribute('data-active');
-    });
+      const pageFromUrl = router.getPageFromUrl();
+      const targetPage = pages.find((page) => page.id === pageFromUrl) ?? pages[0];
 
-    renderPageContent(page);
+      activatePage(targetPage);
+      router.syncNavigation(targetPage.id);
+    },
+    navigate: (pageId) => {
+      const pages = window.NimbAdmin?.pages ?? [];
+      const targetPage = pages.find((page) => page.id === pageId);
+
+      if (!targetPage) {
+        router.handleLocation();
+        return;
+      }
+
+      window.history?.pushState?.({}, '', `/admin/${targetPage.id}`);
+      activatePage(targetPage);
+      router.syncNavigation(targetPage.id);
+    }
   };
 
   const renderNavigation = (pages) => {
@@ -128,7 +167,7 @@ const bootstrapLayout = () => {
       item.setAttribute('data-page', page.id);
       item.style.cursor = 'pointer';
       item.addEventListener('click', () => {
-        activatePage(page);
+        router.navigate(page.id);
       });
       nav.append(item);
     });
@@ -139,6 +178,9 @@ const bootstrapLayout = () => {
   window.NimbAdmin.renderNavigation = renderNavigation;
   window.NimbAdmin.activatePage = activatePage;
   window.NimbAdmin.renderPageContent = renderPageContent;
+  window.NimbAdmin.router = router;
+
+  window.addEventListener?.('popstate', router.handleLocation);
 
   void fetch('/admin-api/pages')
     .then((response) => {
@@ -154,7 +196,7 @@ const bootstrapLayout = () => {
       renderNavigation(adminPages);
 
       if (adminPages.length > 0) {
-        activatePage(adminPages[0]);
+        router.handleLocation();
         return;
       }
 
