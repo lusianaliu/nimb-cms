@@ -191,6 +191,12 @@ const resolveAdminAsset = (rootDirectory: string, requestPath: string) => {
   }
 
   if (relativePath === 'app.js') {
+    const bundledAppPath = path.resolve(process.cwd(), 'admin', 'app.js');
+
+    if (fs.existsSync(bundledAppPath) && fs.statSync(bundledAppPath).isFile()) {
+      return toStaticResponse(fs.readFileSync(bundledAppPath), 'application/javascript; charset=utf-8');
+    }
+
     return toStaticResponse(Buffer.from(defaultAdminApp, 'utf8'), 'application/javascript; charset=utf-8');
   }
 

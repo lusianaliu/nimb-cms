@@ -5,6 +5,8 @@ import { FileSystemStorageAdapter, PersistenceEngine } from '../persistence/inde
 import { AuthService, SessionStore, createAuthMiddleware } from '../auth/index.ts';
 import { CommandDispatcher, createAdminController } from '../admin/index.ts';
 import { registerAdminPage, getAdminPages } from '../admin/admin-registry.ts';
+import { registerAdminTheme, getAdminTheme, getDefaultAdminTheme } from '../admin/admin-theme-registry.ts';
+import { createDefaultAdminTheme } from '../admin/themes/default-theme.ts';
 import { ContentRegistry, ContentStore, ContentQueryService, ContentCommandService, EntryRegistry, ContentTypeRegistry, type ContentEvents } from '../content/index.ts';
 import { createProjectModel, createProjectPaths } from '../project/index.ts';
 import { resolveRuntimeMode } from '../runtime/resolve-runtime-mode.ts';
@@ -154,6 +156,19 @@ export const createBootstrap = async ({
   });
   runtime.adminApi = Object.freeze({
     basePath: '/admin-api'
+  });
+  try {
+    registerAdminTheme(createDefaultAdminTheme());
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.startsWith('Admin theme already registered:')) {
+      throw error;
+    }
+  }
+  runtime.adminTheme = 'default';
+  runtime.adminThemes = Object.freeze({
+    register: registerAdminTheme,
+    get: getAdminTheme,
+    getDefault: getDefaultAdminTheme
   });
   registerAdminPage({ id: 'system', path: '/admin', title: 'System' });
   runtime.adminRegistry = Object.freeze({ registerAdminPage, getAdminPages });
