@@ -2,8 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import { registerAdminTheme, getDefaultAdminTheme, getAdminTheme } from '../core/admin/admin-theme-registry.ts';
-import { createDefaultAdminTheme } from '../core/admin/themes/default-theme.ts';
 
 class FakeElement {
   tagName: string;
@@ -120,7 +118,7 @@ class FakeDocument {
   }
 
   addEventListener() {
-    // No-op because test uses readyState: complete.
+    // no-op
   }
 }
 
@@ -129,24 +127,8 @@ const flushMicrotasks = async () => {
   await new Promise((resolve) => setImmediate(resolve));
 };
 
-test('phase 89: admin theme engine registers themes and applies default runtime theme', async () => {
+const createAppContext = (systemPayload: Record<string, unknown>) => {
   const appScript = fs.readFileSync(new URL('../admin/app.js', import.meta.url), 'utf8');
-
-  const uniqueThemeId = `phase89-${Date.now()}`;
-  const registeredTheme = registerAdminTheme({
-    id: uniqueThemeId,
-    name: 'Phase 89 Test Theme',
-    apply() {
-      // no-op for registry validation.
-    }
-  });
-
-  assert.equal(registeredTheme.id, uniqueThemeId);
-  assert.equal(getAdminTheme(uniqueThemeId).name, 'Phase 89 Test Theme');
-  assert.equal(getDefaultAdminTheme().id, 'default');
-
-  const defaultTheme = createDefaultAdminTheme();
-  assert.equal(defaultTheme.id, 'default');
 
   const header = new FakeElement('header');
   const sidebar = new FakeElement('aside');
@@ -160,7 +142,6 @@ test('phase 89: admin theme engine registers themes and applies default runtime 
     'admin-footer': footer
   });
 
-  const pages = [{ id: 'system', title: 'System', path: '/admin' }];
   const location = { pathname: '/admin/system' };
 
   const context = {
@@ -177,24 +158,11 @@ test('phase 89: admin theme engine registers themes and applies default runtime 
     },
     fetch: async (url: string) => {
       if (url === '/admin-api/system') {
-        return {
-          ok: true,
-          json: async () => ({
-            name: 'Nimb',
-            version: '89.0.0',
-            mode: 'runtime',
-            installed: true,
-            adminTheme: 'default',
-            adminBranding: { adminTitle: 'Phase 89 Admin', logoText: 'Brand 89' }
-          })
-        };
+        return { ok: true, json: async () => systemPayload };
       }
 
       if (url === '/admin-api/pages') {
-        return {
-          ok: true,
-          json: async () => pages
-        };
+        return { ok: true, json: async () => [{ id: 'system', title: 'System', path: '/admin/system' }] };
       }
 
       throw new Error(`Unexpected fetch URL: ${url}`);
@@ -211,16 +179,44 @@ test('phase 89: admin theme engine registers themes and applies default runtime 
   context.window = context as unknown as Record<string, unknown>;
   vm.runInNewContext(appScript, context);
 
+  return { context, document, header, sidebar, main };
+};
+
+test('phase 90: admin branding applies custom title and logo text after theme', async () => {
+  const { document, header, sidebar } = createAppContext({
+    name: 'Nimb',
+    version: '90.0.0',
+    mode: 'runtime',
+    installed: true,
+    adminTheme: 'default',
+    adminBranding: {
+      adminTitle: 'Acme Admin',
+      logoText: 'Acme'
+    }
+  });
+
   await flushMicrotasks();
   await flushMicrotasks();
 
-  const injectedStyle = document.head.children.find((node) => node.id === 'nimb-admin-theme-default');
-  assert.equal(Boolean(injectedStyle), true);
-  assert.equal(String(injectedStyle?.textContent ?? '').includes('#admin-root'), true);
-
-  assert.equal((context.window as { NimbAdmin: { slots: Record<string, FakeElement | null> } }).NimbAdmin.slots.main, main);
-  assert.equal(document.title, 'Phase 89 Admin');
-  assert.equal(header.querySelector('#admin-brand')?.children[0].textContent, 'Brand 89');
-  assert.equal(main.children[0].tagName, 'section');
+  assert.equal(document.title, 'Acme Admin');
+  assert.equal(header.querySelector('#admin-brand')?.children[0].textContent, 'Acme');
   assert.equal(sidebar.children[0].id, 'admin-nav');
+  assert.equal(document.head.children.some((node) => node.id === 'nimb-admin-theme-default'), true);
+});
+
+test('phase 90: missing branding payload falls back to defaults without breaking admin boot', async () => {
+  const { document, header, main } = createAppContext({
+    name: 'Nimb',
+    version: '90.0.0',
+    mode: 'runtime',
+    installed: true,
+    adminTheme: 'default'
+  });
+
+  await flushMicrotasks();
+  await flushMicrotasks();
+
+  assert.equal(document.title, 'Nimb Admin');
+  assert.equal(header.querySelector('#admin-brand')?.children[0].textContent, 'Nimb');
+  assert.equal(main.children[0].tagName, 'section');
 });

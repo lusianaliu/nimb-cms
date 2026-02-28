@@ -21,7 +21,7 @@ const defaultAdminShell = `<!doctype html>
 </head>
 <body>
   <div id="admin-root">
-    <header id="admin-header"></header>
+    <header id="admin-header"><div id="admin-brand"></div></header>
     <div id="admin-body">
       <aside id="admin-sidebar"></aside>
       <main id="admin-main"></main>
@@ -97,8 +97,10 @@ const bootstrapLayout = () => {
   window.NimbAdmin.setSlot = setSlot;
   window.NimbAdmin.clearSlot = clearSlot;
 
-  const header = document.createElement('strong');
-  header.textContent = 'Nimb Admin';
+  const header = document.createElement('div');
+  const brand = document.createElement('div');
+  brand.id = 'admin-brand';
+  header.append(brand);
   setSlot('header', header);
 
   setSlot('sidebar', createListElement(['System']));

@@ -70,5 +70,8 @@ test('phase 79: install lifecycle seeds system types and metadata for runtime', 
     assert.equal(metadata.siteName, 'My Nimb Site');
     assert.equal(metadata.version, '0.1.0');
     assert.equal(Number.isNaN(Date.parse(String(metadata.installedAt))), false);
+    assert.equal(metadata.adminTheme, 'default');
+    assert.equal(metadata.adminTitle, 'Nimb Admin');
+    assert.equal(metadata.logoText, 'Nimb');
   });
 });
