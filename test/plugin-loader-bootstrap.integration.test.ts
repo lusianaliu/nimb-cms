@@ -21,36 +21,43 @@ const writeInstallState = (cwd: string) => {
   fs.writeFileSync(path.join(nimbDir, 'install.json'), `${JSON.stringify({ installed: true, version: '1.0.0', installedAt: '2026-01-01T00:00:00.000Z' }, null, 2)}\n`);
 };
 
-test('bootstrap loads plugins and exposes hook registrations', async () => {
+test('bootstrap loads manifest-driven plugins and registers metadata', async () => {
   const cwd = mkdtemp();
   writeConfig(cwd);
   writeInstallState(cwd);
 
   const pluginsDirectory = path.join(cwd, 'plugins', 'sample');
   fs.mkdirSync(pluginsDirectory, { recursive: true });
+  fs.writeFileSync(path.join(pluginsDirectory, 'plugin.json'), `${JSON.stringify({
+    id: 'sample',
+    name: 'Sample',
+    version: '1.0.0',
+    entry: 'index.ts',
+    capabilities: ['settings.read']
+  }, null, 2)}\n`);
   fs.writeFileSync(path.join(pluginsDirectory, 'index.ts'), `
-    export default {
-      name: 'sample',
-      setup(context) {
-        context.log.info('config loaded', context.config);
-        globalThis.pluginEventCount = 0;
-        context.hooks.on('content.created', () => {
-          globalThis.pluginEventCount += 1;
-        });
-      }
-    };
+    export default function register(runtime) {
+      globalThis.pluginLoaderBootstrap = {
+        capabilities: runtime.capabilities,
+        canReadSettings: Boolean(runtime.settings),
+        hasHooks: Boolean(runtime.hooks)
+      };
+    }
   `);
 
-  const bootstrap = await createBootstrap({ cwd, startupTimestamp: '2026-01-01T00:00:00.000Z' });
-  const runtime = bootstrap.runtime as { contentTypes: { register: (value: unknown) => void }; contentCommand: { create: (type: string, data: Record<string, unknown>) => Promise<unknown> } };
+  const bootstrap = await createBootstrap({ cwd, startupTimestamp: '2026-01-01T00:00:00.000Z', mode: 'runtime' });
 
-  runtime.contentTypes.register({
-    name: 'Article',
-    slug: 'article',
-    fields: [{ name: 'title', type: 'string', required: true }]
+  assert.deepEqual((globalThis as { pluginLoaderBootstrap?: unknown }).pluginLoaderBootstrap, {
+    capabilities: ['settings.read'],
+    canReadSettings: true,
+    hasHooks: false
   });
 
-  await runtime.contentCommand.create('article', { title: 'plugin event' });
-
-  assert.equal((globalThis as { pluginEventCount?: number }).pluginEventCount, 1);
+  assert.deepEqual(bootstrap.runtime.plugins.list(), [{
+    id: 'sample',
+    name: 'Sample',
+    version: '1.0.0',
+    capabilities: ['settings.read'],
+    entry: path.join(cwd, 'plugins', 'sample', 'index.ts')
+  }]);
 });

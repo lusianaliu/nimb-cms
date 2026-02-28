@@ -16,7 +16,7 @@ import type { StorageAdapter as ContentStorageAdapter } from '../storage/storage
 import { JsonStorageAdapter } from '../storage/json-storage-adapter.ts';
 import { EventEmitter } from '../events/event-bus.ts';
 import { HookRegistry } from '../hooks/index.ts';
-import { loadPlugins } from '../plugins/plugin-loader.ts';
+import { loadPlugins } from '../plugin/plugin-loader.ts';
 import type { BootstrapMode } from './bootstrap-mode.ts';
 import { isInstalled } from '../setup/setup-state.ts';
 import { seedSystem } from '../setup/system-seed.ts';
@@ -215,6 +215,14 @@ export const createBootstrap = async ({
   runtime.contentQuery = new ContentQueryService(runtime.contentStore);
   runtime.settings = createSettingsModule(runtime);
   runtime.createScopedRuntime = (capabilities: Capability[] = []) => createScopedRuntime(runtime, capabilities);
+  const pluginRegistry = new Map<string, Record<string, unknown>>();
+  runtime.plugins = Object.freeze({
+    get: (id: string) => pluginRegistry.get(id),
+    list: () => Array.from(pluginRegistry.values()),
+    register: (id: string, plugin: Record<string, unknown>) => {
+      pluginRegistry.set(id, Object.freeze({ ...(plugin ?? {}), id }));
+    }
+  });
   runtime.eventBus = new EventEmitter<ContentEvents>();
   runtime.events = runtime.eventBus as EventEmitter<SystemRuntimeEvents>;
   runtime.events.on('system.installed', () => {
@@ -222,11 +230,6 @@ export const createBootstrap = async ({
   });
   runtime.hooks = new HookRegistry(runtime.eventBus);
   runtime.theme = createThemeManager(runtime);
-  const shouldLoadPlugins = selectedMode !== 'install';
-
-  if (shouldLoadPlugins) {
-    await loadPlugins(runtime, { pluginsDirectory: resolvedPaths.pluginsDir });
-  }
 
   const persistContentSnapshot = async () => {
     await resolvedContentStorageAdapter.saveContentSnapshot(serializeContentStore(runtime.contentStore, runtime.contentTypes));
@@ -281,6 +284,11 @@ export const createBootstrap = async ({
 
   if (selectedMode === 'runtime' && isInstalled()) {
     seedSystem(runtime);
+  }
+
+  const shouldLoadPlugins = selectedMode !== 'install';
+  if (shouldLoadPlugins) {
+    await loadPlugins(runtime, { pluginsDirectory: resolvedPaths.pluginsDir });
   }
 
   const dispatcher = new CommandDispatcher({
