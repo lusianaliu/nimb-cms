@@ -11,7 +11,7 @@ type PluginLoaderLogger = {
 const PLUGIN_MANIFEST_FILE = 'plugin.json';
 
 type RuntimeWithPlugins = {
-  createScopedRuntime: (capabilities?: string[]) => unknown;
+  createScopedRuntime: (pluginId: string, capabilities?: string[]) => unknown;
   plugins?: {
     get: (id: string) => unknown;
     list: () => unknown[];
@@ -63,7 +63,7 @@ export const loadPlugins = async (
         throw new Error('plugin entry must export a default register(runtime) function');
       }
 
-      const scopedRuntime = runtime.createScopedRuntime(manifest.capabilities ?? []);
+      const scopedRuntime = runtime.createScopedRuntime(manifest.id, manifest.capabilities ?? []);
       await register(scopedRuntime);
 
       runtime.plugins?.register?.(manifest.id, Object.freeze({

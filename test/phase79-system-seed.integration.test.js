@@ -42,7 +42,7 @@ test('phase 79: install lifecycle seeds system types and metadata for runtime', 
     writeConfig(cwd);
 
     const installBootstrap = await createBootstrap({ cwd, mode: 'install' });
-    installBootstrap.runtime.events.emit('system.installed', { version: '0.1.0' });
+    await installBootstrap.runtime.events.emit('system.installed', { version: '0.1.0' });
 
     assert.ok(installBootstrap.runtime.contentTypes.get('page'));
     assert.ok(installBootstrap.runtime.contentTypes.get('post'));

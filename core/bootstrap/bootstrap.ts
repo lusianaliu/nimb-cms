@@ -14,7 +14,7 @@ import { version } from '../runtime/version.ts';
 import { resolveAdminBasePath } from '../admin/resolve-admin-path.ts';
 import type { StorageAdapter as ContentStorageAdapter } from '../storage/storage-adapter.ts';
 import { JsonStorageAdapter } from '../storage/json-storage-adapter.ts';
-import { EventEmitter } from '../events/event-bus.ts';
+import { EventEmitter, createEventBus } from '../events/event-bus.ts';
 import { HookRegistry } from '../hooks/index.ts';
 import { loadPlugins } from '../plugin/plugin-loader.ts';
 import type { BootstrapMode } from './bootstrap-mode.ts';
@@ -26,10 +26,6 @@ import type { Capability } from '../runtime/capabilities.ts';
 
 
 const CONTENT_TYPES_STORAGE_KEY = 'content-types';
-type SystemRuntimeEvents = ContentEvents & {
-  'system.installed': { version: string }
-};
-
 const normalizeContentTypeSnapshot = (snapshot) => {
   const types = Array.isArray(snapshot?.types)
     ? [...snapshot.types].sort((left, right) => String(left?.name ?? '').localeCompare(String(right?.name ?? '')))
@@ -54,13 +50,18 @@ const createCapabilityGuard = (capabilities: Capability[]) => {
   };
 };
 
-const createScopedRuntime = (runtime, capabilities: Capability[]) => {
+const createScopedRuntime = (runtime, pluginId: string, capabilities: Capability[]) => {
   const grantedCapabilities = Object.freeze([...(capabilities ?? [])]);
   const requireCapability = createCapabilityGuard(grantedCapabilities as Capability[]);
 
   return Object.freeze({
     capabilities: grantedCapabilities,
-    settings: createSettingsModule(runtime, { requireCapability })
+    settings: createSettingsModule(runtime, { requireCapability }),
+    events: Object.freeze({
+      on: (eventName: string, handler: (payload: unknown, context: { pluginId: string; timestamp: string }) => unknown) => runtime.events.on(eventName, handler),
+      off: (eventName: string, handler: (payload: unknown, context: { pluginId: string; timestamp: string }) => unknown) => runtime.events.off(eventName, handler),
+      emit: (eventName: string, payload: unknown) => runtime.events.emit(eventName, payload, { pluginId })
+    })
   });
 };
 
@@ -214,7 +215,11 @@ export const createBootstrap = async ({
   runtime.contentStore = new ContentStore(runtime.contentTypes);
   runtime.contentQuery = new ContentQueryService(runtime.contentStore);
   runtime.settings = createSettingsModule(runtime);
-  runtime.createScopedRuntime = (capabilities: Capability[] = []) => createScopedRuntime(runtime, capabilities);
+  runtime.createScopedRuntime = (pluginOrCapabilities: string | Capability[] = [], maybeCapabilities: Capability[] = []) => {
+    const pluginId = typeof pluginOrCapabilities === 'string' ? pluginOrCapabilities : 'runtime.system';
+    const capabilities = Array.isArray(pluginOrCapabilities) ? pluginOrCapabilities : maybeCapabilities;
+    return createScopedRuntime(runtime, pluginId, capabilities);
+  };
   const pluginRegistry = new Map<string, Record<string, unknown>>();
   runtime.plugins = Object.freeze({
     get: (id: string) => pluginRegistry.get(id),
@@ -224,7 +229,7 @@ export const createBootstrap = async ({
     }
   });
   runtime.eventBus = new EventEmitter<ContentEvents>();
-  runtime.events = runtime.eventBus as EventEmitter<SystemRuntimeEvents>;
+  runtime.events = createEventBus();
   runtime.events.on('system.installed', () => {
     seedSystem(runtime);
   });
