@@ -12,19 +12,39 @@ const resolveSettings = (runtime) => {
   return entries[0]?.data ?? {};
 };
 
+const getSetting = (runtime, key, fallback) => {
+  try {
+    const value = runtime?.settings?.get?.(key);
+    if (typeof value === 'string' && value.trim()) {
+      return value;
+    }
+  } catch {
+    // Fallback to legacy storage reads.
+  }
+
+  return fallback();
+};
+
 const resolveAdminBranding = (runtime) => {
   const settings = resolveSettings(runtime);
+
+  const adminTitle = getSetting(runtime, 'admin.branding.title', () => settings.adminTitle);
+  const logoText = getSetting(runtime, 'admin.branding.logoText', () => settings.logoText);
+  const logoUrl = getSetting(runtime, 'admin.branding.logoUrl', () => settings.logoUrl);
+
   return Object.freeze({
-    adminTitle: typeof settings.adminTitle === 'string' && settings.adminTitle.trim() ? settings.adminTitle : DEFAULT_ADMIN_BRANDING.adminTitle,
-    logoText: typeof settings.logoText === 'string' && settings.logoText.trim() ? settings.logoText : DEFAULT_ADMIN_BRANDING.logoText,
-    logoUrl: typeof settings.logoUrl === 'string' && settings.logoUrl.trim() ? settings.logoUrl : undefined
+    adminTitle: typeof adminTitle === 'string' && adminTitle.trim() ? adminTitle : DEFAULT_ADMIN_BRANDING.adminTitle,
+    logoText: typeof logoText === 'string' && logoText.trim() ? logoText : DEFAULT_ADMIN_BRANDING.logoText,
+    logoUrl: typeof logoUrl === 'string' && logoUrl.trim() ? logoUrl : undefined
   });
 };
 
 const resolveAdminTheme = (runtime) => {
   const settings = resolveSettings(runtime);
-  if (typeof settings.adminTheme === 'string' && settings.adminTheme.trim()) {
-    return settings.adminTheme;
+  const adminTheme = getSetting(runtime, 'admin.theme', () => settings.adminTheme);
+
+  if (typeof adminTheme === 'string' && adminTheme.trim()) {
+    return adminTheme;
   }
 
   return runtime?.adminTheme ?? 'default';

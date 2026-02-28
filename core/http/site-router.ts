@@ -28,6 +28,15 @@ const getSettings = (runtime) => {
 };
 
 const resolveSiteName = (runtime) => {
+  try {
+    const siteName = runtime?.settings?.get?.('site.name');
+    if (typeof siteName === 'string' && siteName.trim()) {
+      return siteName;
+    }
+  } catch {
+    // Fall through to compatibility settings read.
+  }
+
   const settings = getSettings(runtime);
   return `${settings.siteName ?? 'My Nimb Site'}`;
 };
