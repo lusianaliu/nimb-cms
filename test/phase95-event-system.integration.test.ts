@@ -104,9 +104,9 @@ test('phase 95: event system supports plugin collaboration with scoped runtime s
 
   await phase95?.emitPromise;
 
-  assert.equal(phase95?.hasHooks, false);
+  assert.equal(phase95?.hasHooks, true);
   assert.equal(phase95?.hasEvents, true);
-  assert.deepEqual(phase95?.runtimeKeys, ['capabilities', 'events', 'settings']);
+  assert.deepEqual(phase95?.runtimeKeys, ['capabilities', 'events', 'hooks', 'settings']);
 
   assert.equal(Array.isArray(phase95?.calls), true);
   assert.equal(phase95?.calls?.length, 2);

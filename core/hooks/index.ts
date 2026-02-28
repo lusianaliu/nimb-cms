@@ -1,1 +1,6 @@
-export { HookRegistry, type HookEventName, type HookHandler } from './hook-registry.ts';
+export {
+  HookRegistry,
+  type HookName,
+  type HookHandler,
+  type HookRegistrationOptions
+} from './hook-registry.ts';
