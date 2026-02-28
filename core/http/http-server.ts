@@ -15,6 +15,7 @@ import { renderInstallPage } from '../installer/install-page.ts';
 import { createInstallRouter } from '../install/install-router.ts';
 import { createSiteRouter } from './site-router.ts';
 import { createAdminRouter } from './admin-router.ts';
+import { createAdminApiRouter } from './admin-api-router.ts';
 
 const resolvePublicRoot = ({ runtime, rootDirectory }) => {
   const projectRoot = runtime?.projectPaths?.projectRoot ?? runtime?.project?.projectRoot;
@@ -64,6 +65,9 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
   const adminRouter = !installMode && runtime?.mode === 'runtime'
     ? createAdminRouter({ rootDirectory })
     : null;
+  const adminApiRouter = !installMode && runtime?.mode === 'runtime'
+    ? createAdminApiRouter(runtime)
+    : null;
   const router = installMode ? installRouter : runtimeRouter;
   const apiRouter = installMode
     ? { handle: async () => null }
@@ -111,6 +115,15 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
           if (adminHandler) {
             const adminResponse = await Promise.resolve(adminHandler(context));
             adminResponse.send(response);
+            return;
+          }
+        }
+
+        if (adminApiRouter) {
+          const adminApiHandler = adminApiRouter.dispatch(context);
+          if (adminApiHandler) {
+            const adminApiResponse = await Promise.resolve(adminApiHandler(context));
+            adminApiResponse.send(response);
             return;
           }
         }
