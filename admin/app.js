@@ -1,3 +1,112 @@
+const DEFAULT_ADMIN_THEME_ID = 'default';
+const DEFAULT_ADMIN_THEME_STYLE_ID = 'nimb-admin-theme-default';
+
+const DEFAULT_ADMIN_THEME = {
+  id: DEFAULT_ADMIN_THEME_ID,
+  name: 'Default',
+  apply({ document }) {
+    const existingStyle = document.getElementById(DEFAULT_ADMIN_THEME_STYLE_ID);
+    if (existingStyle) {
+      return;
+    }
+
+    const style = document.createElement('style');
+    style.id = DEFAULT_ADMIN_THEME_STYLE_ID;
+    style.textContent = `
+#admin-root {
+  min-height: 100vh;
+  background: #f4f5f7;
+  color: #1f2933;
+  font-family: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+#admin-header,
+#admin-footer {
+  padding: 0.75rem 1rem;
+  background: #ffffff;
+  border-bottom: 1px solid #d8dee4;
+}
+
+#admin-footer {
+  border-top: 1px solid #d8dee4;
+  border-bottom: none;
+  color: #52606d;
+  font-size: 0.875rem;
+}
+
+#admin-sidebar,
+#admin-main {
+  padding: 1rem;
+}
+
+#admin-sidebar {
+  background: #ffffff;
+  border-right: 1px solid #d8dee4;
+}
+
+#admin-main {
+  background: #f8fafc;
+}
+
+#admin-nav {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#admin-nav li {
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.375rem;
+  color: #334e68;
+}
+
+#admin-nav li[data-active="true"] {
+  background: #d9e2ec;
+  font-weight: 600;
+}
+`;
+
+    const head = document.head ?? document.getElementsByTagName?.('head')?.[0] ?? document.getElementById('admin-root') ?? document.body;
+    if (head?.append) {
+      head.append(style);
+    }
+  }
+};
+
+const createAdminThemeRegistry = () => {
+  const themes = new Map([[DEFAULT_ADMIN_THEME.id, DEFAULT_ADMIN_THEME]]);
+
+  const register = (theme) => {
+    const id = String(theme?.id ?? '').trim();
+    const name = String(theme?.name ?? '').trim();
+
+    if (!id || !name || typeof theme?.apply !== 'function') {
+      throw new TypeError('Admin theme must include id, name, and apply(context)');
+    }
+
+    if (themes.has(id)) {
+      throw new Error(`Admin theme already registered: ${id}`);
+    }
+
+    const normalizedTheme = Object.freeze({ id, name, apply: theme.apply });
+    themes.set(id, normalizedTheme);
+    return normalizedTheme;
+  };
+
+  const getDefault = () => themes.get(DEFAULT_ADMIN_THEME_ID) ?? DEFAULT_ADMIN_THEME;
+
+  const get = (id) => {
+    const themeId = String(id ?? '').trim();
+    if (!themeId) {
+      return getDefault();
+    }
+
+    return themes.get(themeId) ?? getDefault();
+  };
+
+  return Object.freeze({ register, get, getDefault });
+};
+
 const createSystemInfoElement = (system) => {
   const container = document.createElement('section');
 
@@ -31,10 +140,13 @@ const bootstrapLayout = () => {
     footer: document.getElementById('admin-footer')
   };
 
+  const adminThemes = createAdminThemeRegistry();
+
   window.NimbAdmin = {
     slots,
     pages: [],
-    activePageId: null
+    activePageId: null,
+    themes: adminThemes
   };
 
   const setSlot = (name, element) => {
@@ -217,6 +329,29 @@ const bootstrapLayout = () => {
   window.NimbAdmin.router = router;
 
   window.addEventListener?.('popstate', router.handleLocation);
+
+  void fetch('/admin-api/system')
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`Failed to load admin system metadata: ${response.status}`);
+      }
+
+      return response.json();
+    })
+    .then((system) => {
+      const themeId = String(system?.adminTheme ?? DEFAULT_ADMIN_THEME_ID);
+      const theme = adminThemes.get(themeId);
+      theme.apply({
+        document,
+        slots
+      });
+    })
+    .catch(() => {
+      adminThemes.getDefault().apply({
+        document,
+        slots
+      });
+    });
 
   void fetch('/admin-api/pages')
     .then((response) => {

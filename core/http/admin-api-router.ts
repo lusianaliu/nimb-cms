@@ -19,7 +19,8 @@ export const createAdminApiRouter = (runtime) => Object.freeze({
         name: 'Nimb',
         version: runtime?.version ?? '0.0.0',
         mode: runtime?.mode ?? 'unknown',
-        installed: true
+        installed: true,
+        adminTheme: runtime?.adminTheme ?? 'default'
       });
     }
 
