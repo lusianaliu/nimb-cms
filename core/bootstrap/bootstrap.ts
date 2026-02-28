@@ -22,6 +22,7 @@ import { isInstalled } from '../setup/setup-state.ts';
 import { seedSystem } from '../setup/system-seed.ts';
 import { createThemeManager } from '../theme/theme-manager.ts';
 import { createSettingsModule } from '../system/settings.ts';
+import type { Capability } from '../runtime/capabilities.ts';
 
 
 const CONTENT_TYPES_STORAGE_KEY = 'content-types';
@@ -37,6 +38,29 @@ const normalizeContentTypeSnapshot = (snapshot) => {
   return Object.freeze({
     schemaVersion: String(snapshot?.schemaVersion ?? 'v1'),
     types: Object.freeze(types)
+  });
+};
+
+
+const createCapabilityGuard = (capabilities: Capability[]) => {
+  const allowed = new Set(capabilities);
+
+  return (capability: Capability, operation: string) => {
+    if (allowed.has(capability)) {
+      return;
+    }
+
+    throw new Error(`Missing capability "${capability}" for runtime operation "${operation}"`);
+  };
+};
+
+const createScopedRuntime = (runtime, capabilities: Capability[]) => {
+  const grantedCapabilities = Object.freeze([...(capabilities ?? [])]);
+  const requireCapability = createCapabilityGuard(grantedCapabilities as Capability[]);
+
+  return Object.freeze({
+    capabilities: grantedCapabilities,
+    settings: createSettingsModule(runtime, { requireCapability })
   });
 };
 
@@ -190,6 +214,7 @@ export const createBootstrap = async ({
   runtime.contentStore = new ContentStore(runtime.contentTypes);
   runtime.contentQuery = new ContentQueryService(runtime.contentStore);
   runtime.settings = createSettingsModule(runtime);
+  runtime.createScopedRuntime = (capabilities: Capability[] = []) => createScopedRuntime(runtime, capabilities);
   runtime.eventBus = new EventEmitter<ContentEvents>();
   runtime.events = runtime.eventBus as EventEmitter<SystemRuntimeEvents>;
   runtime.events.on('system.installed', () => {
