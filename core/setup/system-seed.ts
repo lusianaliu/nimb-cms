@@ -27,7 +27,11 @@ const SYSTEM_CONTENT_TYPES = Object.freeze([
     fields: Object.freeze([
       Object.freeze({ name: 'siteName', type: 'string', required: true }),
       Object.freeze({ name: 'version', type: 'string', required: true }),
-      Object.freeze({ name: 'installedAt', type: 'string', required: true })
+      Object.freeze({ name: 'installedAt', type: 'string', required: true }),
+      Object.freeze({ name: 'adminTheme', type: 'string', required: true }),
+      Object.freeze({ name: 'adminTitle', type: 'string' }),
+      Object.freeze({ name: 'logoText', type: 'string' }),
+      Object.freeze({ name: 'logoUrl', type: 'string' })
     ])
   })
 ]);
@@ -56,7 +60,10 @@ export function seedSystem(runtime) {
     runtime.contentStore.create('settings', {
       siteName: 'My Nimb Site',
       version: String(runtime.version ?? '0.0.0'),
-      installedAt: new Date().toISOString()
+      installedAt: new Date().toISOString(),
+      adminTheme: 'default',
+      adminTitle: 'Nimb Admin',
+      logoText: 'Nimb'
     });
   }
 }

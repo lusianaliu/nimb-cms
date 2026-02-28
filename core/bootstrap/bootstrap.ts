@@ -165,6 +165,7 @@ export const createBootstrap = async ({
     }
   }
   runtime.adminTheme = 'default';
+  runtime.adminBranding = Object.freeze({ adminTitle: 'Nimb Admin', logoText: 'Nimb' });
   runtime.adminThemes = Object.freeze({
     register: registerAdminTheme,
     get: getAdminTheme,

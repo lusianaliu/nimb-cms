@@ -1,5 +1,9 @@
 const DEFAULT_ADMIN_THEME_ID = 'default';
 const DEFAULT_ADMIN_THEME_STYLE_ID = 'nimb-admin-theme-default';
+const DEFAULT_ADMIN_BRANDING = Object.freeze({
+  adminTitle: 'Nimb Admin',
+  logoText: 'Nimb'
+});
 
 const DEFAULT_ADMIN_THEME = {
   id: DEFAULT_ADMIN_THEME_ID,
@@ -107,6 +111,41 @@ const createAdminThemeRegistry = () => {
   return Object.freeze({ register, get, getDefault });
 };
 
+const normalizeAdminBranding = (branding) => {
+  const candidate = branding ?? {};
+
+  return Object.freeze({
+    adminTitle: String(candidate.adminTitle ?? '').trim() || DEFAULT_ADMIN_BRANDING.adminTitle,
+    logoText: String(candidate.logoText ?? '').trim() || DEFAULT_ADMIN_BRANDING.logoText,
+    logoUrl: String(candidate.logoUrl ?? '').trim()
+  });
+};
+
+const applyAdminBranding = ({ document, branding, slots }) => {
+  const resolved = normalizeAdminBranding(branding);
+  document.title = resolved.adminTitle;
+
+  const header = slots?.header;
+  const brandNode = header?.querySelector?.('#admin-brand');
+
+  if (!brandNode || typeof brandNode.replaceChildren !== 'function') {
+    return resolved;
+  }
+
+  if (resolved.logoUrl) {
+    const image = document.createElement('img');
+    image.setAttribute('src', resolved.logoUrl);
+    image.setAttribute('alt', resolved.logoText);
+    brandNode.replaceChildren(image);
+    return resolved;
+  }
+
+  const text = document.createElement('strong');
+  text.textContent = resolved.logoText;
+  brandNode.replaceChildren(text);
+  return resolved;
+};
+
 const createSystemInfoElement = (system) => {
   const container = document.createElement('section');
 
@@ -175,8 +214,10 @@ const bootstrapLayout = () => {
   window.NimbAdmin.setSlot = setSlot;
   window.NimbAdmin.clearSlot = clearSlot;
 
-  const header = document.createElement('strong');
-  header.textContent = 'Nimb Admin';
+  const header = document.createElement('div');
+  const headerBrand = document.createElement('div');
+  headerBrand.id = 'admin-brand';
+  header.append(headerBrand);
   setSlot('header', header);
 
   const footer = document.createElement('small');
@@ -330,30 +371,7 @@ const bootstrapLayout = () => {
 
   window.addEventListener?.('popstate', router.handleLocation);
 
-  void fetch('/admin-api/system')
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error(`Failed to load admin system metadata: ${response.status}`);
-      }
-
-      return response.json();
-    })
-    .then((system) => {
-      const themeId = String(system?.adminTheme ?? DEFAULT_ADMIN_THEME_ID);
-      const theme = adminThemes.get(themeId);
-      theme.apply({
-        document,
-        slots
-      });
-    })
-    .catch(() => {
-      adminThemes.getDefault().apply({
-        document,
-        slots
-      });
-    });
-
-  void fetch('/admin-api/pages')
+  const loadPages = () => fetch('/admin-api/pages')
     .then((response) => {
       if (!response.ok) {
         throw new Error(`Failed to load admin pages: ${response.status}`);
@@ -380,6 +398,44 @@ const bootstrapLayout = () => {
       loadFailure.textContent = 'Failed to load admin pages.';
       setSlot('sidebar', null);
       setSlot('main', loadFailure);
+    });
+
+  void fetch('/admin-api/system')
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`Failed to load admin system metadata: ${response.status}`);
+      }
+
+      return response.json();
+    })
+    .then((system) => {
+      const themeId = String(system?.adminTheme ?? DEFAULT_ADMIN_THEME_ID);
+      const theme = adminThemes.get(themeId);
+      theme.apply({
+        document,
+        slots
+      });
+
+      applyAdminBranding({
+        document,
+        branding: system?.adminBranding,
+        slots
+      });
+    })
+    .catch(() => {
+      adminThemes.getDefault().apply({
+        document,
+        slots
+      });
+
+      applyAdminBranding({
+        document,
+        branding: DEFAULT_ADMIN_BRANDING,
+        slots
+      });
+    })
+    .finally(() => {
+      void loadPages();
     });
 };
 

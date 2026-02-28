@@ -78,6 +78,9 @@ test('phase 82: admin runtime bridge provides system info API', async () => {
       assert.equal(systemPayload.version, bootstrap.runtime.version);
       assert.equal(systemPayload.mode, bootstrap.runtime.mode);
       assert.equal(systemPayload.installed, true);
+      assert.equal(systemPayload.adminTheme, 'default');
+      assert.equal(systemPayload.adminBranding.adminTitle, 'Nimb Admin');
+      assert.equal(systemPayload.adminBranding.logoText, 'Nimb');
 
       const adminResponse = await fetch(`http://127.0.0.1:${port}/admin`);
       assert.equal(adminResponse.status, 200);
