@@ -8,7 +8,7 @@ import { createHttpServer } from '../core/http/index.ts';
 import { markInstalled } from '../core/setup/setup-state.ts';
 
 const INSTALL_STATE_PATH = '/data/system/install.json';
-const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase84-'));
+const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase85-'));
 
 const writeConfig = (cwd: string) => {
   fs.writeFileSync(path.join(cwd, 'nimb.config.json'), `${JSON.stringify({
@@ -22,7 +22,7 @@ const writeConfig = (cwd: string) => {
 const writeInstallState = (cwd: string) => {
   const nimbDir = path.join(cwd, '.nimb');
   fs.mkdirSync(nimbDir, { recursive: true });
-  fs.writeFileSync(path.join(nimbDir, 'install.json'), `${JSON.stringify({ installed: true, version: '84.0.0', installedAt: '2026-01-01T00:00:00.000Z' }, null, 2)}\n`);
+  fs.writeFileSync(path.join(nimbDir, 'install.json'), `${JSON.stringify({ installed: true, version: '85.0.0', installedAt: '2026-01-01T00:00:00.000Z' }, null, 2)}\n`);
 };
 
 const withInstallState = async (run: () => Promise<void> | void) => {
@@ -53,38 +53,32 @@ const createServer = async (cwd: string) => {
   });
 
   const { port } = await server.start();
-  return { bootstrap, server, port };
+  return { server, port };
 };
 
-test('phase 84: admin extension registry exposes default page and admin page list API', async () => {
+test('phase 85: admin shell exposes layout slots and admin-api remains available', async () => {
   await withInstallState(async () => {
-    markInstalled({ version: '84.0.0' });
+    markInstalled({ version: '85.0.0' });
 
     const cwd = mkdtemp();
     writeConfig(cwd);
     writeInstallState(cwd);
 
-    const { bootstrap, server, port } = await createServer(cwd);
+    const { server, port } = await createServer(cwd);
 
     try {
-      assert.deepEqual(bootstrap.runtime.adminRegistry.getAdminPages(), [
-        { id: 'system', path: '/admin', title: 'System' }
-      ]);
+      const adminResponse = await fetch(`http://127.0.0.1:${port}/admin`);
+      assert.equal(adminResponse.status, 200);
 
-      const pagesResponse = await fetch(`http://127.0.0.1:${port}/admin-api/pages`);
-      assert.equal(pagesResponse.status, 200);
-      assert.equal(pagesResponse.headers.get('content-type'), 'application/json; charset=utf-8');
-      assert.deepEqual(await pagesResponse.json(), [
-        { id: 'system', path: '/admin', title: 'System' }
-      ]);
+      const adminHtml = await adminResponse.text();
+      assert.equal(adminHtml.includes('id="admin-header"'), true);
+      assert.equal(adminHtml.includes('id="admin-sidebar"'), true);
+      assert.equal(adminHtml.includes('id="admin-main"'), true);
+      assert.equal(adminHtml.includes('id="admin-footer"'), true);
 
-      const appScriptResponse = await fetch(`http://127.0.0.1:${port}/admin/app.js`);
-      assert.equal(appScriptResponse.status, 200);
-
-      const appScript = await appScriptResponse.text();
-      assert.equal(appScript.includes('window.NimbAdmin'), true);
-      assert.equal(appScript.includes("setSlot('sidebar'"), true);
-      assert.equal(appScript.includes("fetch('/admin-api/system')"), true);
+      const systemResponse = await fetch(`http://127.0.0.1:${port}/admin-api/system`);
+      assert.equal(systemResponse.status, 200);
+      assert.equal(systemResponse.headers.get('content-type'), 'application/json; charset=utf-8');
     } finally {
       await server.stop();
     }

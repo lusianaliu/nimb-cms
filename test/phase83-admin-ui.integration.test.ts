@@ -77,7 +77,9 @@ test('phase 83: admin shell references live admin app and admin API remains avai
       const appScriptResponse = await fetch(`http://127.0.0.1:${port}/admin/app.js`);
       assert.equal(appScriptResponse.status, 200);
       assert.equal(appScriptResponse.headers.get('content-type'), 'application/javascript; charset=utf-8');
-      assert.equal((await appScriptResponse.text()).includes("fetch('/admin-api/pages')"), true);
+      const appScript = await appScriptResponse.text();
+      assert.equal(appScript.includes("window.NimbAdmin"), true);
+      assert.equal(appScript.includes("fetch('/admin-api/system')"), true);
 
       const systemResponse = await fetch(`http://127.0.0.1:${port}/admin-api/system`);
       assert.equal(systemResponse.status, 200);
