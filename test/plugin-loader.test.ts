@@ -3,10 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { EventEmitter } from '../core/events/event-bus.ts';
 import { HookRegistry } from '../core/hooks/index.ts';
 import { loadPlugins } from '../core/plugins/plugin-loader.ts';
-import { CONTENT_CREATED_EVENT, type ContentEvents } from '../core/content/index.ts';
 
 const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-plugin-loader-'));
 
@@ -34,7 +32,7 @@ test('loadPlugins passes PluginContext to plugin setup', async () => {
   `);
 
   const runtime = {
-    hooks: new HookRegistry(new EventEmitter<ContentEvents>())
+    hooks: new HookRegistry()
   };
 
   const loaded = await loadPlugins(runtime, { pluginsDirectory });
@@ -66,7 +64,7 @@ test('loadPlugins loads plugin config from config.json', async () => {
   }, null, 2)}\n`);
 
   const runtime = {
-    hooks: new HookRegistry(new EventEmitter<ContentEvents>())
+    hooks: new HookRegistry()
   };
 
   await loadPlugins(runtime, { pluginsDirectory });
@@ -92,7 +90,7 @@ test('loadPlugins uses empty config when plugin config.json is missing', async (
   `);
 
   const runtime = {
-    hooks: new HookRegistry(new EventEmitter<ContentEvents>())
+    hooks: new HookRegistry()
   };
 
   await loadPlugins(runtime, { pluginsDirectory });
@@ -114,7 +112,7 @@ test('loadPlugins context logger prefixes plugin name', async () => {
   `);
 
   const runtime = {
-    hooks: new HookRegistry(new EventEmitter<ContentEvents>())
+    hooks: new HookRegistry()
   };
 
   const messages: string[] = [];
@@ -141,27 +139,23 @@ test('loadPlugins context hooks remain functional', async () => {
     export default {
       name: 'hooked',
       setup(context) {
-        globalThis.eventsSeen = 0;
-        context.hooks.on('content.created', () => {
-          globalThis.eventsSeen += 1;
-        });
+        context.hooks.register('content.create.transform', async (value) => ({
+          ...value,
+          fromPlugin: true
+        }));
       }
     };
   `);
 
-  const eventBus = new EventEmitter<ContentEvents>();
   const runtime = {
-    hooks: new HookRegistry(eventBus)
+    hooks: new HookRegistry()
   };
 
   await loadPlugins(runtime, { pluginsDirectory });
 
-  eventBus.emit(CONTENT_CREATED_EVENT, {
-    type: 'article',
-    entry: { id: 'entry-1' } as never
-  });
+  const result = await runtime.hooks.execute('content.create.transform', { title: 'Article' }, { type: 'article' });
 
-  assert.equal((globalThis as { eventsSeen?: number }).eventsSeen, 1);
+  assert.deepEqual(result, { title: 'Article', fromPlugin: true });
 });
 
 test('loadPlugins isolates plugin failures and continues loading', async () => {
@@ -188,7 +182,7 @@ test('loadPlugins isolates plugin failures and continues loading', async () => {
 
   const loggedErrors: string[] = [];
   const runtime = {
-    hooks: new HookRegistry(new EventEmitter<ContentEvents>())
+    hooks: new HookRegistry()
   };
 
   const loaded = await loadPlugins(runtime, {

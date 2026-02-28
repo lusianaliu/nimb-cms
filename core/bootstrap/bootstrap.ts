@@ -53,10 +53,32 @@ const createCapabilityGuard = (capabilities: Capability[]) => {
 const createScopedRuntime = (runtime, pluginId: string, capabilities: Capability[]) => {
   const grantedCapabilities = Object.freeze([...(capabilities ?? [])]);
   const requireCapability = createCapabilityGuard(grantedCapabilities as Capability[]);
+  const allowedDomains = new Set<string>();
+
+  for (const capability of grantedCapabilities) {
+    const [domain] = String(capability).split('.');
+    if (domain) {
+      allowedDomains.add(domain);
+    }
+  }
+
+  const validateHookDomain = (hookName: string) => {
+    const [domain] = String(hookName).split('.');
+    if (!domain || !allowedDomains.has(domain)) {
+      throw new Error(`Plugin "${pluginId}" cannot register hook "${hookName}" outside allowed domains: ${[...allowedDomains].sort().join(', ') || 'none'}`);
+    }
+  };
 
   return Object.freeze({
     capabilities: grantedCapabilities,
     settings: createSettingsModule(runtime, { requireCapability }),
+    hooks: Object.freeze({
+      register: (hookName: string, handler: (value: unknown, context: Record<string, unknown>) => unknown | Promise<unknown>) => {
+        validateHookDomain(hookName);
+        return runtime.hooks.register(hookName, handler, { pluginId });
+      },
+      execute: (hookName: string, initialValue: unknown, context: Record<string, unknown>) => runtime.hooks.execute(hookName, initialValue, context)
+    }),
     events: Object.freeze({
       on: (eventName: string, handler: (payload: unknown, context: { pluginId: string; timestamp: string }) => unknown) => runtime.events.on(eventName, handler),
       off: (eventName: string, handler: (payload: unknown, context: { pluginId: string; timestamp: string }) => unknown) => runtime.events.off(eventName, handler),
@@ -233,7 +255,7 @@ export const createBootstrap = async ({
   runtime.events.on('system.installed', () => {
     seedSystem(runtime);
   });
-  runtime.hooks = new HookRegistry(runtime.eventBus);
+  runtime.hooks = new HookRegistry();
   runtime.theme = createThemeManager(runtime);
 
   const persistContentSnapshot = async () => {
@@ -241,7 +263,7 @@ export const createBootstrap = async ({
   };
 
   runtime.persistContentSnapshot = persistContentSnapshot;
-  runtime.contentCommand = new ContentCommandService(runtime.contentStore, runtime.persistContentSnapshot, runtime.eventBus);
+  runtime.contentCommand = new ContentCommandService(runtime.contentStore, runtime.persistContentSnapshot, runtime.eventBus, runtime.hooks);
 
 
   const restore = async () => {
