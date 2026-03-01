@@ -3,6 +3,8 @@ import { createContentAdminService } from '../admin/content-admin.ts';
 import { renderContentList } from '../admin/views/content-list.ts';
 import { renderContentForm } from '../admin/views/content-form.ts';
 import { renderAdminShell } from '../admin/admin-shell.ts';
+import { runMiddlewareStack } from './run-middleware.ts';
+import type { MiddlewareContext } from './middleware.ts';
 
 const SUPPORTED_TYPES = new Set(['page', 'post']);
 
@@ -127,13 +129,34 @@ const buildEntryData = (schema, formData: Record<string, unknown>, existingEntri
   return data;
 };
 
+
+
+const withAdminMiddleware = (runtime, context, handler: () => Promise<unknown> | unknown) => {
+  const middlewareContext: MiddlewareContext = {
+    req: context.request,
+    res: context.response,
+    runtime,
+    params: context.params,
+    state: {}
+  };
+
+  let output: unknown = null;
+
+  return runMiddlewareStack(
+    middlewareContext,
+    runtime?.admin?.middleware?.list?.() ?? [],
+    async () => {
+      output = await Promise.resolve(handler());
+    }
+  ).then(() => output);
+};
 export const createAdminContentRouter = (runtime) => {
   const service = createContentAdminService(runtime);
   const router = createRouter([
     {
       method: 'GET',
       path: '/admin/content/:type',
-      handler: (context) => {
+      handler: (context) => withAdminMiddleware(runtime, context, async () => {
         const type = getRequestedType(context);
         if (!type) {
           return toTextResponse(404, 'Not found');
@@ -146,12 +169,12 @@ export const createAdminContentRouter = (runtime) => {
           activeNav: 'content',
           content: renderContentList({ type, entries })
         }));
-      }
+      })
     },
     {
       method: 'GET',
       path: '/admin/content/:type/new',
-      handler: (context) => {
+      handler: (context) => withAdminMiddleware(runtime, context, async () => {
         const type = getRequestedType(context);
         if (!type) {
           return toTextResponse(404, 'Not found');
@@ -164,12 +187,12 @@ export const createAdminContentRouter = (runtime) => {
           activeNav: 'content',
           content: renderContentForm({ type, schema, entry: null, mode: 'new' })
         }));
-      }
+      })
     },
     {
       method: 'GET',
       path: '/admin/content/:type/:id/edit',
-      handler: (context) => {
+      handler: (context) => withAdminMiddleware(runtime, context, async () => {
         const type = getRequestedType(context);
         if (!type) {
           return toTextResponse(404, 'Not found');
@@ -187,12 +210,12 @@ export const createAdminContentRouter = (runtime) => {
           activeNav: 'content',
           content: renderContentForm({ type, schema, entry, mode: 'edit' })
         }));
-      }
+      })
     },
     {
       method: 'POST',
       path: '/admin/content/:type',
-      handler: async (context) => {
+      handler: (context) => withAdminMiddleware(runtime, context, async () => {
         const type = getRequestedType(context);
         if (!type) {
           return toTextResponse(404, 'Not found');
@@ -205,12 +228,12 @@ export const createAdminContentRouter = (runtime) => {
 
         await service.createEntry(type, entryData);
         return toRedirectResponse(`/admin/content/${encodeURIComponent(type)}`);
-      }
+      })
     },
     {
       method: 'POST',
       path: '/admin/content/:type/:id/update',
-      handler: async (context) => {
+      handler: (context) => withAdminMiddleware(runtime, context, async () => {
         const type = getRequestedType(context);
         if (!type) {
           return toTextResponse(404, 'Not found');
@@ -224,12 +247,12 @@ export const createAdminContentRouter = (runtime) => {
 
         await service.updateEntry(type, id, entryData);
         return toRedirectResponse(`/admin/content/${encodeURIComponent(type)}`);
-      }
+      })
     },
     {
       method: 'POST',
       path: '/admin/content/:type/:id/delete',
-      handler: async (context) => {
+      handler: (context) => withAdminMiddleware(runtime, context, async () => {
         const type = getRequestedType(context);
         if (!type) {
           return toTextResponse(404, 'Not found');
@@ -237,7 +260,7 @@ export const createAdminContentRouter = (runtime) => {
 
         await service.deleteEntry(type, `${context.params?.id ?? ''}`);
         return toRedirectResponse(`/admin/content/${encodeURIComponent(type)}`);
-      }
+      })
     }
   ]);
 

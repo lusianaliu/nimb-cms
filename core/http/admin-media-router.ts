@@ -2,6 +2,8 @@ import { createRouter } from './router.ts';
 import { renderAdminShell } from '../admin/admin-shell.ts';
 import { renderMediaList } from '../admin/views/media-list.ts';
 import { renderMediaUpload } from '../admin/views/media-upload.ts';
+import { runMiddlewareStack } from './run-middleware.ts';
+import type { MiddlewareContext } from './middleware.ts';
 
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
 
@@ -101,12 +103,33 @@ const parseMultipartUpload = (body: Buffer, contentType: string) => {
   throw new Error('MISSING_FILE_FIELD');
 };
 
+
+
+const withAdminMiddleware = (runtime, context, handler: () => Promise<unknown> | unknown) => {
+  const middlewareContext: MiddlewareContext = {
+    req: context.request,
+    res: context.response,
+    runtime,
+    params: context.params,
+    state: {}
+  };
+
+  let output: unknown = null;
+
+  return runMiddlewareStack(
+    middlewareContext,
+    runtime?.admin?.middleware?.list?.() ?? [],
+    async () => {
+      output = await Promise.resolve(handler());
+    }
+  ).then(() => output);
+};
 export const createAdminMediaRouter = (runtime) => {
   const router = createRouter([
     {
       method: 'GET',
       path: '/admin/media',
-      handler: async () => {
+      handler: (context) => withAdminMiddleware(runtime, context, async () => {
         const media = await runtime.media.list();
         return toHtmlResponse(renderAdminShell({
           title: `Media · ${runtime?.admin?.title ?? 'Nimb Admin'}`,
@@ -114,22 +137,22 @@ export const createAdminMediaRouter = (runtime) => {
           activeNav: 'media',
           content: renderMediaList({ media })
         }));
-      }
+      })
     },
     {
       method: 'GET',
       path: '/admin/media/upload',
-      handler: () => toHtmlResponse(renderAdminShell({
+      handler: (context) => withAdminMiddleware(runtime, context, async () => toHtmlResponse(renderAdminShell({
         title: `Upload media · ${runtime?.admin?.title ?? 'Nimb Admin'}`,
         runtime,
         activeNav: 'media',
         content: renderMediaUpload()
-      }))
+      })))
     },
     {
       method: 'POST',
       path: '/admin/media/upload',
-      handler: async (context) => {
+      handler: (context) => withAdminMiddleware(runtime, context, async () => {
         const contentType = `${context.request.headers['content-type'] ?? ''}`;
         if (!contentType.toLowerCase().startsWith('multipart/form-data')) {
           return toTextResponse(415, 'Unsupported upload body');
@@ -157,16 +180,16 @@ export const createAdminMediaRouter = (runtime) => {
 
           return toTextResponse(400, 'Invalid multipart upload');
         }
-      }
+      })
     },
     {
       method: 'POST',
       path: '/admin/media/:id/delete',
-      handler: async (context) => {
+      handler: (context) => withAdminMiddleware(runtime, context, async () => {
         await runtime.media.delete(`${context.params?.id ?? ''}`);
         runtime.renderCache?.invalidate?.();
         return toRedirectResponse('/admin/media');
-      }
+      })
     }
   ]);
 
