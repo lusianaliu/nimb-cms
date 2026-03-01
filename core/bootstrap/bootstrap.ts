@@ -23,6 +23,7 @@ import { seedSystem } from '../setup/system-seed.ts';
 import { createThemeManager } from '../theme/theme-manager.ts';
 import { createSettingsModule } from '../system/settings.ts';
 import type { Capability } from '../runtime/capabilities.ts';
+import type { ScopedRuntime } from '../plugin/plugin-api.ts';
 
 
 const CONTENT_TYPES_STORAGE_KEY = 'content-types';
@@ -50,7 +51,7 @@ const createCapabilityGuard = (capabilities: Capability[]) => {
   };
 };
 
-const createScopedRuntime = (runtime, pluginId: string, capabilities: Capability[]) => {
+const createScopedRuntime = (runtime, pluginId: string, capabilities: Capability[]): ScopedRuntime => {
   const grantedCapabilities = Object.freeze([...(capabilities ?? [])]);
   const requireCapability = createCapabilityGuard(grantedCapabilities as Capability[]);
   const allowedDomains = new Set<string>();
@@ -83,6 +84,10 @@ const createScopedRuntime = (runtime, pluginId: string, capabilities: Capability
       on: (eventName: string, handler: (payload: unknown, context: { pluginId: string; timestamp: string }) => unknown) => runtime.events.on(eventName, handler),
       off: (eventName: string, handler: (payload: unknown, context: { pluginId: string; timestamp: string }) => unknown) => runtime.events.off(eventName, handler),
       emit: (eventName: string, payload: unknown) => runtime.events.emit(eventName, payload, { pluginId })
+    }),
+    plugins: Object.freeze({
+      get: (id: string) => runtime.plugins?.get(id),
+      list: () => runtime.plugins?.list() ?? []
     })
   });
 };

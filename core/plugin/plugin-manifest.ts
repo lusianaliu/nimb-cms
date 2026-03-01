@@ -1,4 +1,4 @@
-const MANIFEST_FIELDS = new Set(['id', 'name', 'version', 'entry', 'capabilities']);
+const MANIFEST_FIELDS = new Set(['id', 'name', 'version', 'entry', 'apiVersion', 'capabilities']);
 const PLUGIN_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export interface PluginManifest {
@@ -6,6 +6,7 @@ export interface PluginManifest {
   name: string
   version: string
   entry: string
+  apiVersion: string
   capabilities?: string[]
 }
 
@@ -33,6 +34,7 @@ export const validatePluginManifest = (value: unknown): PluginManifest => {
   const id = asString(manifest.id, 'id');
   const entry = asString(manifest.entry, 'entry');
   const version = asString(manifest.version, 'version');
+  const apiVersion = asString(manifest.apiVersion, 'apiVersion');
 
   if (!PLUGIN_ID_PATTERN.test(id)) {
     throw new Error('plugin manifest field "id" must be kebab-case');
@@ -52,6 +54,7 @@ export const validatePluginManifest = (value: unknown): PluginManifest => {
     name: typeof manifest.name === 'string' && manifest.name.trim().length > 0 ? manifest.name : id,
     version,
     entry,
+    apiVersion,
     capabilities
   });
 };

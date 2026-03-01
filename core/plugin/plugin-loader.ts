@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { isCompatible } from './api-compat.ts';
+import { PLUGIN_API_VERSION, type PluginAPI, type ScopedRuntime } from './plugin-api.ts';
 import { validatePluginManifest } from './plugin-manifest.ts';
 
 type PluginLoaderLogger = {
@@ -11,7 +13,7 @@ type PluginLoaderLogger = {
 const PLUGIN_MANIFEST_FILE = 'plugin.json';
 
 type RuntimeWithPlugins = {
-  createScopedRuntime: (pluginId: string, capabilities?: string[]) => unknown;
+  createScopedRuntime: (pluginId: string, capabilities?: string[]) => ScopedRuntime;
   plugins?: {
     get: (id: string) => unknown;
     list: () => unknown[];
@@ -50,6 +52,10 @@ export const loadPlugins = async (
 
     try {
       const manifest = await readManifest(pluginDirectory);
+      if (!isCompatible(PLUGIN_API_VERSION, manifest.apiVersion)) {
+        throw new Error(`plugin api version \"${manifest.apiVersion}\" is incompatible with core api \"${PLUGIN_API_VERSION}\"`);
+      }
+
       if (runtime.plugins?.get(manifest.id)) {
         logger?.warn?.('plugin loader skipped duplicate plugin id', { plugin: manifest.id });
         continue;
@@ -60,16 +66,25 @@ export const loadPlugins = async (
       const register = imported.default;
 
       if (typeof register !== 'function') {
-        throw new Error('plugin entry must export a default register(runtime) function');
+        throw new Error('plugin entry must export a default register(api) function');
       }
 
       const scopedRuntime = runtime.createScopedRuntime(manifest.id, manifest.capabilities ?? []);
-      await register(scopedRuntime);
+      const pluginAPI: PluginAPI = Object.freeze({
+        version: PLUGIN_API_VERSION,
+        runtime: scopedRuntime
+      });
+
+      await register(Object.freeze({
+        apiVersion: PLUGIN_API_VERSION,
+        ...pluginAPI
+      }));
 
       runtime.plugins?.register?.(manifest.id, Object.freeze({
         id: manifest.id,
         name: manifest.name,
         version: manifest.version,
+        apiVersion: manifest.apiVersion,
         capabilities: Object.freeze([...(manifest.capabilities ?? [])]),
         entry: pluginEntryPath
       }));

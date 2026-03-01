@@ -29,6 +29,7 @@ const writePlugin = (cwd: string, pluginId: string, source: string) => {
     name: pluginId,
     version: '1.0.0',
     entry: 'index.ts',
+    apiVersion: '^1.0.0',
     capabilities: []
   }, null, 2)}\n`);
   fs.writeFileSync(path.join(directory, 'index.ts'), source);
@@ -43,13 +44,13 @@ test('phase 95: event system supports plugin collaboration with scoped runtime s
     cwd,
     'chapter-listener-a',
     `
-      export default function register(runtime) {
+      export default function register(api) {
         globalThis.phase95 = globalThis.phase95 ?? { calls: [], contexts: [], hasHooks: null, hasEvents: null, runtimeKeys: [] };
-        globalThis.phase95.hasHooks = Boolean(runtime?.hooks);
-        globalThis.phase95.hasEvents = Boolean(runtime?.events);
-        globalThis.phase95.runtimeKeys = Object.keys(runtime ?? {}).sort();
+        globalThis.phase95.hasHooks = Boolean(api?.runtime?.hooks);
+        globalThis.phase95.hasEvents = Boolean(api?.runtime?.events);
+        globalThis.phase95.runtimeKeys = Object.keys(api?.runtime ?? {}).sort();
 
-        runtime.events.on('chapter.published', async (payload, context) => {
+        api.runtime.events.on('chapter.published', async (payload, context) => {
           await new Promise((resolve) => setTimeout(resolve, 25));
           globalThis.phase95.calls.push(\`a:\${payload.chapterId}\`);
           globalThis.phase95.contexts.push(context);
@@ -62,9 +63,9 @@ test('phase 95: event system supports plugin collaboration with scoped runtime s
     cwd,
     'chapter-listener-b',
     `
-      export default function register(runtime) {
+      export default function register(api) {
         globalThis.phase95 = globalThis.phase95 ?? { calls: [], contexts: [] };
-        runtime.events.on('chapter.published', async (payload, context) => {
+        api.runtime.events.on('chapter.published', async (payload, context) => {
           await new Promise((resolve) => setTimeout(resolve, 5));
           globalThis.phase95.calls.push(\`b:\${payload.chapterId}\`);
           globalThis.phase95.contexts.push(context);
@@ -77,10 +78,10 @@ test('phase 95: event system supports plugin collaboration with scoped runtime s
     cwd,
     'chapter-publisher',
     `
-      export default function register(runtime) {
+      export default function register(api) {
         globalThis.phase95 = globalThis.phase95 ?? { calls: [], contexts: [] };
         globalThis.phase95.publisherStartedAt = Date.now();
-        globalThis.phase95.emitPromise = runtime.events.emit('chapter.published', { chapterId: 'ch-42' }).then(() => {
+        globalThis.phase95.emitPromise = api.runtime.events.emit('chapter.published', { chapterId: 'ch-42' }).then(() => {
           globalThis.phase95.publisherFinishedAt = Date.now();
         });
       }
@@ -106,7 +107,7 @@ test('phase 95: event system supports plugin collaboration with scoped runtime s
 
   assert.equal(phase95?.hasHooks, true);
   assert.equal(phase95?.hasEvents, true);
-  assert.deepEqual(phase95?.runtimeKeys, ['capabilities', 'events', 'hooks', 'settings']);
+  assert.deepEqual(phase95?.runtimeKeys, ['capabilities', 'events', 'hooks', 'plugins', 'settings']);
 
   assert.equal(Array.isArray(phase95?.calls), true);
   assert.equal(phase95?.calls?.length, 2);
@@ -132,8 +133,8 @@ test('phase 95: event system validates dotted event names', async () => {
     cwd,
     'invalid-event-plugin',
     `
-      export default function register(runtime) {
-        runtime.events.on('invalid_event_name', () => {});
+      export default function register(api) {
+        api.runtime.events.on('invalid_event_name', () => {});
       }
     `
   );
