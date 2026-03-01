@@ -205,7 +205,8 @@ export const createBootstrap = async ({
   runtime.setConfig?.(config);
   runtime.adminBasePath = resolveAdminBasePath(runtime);
   runtime.admin = Object.freeze({
-    basePath: runtime.adminBasePath
+    basePath: runtime.adminBasePath,
+    title: runtime?.getConfig?.()?.admin?.title ?? 'Nimb Admin'
   });
   runtime.adminApi = Object.freeze({
     basePath: '/admin-api'

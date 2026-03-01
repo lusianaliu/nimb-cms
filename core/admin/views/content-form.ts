@@ -19,7 +19,7 @@ const renderFieldInput = (field, value) => {
   const required = field?.required ? ' required' : '';
 
   if (type === 'text') {
-    return `<textarea id="${escapeHtml(name)}" name="${escapeHtml(name)}"${required} rows="8" cols="60">${escapeHtml(value)}</textarea>`;
+    return `<textarea id="${escapeHtml(name)}" name="${escapeHtml(name)}"${required} rows="8">${escapeHtml(value)}</textarea>`;
   }
 
   if (type === 'boolean') {
@@ -50,25 +50,17 @@ export const renderContentForm = ({ type, schema, entry, mode }) => {
     const value = entryData[name] ?? '';
 
     return `<div>
-      <label for="${escapeHtml(name)}">${escapeHtml(name)}</label><br>
+      <label for="${escapeHtml(name)}">${escapeHtml(name)}</label>
       ${renderFieldInput(field, value)}
     </div>`;
   }).join('\n');
 
-  return `<!doctype html>
-<html>
-<head>
-  <title>${mode === 'edit' ? 'Edit' : 'Create'} ${escapeHtml(type)}</title>
-</head>
-<body>
-  <h1>${mode === 'edit' ? 'Edit' : 'Create'} ${escapeHtml(type)}</h1>
+  return `<h1>${mode === 'edit' ? 'Edit' : 'Create'} ${escapeHtml(type)}</h1>
   <form method="post" action="${action}">
     ${fields}
     <p>
       <button type="submit">Save</button>
       <a href="/admin/content/${safeType}">Cancel</a>
     </p>
-  </form>
-</body>
-</html>`;
+  </form>`;
 };

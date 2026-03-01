@@ -12,7 +12,8 @@ const DEFAULT_CONFIG = Object.freeze({
   admin: Object.freeze({
     enabled: true,
     basePath: '/admin',
-    staticDir: './ui/admin'
+    staticDir: './ui/admin',
+    title: 'Nimb Admin'
   })
 });
 
@@ -108,11 +109,13 @@ const normalizeAdmin = (admin) => {
   const enabled = admin.enabled === undefined ? DEFAULT_CONFIG.admin.enabled : admin.enabled === true;
   const basePath = normalizeBasePath(admin.basePath);
   const staticDir = String(admin.staticDir ?? DEFAULT_CONFIG.admin.staticDir).trim() || DEFAULT_CONFIG.admin.staticDir;
+  const title = typeof admin.title === 'string' && admin.title.trim() ? admin.title.trim() : DEFAULT_CONFIG.admin.title;
 
   return Object.freeze({
     enabled,
     basePath,
-    staticDir
+    staticDir,
+    title
   });
 };
 

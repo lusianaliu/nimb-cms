@@ -7,7 +7,7 @@ const config = Object.freeze({
   plugins: Object.freeze([]),
   runtime: Object.freeze({ logLevel: 'info', mode: 'development' }),
   server: Object.freeze({ port: 0 }),
-  admin: Object.freeze({ enabled: true, basePath: '/admin', staticDir: './ui/admin' })
+  admin: Object.freeze({ enabled: true, basePath: '/admin', staticDir: './ui/admin', title: 'Nimb Admin' })
 });
 
 test('phase 48: runtime.getConfig returns immutable config snapshot', () => {
@@ -15,7 +15,7 @@ test('phase 48: runtime.getConfig returns immutable config snapshot', () => {
   runtime.setConfig({
     name: 'nimb-app',
     runtime: { mode: 'development', logLevel: 'info' },
-    admin: { enabled: true, basePath: '/admin', staticDir: './ui/admin' }
+    admin: { enabled: true, basePath: '/admin', staticDir: './ui/admin', title: 'Nimb Admin' }
   });
 
   const snapshot = runtime.getConfig();
