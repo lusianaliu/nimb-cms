@@ -33,6 +33,14 @@ const SYSTEM_CONTENT_TYPES = Object.freeze([
       Object.freeze({ name: 'logoText', type: 'string' }),
       Object.freeze({ name: 'logoUrl', type: 'string' })
     ])
+  }),
+  Object.freeze({
+    name: 'Navigation',
+    slug: 'navigation',
+    fields: Object.freeze([
+      Object.freeze({ name: 'slug', type: 'string', required: true }),
+      Object.freeze({ name: 'items', type: 'text', required: true })
+    ])
   })
 ]);
 
@@ -64,6 +72,20 @@ export function seedSystem(runtime) {
       adminTheme: 'default',
       adminTitle: 'Nimb Admin',
       logoText: 'Nimb'
+    });
+  }
+
+  const hasPrimaryNavigation = runtime.contentStore
+    .list('navigation')
+    .some((entry) => `${entry?.data?.slug ?? ''}` === 'primary');
+
+  if (!hasPrimaryNavigation) {
+    runtime.contentStore.create('navigation', {
+      slug: 'primary',
+      items: JSON.stringify([
+        { label: 'Home', url: '/' },
+        { label: 'Blog', url: '/blog' }
+      ])
     });
   }
 }
