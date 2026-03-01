@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { runMiddlewareStack } from './run-middleware.ts';
+import type { MiddlewareContext } from './middleware.ts';
 
 const defaultAdminShell = `<!doctype html>
 <html>
@@ -205,7 +207,27 @@ const resolveAdminAsset = (rootDirectory: string, requestPath: string) => {
   return null;
 };
 
-export const createAdminRouter = ({ rootDirectory = process.cwd() } = {}) => {
+const withAdminMiddleware = (runtime, context, handler: () => Promise<unknown> | unknown) => {
+  const middlewareContext: MiddlewareContext = {
+    req: context.request,
+    res: context.response,
+    runtime,
+    params: context.params,
+    state: {}
+  };
+
+  let output: unknown = null;
+
+  return runMiddlewareStack(
+    middlewareContext,
+    runtime?.admin?.middleware?.list?.() ?? [],
+    async () => {
+      output = await Promise.resolve(handler());
+    }
+  ).then(() => output ?? middlewareContext.state.response ?? null);
+};
+
+export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = null } = {}) => {
   const normalizedBasePath = '/admin';
   const shell = loadAdminShell(rootDirectory);
 
@@ -216,7 +238,7 @@ export const createAdminRouter = ({ rootDirectory = process.cwd() } = {}) => {
       }
 
       if (context.path === normalizedBasePath || context.path === `${normalizedBasePath}/`) {
-        return () => toHtmlResponse(shell);
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(shell));
       }
 
       if (context.path.startsWith(`${normalizedBasePath}/`)) {
@@ -225,7 +247,7 @@ export const createAdminRouter = ({ rootDirectory = process.cwd() } = {}) => {
           return () => assetResponse;
         }
 
-        return () => toHtmlResponse(shell);
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(shell));
       }
 
       return null;
