@@ -148,7 +148,7 @@ const withAdminMiddleware = (runtime, context, handler: () => Promise<unknown> |
     async () => {
       output = await Promise.resolve(handler());
     }
-  ).then(() => output);
+  ).then(() => output ?? middlewareContext.state.response ?? null);
 };
 export const createAdminContentRouter = (runtime) => {
   const service = createContentAdminService(runtime);

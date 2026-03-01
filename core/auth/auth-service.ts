@@ -1,6 +1,15 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { promisify } from 'node:util';
 import { issueToken, verifyToken } from './token.ts';
 import { SessionStore } from './session-store.ts';
+
+const scryptAsync = promisify(crypto.scrypt);
+const USERS_FILE_PATH = path.resolve('/data/system/users.json');
+const SCRYPT_PREFIX = 'scrypt';
+
+type PasswordUser = Readonly<{ id: string, email: string, passwordHash: string, createdAt: string }>;
 
 type AuthUser = Readonly<{ id: string, username: string, passwordHash: string, createdAt: string }>;
 type AuthSession = Readonly<{ token: string, userId: string, issuedAt: string, expiresAt: string }>;
@@ -128,3 +137,128 @@ export class AuthService {
     this.onStateChange(this.snapshot());
   }
 }
+
+const ensureParentDirectory = async (filePath: string) => {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+};
+
+const safeParseUsers = (raw: string): PasswordUser[] => {
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .filter((entry) => entry && typeof entry === 'object')
+      .map((entry) => {
+        const record = entry as Record<string, unknown>;
+        return Object.freeze({
+          id: `${record.id ?? ''}`,
+          email: `${record.email ?? ''}`,
+          passwordHash: `${record.passwordHash ?? ''}`,
+          createdAt: `${record.createdAt ?? ''}`
+        });
+      })
+      .filter((entry) => entry.id && entry.email && entry.passwordHash && entry.createdAt);
+  } catch {
+    return [];
+  }
+};
+
+const readUsers = async (): Promise<PasswordUser[]> => {
+  try {
+    const raw = await fs.readFile(USERS_FILE_PATH, 'utf8');
+    return safeParseUsers(raw);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+      return [];
+    }
+
+    throw error;
+  }
+};
+
+const writeUsers = async (users: PasswordUser[]) => {
+  await ensureParentDirectory(USERS_FILE_PATH);
+  await fs.writeFile(USERS_FILE_PATH, `${JSON.stringify(users, null, 2)}\n`, 'utf8');
+};
+
+const deriveScryptHash = async (password: string, salt: string) => {
+  const derived = await scryptAsync(password, salt, 64) as Buffer;
+  return `${SCRYPT_PREFIX}$${salt}$${derived.toString('hex')}`;
+};
+
+export const createAuthService = (runtime) => {
+  const now = () => runtime?.clock?.() ?? new Date().toISOString();
+
+  const findUserByEmail = async (email: string) => {
+    const normalized = `${email ?? ''}`.trim().toLowerCase();
+    if (!normalized) {
+      return null;
+    }
+
+    const users = await readUsers();
+    return users.find((entry) => entry.email.toLowerCase() === normalized) ?? null;
+  };
+
+
+  const findUserById = async (id: string) => {
+    const normalized = `${id ?? ''}`.trim();
+    if (!normalized) {
+      return null;
+    }
+
+    const users = await readUsers();
+    return users.find((entry) => entry.id === normalized) ?? null;
+  };
+
+  const createUser = async (email: string, password: string) => {
+    const normalized = `${email ?? ''}`.trim().toLowerCase();
+    if (!normalized) {
+      throw new Error('Email is required');
+    }
+
+    const users = await readUsers();
+    if (users.some((entry) => entry.email.toLowerCase() === normalized)) {
+      throw new Error('User already exists');
+    }
+
+    const salt = crypto.randomBytes(16).toString('hex');
+    const passwordHash = await deriveScryptHash(`${password ?? ''}`, salt);
+    const user = Object.freeze({
+      id: crypto.randomUUID(),
+      email: normalized,
+      passwordHash,
+      createdAt: now()
+    });
+
+    await writeUsers([...users, user]);
+    return user;
+  };
+
+  const verifyPassword = async (password: string, hash: string) => {
+    const [prefix, salt, storedHex] = `${hash ?? ''}`.split('$');
+    if (prefix !== SCRYPT_PREFIX || !salt || !storedHex) {
+      return false;
+    }
+
+    const expected = await deriveScryptHash(`${password ?? ''}`, salt);
+    const [, , computedHex] = expected.split('$');
+    const stored = Buffer.from(storedHex, 'hex');
+    const computed = Buffer.from(`${computedHex ?? ''}`, 'hex');
+
+    if (stored.byteLength === 0 || computed.byteLength === 0 || stored.byteLength !== computed.byteLength) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(stored, computed);
+  };
+
+  return Object.freeze({
+    createUser,
+    findUserByEmail,
+    findUserById,
+    verifyPassword
+  });
+};

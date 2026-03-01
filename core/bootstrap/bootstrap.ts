@@ -3,6 +3,9 @@ import { createRuntime } from './runtime-factory.ts';
 import { BootstrapSnapshot } from './bootstrap-snapshot.ts';
 import { FileSystemStorageAdapter, PersistenceEngine } from '../persistence/index.ts';
 import { AuthService, SessionStore, createAuthMiddleware } from '../auth/index.ts';
+import { createAuthService } from '../auth/auth-service.ts';
+import { createSessionService } from '../auth/session-service.ts';
+import { createAdminAuthMiddleware } from '../auth/admin-auth-middleware.ts';
 import { CommandDispatcher, createAdminController } from '../admin/index.ts';
 import { registerAdminPage, getAdminPages } from '../admin/admin-registry.ts';
 import { registerAdminTheme, getAdminTheme, getDefaultAdminTheme } from '../admin/admin-theme-registry.ts';
@@ -219,6 +222,12 @@ export const createBootstrap = async ({
     await next();
   };
   middlewareRegistry.use(adminContextMiddleware);
+
+  runtime.auth = createAuthService(runtime);
+  runtime.sessions = createSessionService(runtime);
+  const adminAuthMiddleware = createAdminAuthMiddleware(runtime);
+  middlewareRegistry.use(adminAuthMiddleware);
+
   runtime.admin = Object.freeze({
     basePath: runtime.adminBasePath,
     title: runtime?.getConfig?.()?.admin?.title ?? 'Nimb Admin',
@@ -312,6 +321,13 @@ export const createBootstrap = async ({
     deleteEntry: async (typeSlug: string, id: string) => runtime.contentCommand.delete(typeSlug, id),
     invalidateRenderCache: () => runtime.renderCache?.invalidate?.()
   });
+
+
+  const defaultAdminEmail = 'admin@nimb.local';
+  const existingAdmin = await runtime.auth.findUserByEmail(defaultAdminEmail);
+  if (!existingAdmin) {
+    await runtime.auth.createUser(defaultAdminEmail, 'admin');
+  }
 
 
   const restore = async () => {

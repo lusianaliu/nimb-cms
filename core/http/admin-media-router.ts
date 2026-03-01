@@ -122,7 +122,7 @@ const withAdminMiddleware = (runtime, context, handler: () => Promise<unknown> |
     async () => {
       output = await Promise.resolve(handler());
     }
-  ).then(() => output);
+  ).then(() => output ?? middlewareContext.state.response ?? null);
 };
 export const createAdminMediaRouter = (runtime) => {
   const router = createRouter([

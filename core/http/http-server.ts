@@ -18,6 +18,7 @@ import { createAdminRouter } from './admin-router.ts';
 import { createAdminApiRouter } from './admin-api-router.ts';
 import { createAdminContentRouter } from './admin-content-router.ts';
 import { createAdminMediaRouter } from './admin-media-router.ts';
+import { createAdminAuthRouter } from './admin-auth-router.ts';
 
 const resolvePublicRoot = ({ runtime, rootDirectory }) => {
   const projectRoot = runtime?.projectPaths?.projectRoot ?? runtime?.project?.projectRoot;
@@ -90,10 +91,13 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
   const installRouter = createInstallRouter(runtime);
   const siteRouter = !installMode && runtime?.mode === 'runtime' ? createSiteRouter(runtime) : null;
   const adminRouter = !installMode && runtime?.mode === 'runtime'
-    ? createAdminRouter({ rootDirectory })
+    ? createAdminRouter({ rootDirectory, runtime })
     : null;
   const adminApiRouter = !installMode && runtime?.mode === 'runtime'
     ? createAdminApiRouter(runtime)
+    : null;
+  const adminAuthRouter = !installMode && runtime?.mode === 'runtime'
+    ? createAdminAuthRouter(runtime)
     : null;
   const adminContentRouter = !installMode && runtime?.mode === 'runtime'
     ? createAdminContentRouter(runtime)
@@ -114,6 +118,7 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
 
     Promise.resolve()
       .then(async () => {
+        const routeContext = { ...context, response };
         if (!installMode) {
           const gateResponse = await gateRequest(context, () => null);
           if (gateResponse) {
@@ -139,57 +144,67 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
           }
 
           if (context.method === 'POST') {
-            (await handleInstall(context.request, runtime)).send(response);
+            (await handleInstall(routeContext.request, runtime)).send(response);
+            return;
+          }
+        }
+
+
+        if (adminAuthRouter) {
+          const adminAuthHandler = adminAuthRouter.dispatch(routeContext);
+          if (adminAuthHandler) {
+            const adminAuthResponse = await Promise.resolve(adminAuthHandler(routeContext));
+            adminAuthResponse.send(response);
             return;
           }
         }
 
         if (adminContentRouter) {
-          const adminContentHandler = adminContentRouter.dispatch(context);
+          const adminContentHandler = adminContentRouter.dispatch(routeContext);
           if (adminContentHandler) {
-            const adminContentResponse = await Promise.resolve(adminContentHandler(context));
+            const adminContentResponse = await Promise.resolve(adminContentHandler(routeContext));
             adminContentResponse.send(response);
             return;
           }
         }
 
         if (adminMediaRouter) {
-          const adminMediaHandler = adminMediaRouter.dispatch(context);
+          const adminMediaHandler = adminMediaRouter.dispatch(routeContext);
           if (adminMediaHandler) {
-            const adminMediaResponse = await Promise.resolve(adminMediaHandler(context));
+            const adminMediaResponse = await Promise.resolve(adminMediaHandler(routeContext));
             adminMediaResponse.send(response);
             return;
           }
         }
 
         if (adminRouter) {
-          const adminHandler = adminRouter.dispatch(context);
+          const adminHandler = adminRouter.dispatch(routeContext);
           if (adminHandler) {
-            const adminResponse = await Promise.resolve(adminHandler(context));
+            const adminResponse = await Promise.resolve(adminHandler(routeContext));
             adminResponse.send(response);
             return;
           }
         }
 
         if (adminApiRouter) {
-          const adminApiHandler = adminApiRouter.dispatch(context);
+          const adminApiHandler = adminApiRouter.dispatch(routeContext);
           if (adminApiHandler) {
-            const adminApiResponse = await Promise.resolve(adminApiHandler(context));
+            const adminApiResponse = await Promise.resolve(adminApiHandler(routeContext));
             adminApiResponse.send(response);
             return;
           }
         }
 
         if (siteRouter) {
-          const siteHandler = siteRouter.dispatch(context);
+          const siteHandler = siteRouter.dispatch(routeContext);
           if (siteHandler) {
-            const siteResponse = await Promise.resolve(siteHandler(context));
+            const siteResponse = await Promise.resolve(siteHandler(routeContext));
             siteResponse.send(response);
             return;
           }
         }
 
-        const apiResponse = await apiRouter.handle(context);
+        const apiResponse = await apiRouter.handle(routeContext);
         if (apiResponse) {
           apiResponse.send(response);
           return;
@@ -203,14 +218,14 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
           return;
         }
 
-        const handler = router.dispatch(context);
+        const handler = router.dispatch(routeContext);
 
         if (!handler) {
           notFoundResponse({ path: context.path, timestamp: context.timestamp }).send(response);
           return;
         }
 
-        const routeResponse = await Promise.resolve(handler(context));
+        const routeResponse = await Promise.resolve(handler(routeContext));
         routeResponse.send(response);
       })
       .catch((error) => {
