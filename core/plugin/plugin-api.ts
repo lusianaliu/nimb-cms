@@ -6,6 +6,11 @@ export interface ScopedRuntime {
       register: (item: { id: string; label: string; path: string; order?: number; capability?: string }) => void
       list: () => Array<{ id: string; label: string; path: string; order?: number; capability?: string }>
     }
+
+    middleware: {
+      use: (middleware: import('../http/middleware.ts').Middleware) => void
+      list: () => import('../http/middleware.ts').Middleware[]
+    }
   }
   events: {
     on: (eventName: string, handler: (payload: unknown, context: { pluginId: string; timestamp: string }) => unknown) => () => void
