@@ -118,6 +118,6 @@ test('phase 97: plugin runtime surface is restricted to public contract', async 
     phase97RuntimeSurface?: { keys?: string[]; hasCreateScopedRuntime?: boolean };
   }).phase97RuntimeSurface;
 
-  assert.deepEqual(result?.keys, ['capabilities', 'events', 'hooks', 'plugins', 'settings']);
+  assert.deepEqual(result?.keys, ['admin', 'capabilities', 'events', 'hooks', 'plugins', 'settings']);
   assert.equal(result?.hasCreateScopedRuntime, false);
 });

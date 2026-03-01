@@ -86,7 +86,7 @@ test('phase 100: admin content routes render inside shell with active navigation
       assert.equal(postListResponse.status, 200);
       const postListHtml = await postListResponse.text();
       assert.equal(postListHtml.includes('<h1>post entries</h1>'), true);
-      assert.equal(postListHtml.includes('<a href="/admin/content/post" aria-current="page" class="is-active">Posts</a>'), true);
+      assert.equal(postListHtml.includes('<a href="/admin/content/page" aria-current="page" class="is-active">Content</a>'), true);
 
       const adminFallbackResponse = await fetch(`http://127.0.0.1:${port}/admin/content/page/does-not-exist`, {
         headers: { 'x-nimb-capabilities': 'content.write' }

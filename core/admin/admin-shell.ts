@@ -3,6 +3,7 @@ import { renderAdminNav } from './admin-nav.ts';
 
 export type AdminShellContext = {
   title: string
+  runtime?: Record<string, unknown>
   activeNav?: string
   content: string
 };
@@ -49,7 +50,7 @@ export function renderAdminShell(ctx: AdminShellContext): string {
   </style>
 </head>
 <body>
-  ${renderAdminLayout(renderAdminNav(ctx.activeNav), ctx.content)}
+  ${renderAdminLayout(renderAdminNav(ctx.runtime, ctx.activeNav), ctx.content)}
 </body>
 </html>`;
 }

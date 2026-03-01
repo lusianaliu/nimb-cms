@@ -5,19 +5,28 @@ const escapeHtml = (value: unknown) => `${value ?? ''}`
   .replaceAll('"', '&quot;')
   .replaceAll("'", '&#39;');
 
-const NAV_ITEMS = Object.freeze([
-  { id: 'dashboard', label: 'Dashboard', href: '/admin' },
-  { id: 'content', label: 'Content', href: '/admin/content/page' },
-  { id: 'posts', label: 'Posts', href: '/admin/content/post' },
-  { id: 'media', label: 'Media', href: '/admin/media' }
-]);
+const hasCapability = (runtime, capability: string) => {
+  const checker = runtime?.auth?.hasCapability;
+  if (typeof checker !== 'function') {
+    return true;
+  }
 
-export function renderAdminNav(active?: string): string {
-  const items = NAV_ITEMS.map((item) => {
+  return checker(capability) !== false;
+};
+
+export function renderAdminNav(runtime, active?: string): string {
+  const items = (runtime?.admin?.navRegistry?.list?.() ?? []).filter((item) => {
+    const capability = `${item?.capability ?? ''}`.trim();
+    if (!capability) {
+      return true;
+    }
+
+    return hasCapability(runtime, capability);
+  }).map((item) => {
     const isActive = item.id === `${active ?? ''}`;
     const activeAttr = isActive ? ' aria-current="page" class="is-active"' : '';
 
-    return `<li><a href="${item.href}"${activeAttr}>${escapeHtml(item.label)}</a></li>`;
+    return `<li><a href="${escapeHtml(item.path)}"${activeAttr}>${escapeHtml(item.label)}</a></li>`;
   }).join('');
 
   return `<nav class="admin-nav" aria-label="Admin Navigation"><ul>${items}</ul></nav>`;
