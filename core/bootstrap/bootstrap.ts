@@ -269,6 +269,18 @@ export const createBootstrap = async ({
 
   runtime.persistContentSnapshot = persistContentSnapshot;
   runtime.contentCommand = new ContentCommandService(runtime.contentStore, runtime.persistContentSnapshot, runtime.eventBus, runtime.hooks);
+  runtime.renderCache = Object.freeze({
+    invalidate: () => undefined
+  });
+  runtime.content = Object.freeze({
+    listEntries: (typeSlug: string) => runtime.contentQuery.list(typeSlug),
+    getEntry: (typeSlug: string, id: string) => runtime.contentQuery.get(typeSlug, id),
+    getTypeSchema: (typeSlug: string) => runtime.contentTypes.get(typeSlug),
+    createEntry: async (typeSlug: string, data: Record<string, unknown>) => runtime.contentCommand.create(typeSlug, data),
+    updateEntry: async (typeSlug: string, id: string, data: Record<string, unknown>) => runtime.contentCommand.update(typeSlug, id, data),
+    deleteEntry: async (typeSlug: string, id: string) => runtime.contentCommand.delete(typeSlug, id),
+    invalidateRenderCache: () => runtime.renderCache?.invalidate?.()
+  });
 
 
   const restore = async () => {

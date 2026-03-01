@@ -16,6 +16,7 @@ import { createInstallRouter } from '../install/install-router.ts';
 import { createSiteRouter } from './site-router.ts';
 import { createAdminRouter } from './admin-router.ts';
 import { createAdminApiRouter } from './admin-api-router.ts';
+import { createAdminContentRouter } from './admin-content-router.ts';
 
 const resolvePublicRoot = ({ runtime, rootDirectory }) => {
   const projectRoot = runtime?.projectPaths?.projectRoot ?? runtime?.project?.projectRoot;
@@ -68,6 +69,9 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
   const adminApiRouter = !installMode && runtime?.mode === 'runtime'
     ? createAdminApiRouter(runtime)
     : null;
+  const adminContentRouter = !installMode && runtime?.mode === 'runtime'
+    ? createAdminContentRouter(runtime)
+    : null;
   const router = installMode ? installRouter : runtimeRouter;
   const apiRouter = installMode
     ? { handle: async () => null }
@@ -106,6 +110,15 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
 
           if (context.method === 'POST') {
             (await handleInstall(context.request, runtime)).send(response);
+            return;
+          }
+        }
+
+        if (adminContentRouter) {
+          const adminContentHandler = adminContentRouter.dispatch(context);
+          if (adminContentHandler) {
+            const adminContentResponse = await Promise.resolve(adminContentHandler(context));
+            adminContentResponse.send(response);
             return;
           }
         }
