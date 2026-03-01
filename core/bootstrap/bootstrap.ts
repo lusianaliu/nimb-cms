@@ -31,6 +31,7 @@ import { createSettingsModule } from '../system/settings.ts';
 import { createMediaService } from '../media/media-service.ts';
 import type { Capability } from '../runtime/capabilities.ts';
 import type { ScopedRuntime } from '../plugin/plugin-api.ts';
+import { getInstallState } from '../system/system-config.ts';
 
 
 const CONTENT_TYPES_STORAGE_KEY = 'content-types';
@@ -212,6 +213,11 @@ export const createBootstrap = async ({
   runtime.projectPaths = resolvedPaths;
   runtime.project = resolvedPaths;
   runtime.version = version;
+  const installState = getInstallState({ projectRoot: resolvedPaths.projectRoot, runtimeVersion: runtime.version });
+  runtime.system = Object.freeze({
+    config: installState.config,
+    installed: installState.installed
+  });
   runtime.setRuntimeMode?.(runtimeMode);
   runtime.setConfig?.(config);
   runtime.adminBasePath = resolveAdminBasePath(runtime);

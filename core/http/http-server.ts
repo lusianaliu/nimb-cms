@@ -9,7 +9,7 @@ import { createInspectorRoute } from './routes/inspector.ts';
 import { registerContentApiRoutes } from './routes/content-api.ts';
 import { createApiRouter } from '../api/index.ts';
 import { errorResponse, notFoundResponse } from './response.ts';
-import { installerGate } from './installer-gate.ts';
+import { installGuardMiddleware } from './install-guard-middleware.ts';
 import { handleInstall } from '../installer/install-controller.ts';
 import { renderInstallPage } from '../installer/install-page.ts';
 import { createInstallRouter } from '../install/install-router.ts';
@@ -109,7 +109,7 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
   const apiRouter = installMode
     ? { handle: async () => null }
     : createApiRouter({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries });
-  const gateRequest = installerGate(runtime);
+  const guardRequest = installGuardMiddleware(runtime);
   const publicRoot = resolvePublicRoot({ runtime, rootDirectory });
   const uploadsRoot = '/data/uploads';
 
@@ -120,16 +120,16 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
       .then(async () => {
         const routeContext = { ...context, response };
         if (!installMode) {
-          const gateResponse = await gateRequest(context, () => null);
-          if (gateResponse) {
-            gateResponse.send(response);
+          const guardResponse = await guardRequest(context, () => null);
+          if (guardResponse) {
+            guardResponse.send(response);
             return;
           }
         }
 
         if (!installMode && context.path === '/install') {
           if (context.method === 'GET') {
-            if (runtime?.getRuntimeMode?.() !== 'installer') {
+            if (runtime?.system?.installed === true && runtime?.getRuntimeMode?.() !== 'installer') {
               notFoundResponse({ path: context.path, timestamp: context.timestamp }).send(response);
               return;
             }
