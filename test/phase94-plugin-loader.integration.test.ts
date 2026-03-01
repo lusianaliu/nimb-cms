@@ -41,15 +41,16 @@ test('phase 94: plugin manifest loader validates manifests, scopes runtime and p
       name: 'Valid Plugin',
       version: '1.0.0',
       entry: 'index.ts',
+      apiVersion: '^1.0.0',
       capabilities: ['settings.read']
     },
     `
-      export default function register(runtime) {
+      export default function register(api) {
         globalThis.phase94 = globalThis.phase94 ?? { executions: 0 };
         globalThis.phase94.executions += 1;
-        globalThis.phase94.hasSettings = Boolean(runtime?.settings);
-        globalThis.phase94.hasHooks = Boolean(runtime?.hooks);
-        globalThis.phase94.capabilities = runtime?.capabilities ?? [];
+        globalThis.phase94.hasSettings = Boolean(api?.runtime?.settings);
+        globalThis.phase94.hasHooks = Boolean(api?.runtime?.hooks);
+        globalThis.phase94.capabilities = api?.runtime?.capabilities ?? [];
       }
     `
   );
@@ -79,7 +80,7 @@ test('phase 94: plugin manifest loader validates manifests, scopes runtime and p
 
   assert.equal(phase94?.executions, 1);
   assert.equal(phase94?.hasSettings, true);
-  assert.equal(phase94?.hasHooks, false);
+  assert.equal(phase94?.hasHooks, true);
   assert.deepEqual(phase94?.capabilities, ['settings.read']);
   assert.equal((globalThis as { phase94InvalidWasLoaded?: boolean }).phase94InvalidWasLoaded, undefined);
 
@@ -89,6 +90,7 @@ test('phase 94: plugin manifest loader validates manifests, scopes runtime and p
     id: 'valid-plugin',
     name: 'Valid Plugin',
     version: '1.0.0',
+    apiVersion: '^1.0.0',
     capabilities: ['settings.read'],
     entry: path.join(cwd, 'plugins', 'valid-plugin', 'index.ts')
   });

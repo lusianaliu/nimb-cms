@@ -29,6 +29,7 @@ const writePlugin = (cwd: string, pluginId: string, source: string, capabilities
     name: pluginId,
     version: '1.0.0',
     entry: 'index.ts',
+    apiVersion: '^1.0.0',
     capabilities
   }, null, 2)}\n`);
   fs.writeFileSync(path.join(directory, 'index.ts'), source);
@@ -40,8 +41,8 @@ test('phase 96: hooks execute in order with async chained transformations', asyn
   writeInstallState(cwd);
 
   writePlugin(cwd, 'hook-a', `
-    export default function register(runtime) {
-      runtime.hooks.register('content.create.transform', async (value) => {
+    export default function register(api) {
+      api.runtime.hooks.register('content.create.transform', async (value) => {
         await new Promise((resolve) => setTimeout(resolve, 20));
         globalThis.phase96Order = [...(globalThis.phase96Order ?? []), 'a'];
         return { ...value, title: String(value.title) + ' A' };
@@ -50,8 +51,8 @@ test('phase 96: hooks execute in order with async chained transformations', asyn
   `);
 
   writePlugin(cwd, 'hook-b', `
-    export default function register(runtime) {
-      runtime.hooks.register('content.create.transform', async (value) => {
+    export default function register(api) {
+      api.runtime.hooks.register('content.create.transform', async (value) => {
         globalThis.phase96Order = [...(globalThis.phase96Order ?? []), 'b'];
         return { ...value, slug: String(value.title).toLowerCase().replace(/\\s+/g, '-') };
       });
@@ -73,8 +74,8 @@ test('phase 96: hook execution errors are isolated with descriptive messages', a
   writeInstallState(cwd);
 
   writePlugin(cwd, 'broken-transform', `
-    export default function register(runtime) {
-      runtime.hooks.register('content.create.transform', async () => {
+    export default function register(api) {
+      api.runtime.hooks.register('content.create.transform', async () => {
         throw new Error('transform failed');
       });
     }
@@ -94,8 +95,8 @@ test('phase 96: invalid hook names are rejected', async () => {
   writeInstallState(cwd);
 
   writePlugin(cwd, 'invalid-name', `
-    export default function register(runtime) {
-      runtime.hooks.register('content.create', async (value) => value);
+    export default function register(api) {
+      api.runtime.hooks.register('content.create', async (value) => value);
     }
   `);
 
@@ -112,8 +113,8 @@ test('phase 96: plugins cannot register hooks outside allowed domains', async ()
     cwd,
     'settings-plugin',
     `
-      export default function register(runtime) {
-        runtime.hooks.register('content.create.transform', async (value) => value);
+      export default function register(api) {
+        api.runtime.hooks.register('content.create.transform', async (value) => value);
       }
     `,
     ['settings.write']

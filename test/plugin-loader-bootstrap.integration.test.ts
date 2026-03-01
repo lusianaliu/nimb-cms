@@ -33,14 +33,15 @@ test('bootstrap loads manifest-driven plugins and registers metadata', async () 
     name: 'Sample',
     version: '1.0.0',
     entry: 'index.ts',
+    apiVersion: '^1.0.0',
     capabilities: ['settings.read']
   }, null, 2)}\n`);
   fs.writeFileSync(path.join(pluginsDirectory, 'index.ts'), `
-    export default function register(runtime) {
+    export default function register(api) {
       globalThis.pluginLoaderBootstrap = {
-        capabilities: runtime.capabilities,
-        canReadSettings: Boolean(runtime.settings),
-        hasHooks: Boolean(runtime.hooks)
+        capabilities: api.runtime.capabilities,
+        canReadSettings: Boolean(api.runtime.settings),
+        hasHooks: Boolean(api.runtime.hooks)
       };
     }
   `);
@@ -50,13 +51,14 @@ test('bootstrap loads manifest-driven plugins and registers metadata', async () 
   assert.deepEqual((globalThis as { pluginLoaderBootstrap?: unknown }).pluginLoaderBootstrap, {
     capabilities: ['settings.read'],
     canReadSettings: true,
-    hasHooks: false
+    hasHooks: true
   });
 
   assert.deepEqual(bootstrap.runtime.plugins.list(), [{
     id: 'sample',
     name: 'Sample',
     version: '1.0.0',
+    apiVersion: '^1.0.0',
     capabilities: ['settings.read'],
     entry: path.join(cwd, 'plugins', 'sample', 'index.ts')
   }]);
