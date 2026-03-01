@@ -6,6 +6,7 @@ import { AuthService, SessionStore, createAuthMiddleware } from '../auth/index.t
 import { CommandDispatcher, createAdminController } from '../admin/index.ts';
 import { registerAdminPage, getAdminPages } from '../admin/admin-registry.ts';
 import { registerAdminTheme, getAdminTheme, getDefaultAdminTheme } from '../admin/admin-theme-registry.ts';
+import { createAdminNavRegistry } from '../admin/admin-nav-registry.ts';
 import { createDefaultAdminTheme } from '../admin/themes/default-theme.ts';
 import { ContentRegistry, ContentStore, ContentQueryService, ContentCommandService, EntryRegistry, ContentTypeRegistry, type ContentEvents } from '../content/index.ts';
 import { createProjectModel, createProjectPaths } from '../project/index.ts';
@@ -73,6 +74,9 @@ const createScopedRuntime = (runtime, pluginId: string, capabilities: Capability
 
   return Object.freeze({
     capabilities: grantedCapabilities,
+    admin: Object.freeze({
+      navRegistry: runtime.admin?.navRegistry
+    }),
     settings: createSettingsModule(runtime, { requireCapability }),
     hooks: Object.freeze({
       register: (hookName: string, handler: (value: unknown, context: Record<string, unknown>) => unknown | Promise<unknown>) => {
@@ -205,9 +209,23 @@ export const createBootstrap = async ({
   runtime.setRuntimeMode?.(runtimeMode);
   runtime.setConfig?.(config);
   runtime.adminBasePath = resolveAdminBasePath(runtime);
+  const navRegistry = createAdminNavRegistry();
   runtime.admin = Object.freeze({
     basePath: runtime.adminBasePath,
-    title: runtime?.getConfig?.()?.admin?.title ?? 'Nimb Admin'
+    title: runtime?.getConfig?.()?.admin?.title ?? 'Nimb Admin',
+    navRegistry
+  });
+  navRegistry.register({
+    id: 'content',
+    label: 'Content',
+    path: '/admin/content/page',
+    order: 10
+  });
+  navRegistry.register({
+    id: 'media',
+    label: 'Media',
+    path: '/admin/media',
+    order: 20
   });
   runtime.adminApi = Object.freeze({
     basePath: '/admin-api'
@@ -337,6 +355,10 @@ export const createBootstrap = async ({
   if (shouldLoadPlugins) {
     await loadPlugins(runtime, { pluginsDirectory: resolvedPaths.pluginsDir });
   }
+
+  await runtime.events.emit('admin.nav.register', Object.freeze({
+    navRegistry: runtime.admin.navRegistry
+  }));
 
   const dispatcher = new CommandDispatcher({
     executor: {

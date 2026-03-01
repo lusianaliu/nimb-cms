@@ -142,7 +142,8 @@ export const createAdminContentRouter = (runtime) => {
         const entries = service.listEntries(type);
         return toHtmlResponse(renderAdminShell({
           title: `Content · ${runtime?.admin?.title ?? 'Nimb Admin'}`,
-          activeNav: type === 'post' ? 'posts' : 'content',
+          runtime,
+          activeNav: 'content',
           content: renderContentList({ type, entries })
         }));
       }
@@ -159,7 +160,8 @@ export const createAdminContentRouter = (runtime) => {
         const schema = runtime.content.getTypeSchema(type);
         return toHtmlResponse(renderAdminShell({
           title: `Create ${type} · ${runtime?.admin?.title ?? 'Nimb Admin'}`,
-          activeNav: type === 'post' ? 'posts' : 'content',
+          runtime,
+          activeNav: 'content',
           content: renderContentForm({ type, schema, entry: null, mode: 'new' })
         }));
       }
@@ -181,7 +183,8 @@ export const createAdminContentRouter = (runtime) => {
         const schema = runtime.content.getTypeSchema(type);
         return toHtmlResponse(renderAdminShell({
           title: `Edit ${type} · ${runtime?.admin?.title ?? 'Nimb Admin'}`,
-          activeNav: type === 'post' ? 'posts' : 'content',
+          runtime,
+          activeNav: 'content',
           content: renderContentForm({ type, schema, entry, mode: 'edit' })
         }));
       }

@@ -110,6 +110,7 @@ export const createAdminMediaRouter = (runtime) => {
         const media = await runtime.media.list();
         return toHtmlResponse(renderAdminShell({
           title: `Media · ${runtime?.admin?.title ?? 'Nimb Admin'}`,
+          runtime,
           activeNav: 'media',
           content: renderMediaList({ media })
         }));
@@ -120,6 +121,7 @@ export const createAdminMediaRouter = (runtime) => {
       path: '/admin/media/upload',
       handler: () => toHtmlResponse(renderAdminShell({
         title: `Upload media · ${runtime?.admin?.title ?? 'Nimb Admin'}`,
+        runtime,
         activeNav: 'media',
         content: renderMediaUpload()
       }))
