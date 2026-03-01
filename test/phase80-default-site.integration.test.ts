@@ -75,8 +75,8 @@ test('phase 80: runtime mode serves default HTML site at root', async () => {
       const html = await response.text();
       assert.equal(html.includes('<!doctype html>'), true);
       assert.equal(html.includes('My Nimb Site'), true);
-      assert.equal(html.includes('Welcome to Nimb'), true);
-      assert.equal(html.includes('Your site is ready. Start creating content.'), true);
+      assert.equal(html.includes('Welcome to My Nimb Site'), true);
+      assert.equal(html.includes('A site powered by Nimb'), true);
     } finally {
       await server.stop();
     }
