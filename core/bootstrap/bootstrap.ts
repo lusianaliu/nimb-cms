@@ -22,6 +22,7 @@ import { isInstalled } from '../setup/setup-state.ts';
 import { seedSystem } from '../setup/system-seed.ts';
 import { createThemeManager } from '../theme/theme-manager.ts';
 import { createSettingsModule } from '../system/settings.ts';
+import { createMediaService } from '../media/media-service.ts';
 import type { Capability } from '../runtime/capabilities.ts';
 import type { ScopedRuntime } from '../plugin/plugin-api.ts';
 
@@ -273,6 +274,7 @@ export const createBootstrap = async ({
   runtime.renderCache = Object.freeze({
     invalidate: () => undefined
   });
+  runtime.media = createMediaService(runtime);
   runtime.content = Object.freeze({
     listEntries: (typeSlug: string) => runtime.contentQuery.list(typeSlug),
     getEntry: (typeSlug: string, id: string) => runtime.contentQuery.get(typeSlug, id),

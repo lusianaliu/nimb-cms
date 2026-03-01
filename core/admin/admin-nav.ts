@@ -8,7 +8,8 @@ const escapeHtml = (value: unknown) => `${value ?? ''}`
 const NAV_ITEMS = Object.freeze([
   { id: 'dashboard', label: 'Dashboard', href: '/admin' },
   { id: 'content', label: 'Content', href: '/admin/content/page' },
-  { id: 'posts', label: 'Posts', href: '/admin/content/post' }
+  { id: 'posts', label: 'Posts', href: '/admin/content/post' },
+  { id: 'media', label: 'Media', href: '/admin/media' }
 ]);
 
 export function renderAdminNav(active?: string): string {

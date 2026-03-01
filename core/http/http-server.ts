@@ -17,6 +17,7 @@ import { createSiteRouter } from './site-router.ts';
 import { createAdminRouter } from './admin-router.ts';
 import { createAdminApiRouter } from './admin-api-router.ts';
 import { createAdminContentRouter } from './admin-content-router.ts';
+import { createAdminMediaRouter } from './admin-media-router.ts';
 
 const resolvePublicRoot = ({ runtime, rootDirectory }) => {
   const projectRoot = runtime?.projectPaths?.projectRoot ?? runtime?.project?.projectRoot;
@@ -28,6 +29,31 @@ const resolvePublicRoot = ({ runtime, rootDirectory }) => {
 
   const baseRoot = typeof projectRoot === 'string' && projectRoot.trim() !== '' ? projectRoot : rootDirectory;
   return path.resolve(baseRoot, 'public');
+};
+
+const trySendUploadsAsset = (response, requestPath, uploadsRoot) => {
+  if (!requestPath.startsWith('/uploads/')) {
+    return false;
+  }
+
+  const relativePath = requestPath.replace(/^\/+uploads\//, '');
+  const absolutePath = path.resolve(uploadsRoot, relativePath);
+
+  if (absolutePath !== uploadsRoot && !absolutePath.startsWith(`${uploadsRoot}${path.sep}`)) {
+    return false;
+  }
+
+  if (!fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
+    return false;
+  }
+
+  const body = fs.readFileSync(absolutePath);
+  response.writeHead(200, {
+    'content-length': body.byteLength,
+    'content-type': 'application/octet-stream'
+  });
+  response.end(body);
+  return true;
 };
 
 const trySendPublicIndex = (response, requestPath, publicRoot) => {
@@ -72,12 +98,16 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
   const adminContentRouter = !installMode && runtime?.mode === 'runtime'
     ? createAdminContentRouter(runtime)
     : null;
+  const adminMediaRouter = !installMode && runtime?.mode === 'runtime'
+    ? createAdminMediaRouter(runtime)
+    : null;
   const router = installMode ? installRouter : runtimeRouter;
   const apiRouter = installMode
     ? { handle: async () => null }
     : createApiRouter({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries });
   const gateRequest = installerGate(runtime);
   const publicRoot = resolvePublicRoot({ runtime, rootDirectory });
+  const uploadsRoot = '/data/uploads';
 
   const server = http.createServer((request, response) => {
     const context = createRequestContext(request, { clock });
@@ -123,6 +153,15 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
           }
         }
 
+        if (adminMediaRouter) {
+          const adminMediaHandler = adminMediaRouter.dispatch(context);
+          if (adminMediaHandler) {
+            const adminMediaResponse = await Promise.resolve(adminMediaHandler(context));
+            adminMediaResponse.send(response);
+            return;
+          }
+        }
+
         if (adminRouter) {
           const adminHandler = adminRouter.dispatch(context);
           if (adminHandler) {
@@ -153,6 +192,10 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
         const apiResponse = await apiRouter.handle(context);
         if (apiResponse) {
           apiResponse.send(response);
+          return;
+        }
+
+        if (trySendUploadsAsset(response, context.path, uploadsRoot)) {
           return;
         }
 
