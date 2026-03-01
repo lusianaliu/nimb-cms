@@ -2,6 +2,7 @@ import { createRouter } from './router.ts';
 import { createContentAdminService } from '../admin/content-admin.ts';
 import { renderContentList } from '../admin/views/content-list.ts';
 import { renderContentForm } from '../admin/views/content-form.ts';
+import { renderAdminShell } from '../admin/admin-shell.ts';
 
 const SUPPORTED_TYPES = new Set(['page', 'post']);
 
@@ -139,7 +140,11 @@ export const createAdminContentRouter = (runtime) => {
         }
 
         const entries = service.listEntries(type);
-        return toHtmlResponse(renderContentList({ type, entries }));
+        return toHtmlResponse(renderAdminShell({
+          title: `Content · ${runtime?.admin?.title ?? 'Nimb Admin'}`,
+          activeNav: type === 'post' ? 'posts' : 'content',
+          content: renderContentList({ type, entries })
+        }));
       }
     },
     {
@@ -152,7 +157,11 @@ export const createAdminContentRouter = (runtime) => {
         }
 
         const schema = runtime.content.getTypeSchema(type);
-        return toHtmlResponse(renderContentForm({ type, schema, entry: null, mode: 'new' }));
+        return toHtmlResponse(renderAdminShell({
+          title: `Create ${type} · ${runtime?.admin?.title ?? 'Nimb Admin'}`,
+          activeNav: type === 'post' ? 'posts' : 'content',
+          content: renderContentForm({ type, schema, entry: null, mode: 'new' })
+        }));
       }
     },
     {
@@ -170,7 +179,11 @@ export const createAdminContentRouter = (runtime) => {
         }
 
         const schema = runtime.content.getTypeSchema(type);
-        return toHtmlResponse(renderContentForm({ type, schema, entry, mode: 'edit' }));
+        return toHtmlResponse(renderAdminShell({
+          title: `Edit ${type} · ${runtime?.admin?.title ?? 'Nimb Admin'}`,
+          activeNav: type === 'post' ? 'posts' : 'content',
+          content: renderContentForm({ type, schema, entry, mode: 'edit' })
+        }));
       }
     },
     {

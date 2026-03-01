@@ -67,7 +67,7 @@ test('phase 81: admin shell serves headless html and site root still works', asy
     const { bootstrap, server, port } = await createServer(cwd);
 
     try {
-      assert.deepEqual(bootstrap.runtime.admin, { basePath: '/admin' });
+      assert.deepEqual(bootstrap.runtime.admin, { basePath: '/admin', title: 'Nimb Admin' });
 
       const adminResponse = await fetch(`http://127.0.0.1:${port}/admin`);
       assert.equal(adminResponse.status, 200);

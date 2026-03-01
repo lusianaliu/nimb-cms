@@ -80,7 +80,8 @@ test('phase 32: missing config falls back to deterministic defaults', () => {
     admin: {
       enabled: true,
       basePath: '/admin',
-      staticDir: './ui/admin'
+      staticDir: './ui/admin',
+      title: 'Nimb Admin'
     }
   });
 });
