@@ -8,7 +8,7 @@ import { createRuntimeRoute } from './routes/runtime.ts';
 import { createInspectorRoute } from './routes/inspector.ts';
 import { registerContentApiRoutes } from './routes/content-api.ts';
 import { createApiRouter } from '../api/index.ts';
-import { errorResponse, notFoundResponse } from './response.ts';
+import { errorResponse, jsonResponse, notFoundResponse, redirectResponse } from './response.ts';
 import { installGuardMiddleware } from './install-guard-middleware.ts';
 import { handleInstall } from '../installer/install-controller.ts';
 import { renderInstallPage } from '../installer/install-page.ts';
@@ -129,8 +129,8 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
 
         if (!installMode && context.path === '/install') {
           if (context.method === 'GET') {
-            if (runtime?.system?.installed === true && runtime?.getRuntimeMode?.() !== 'installer') {
-              notFoundResponse({ path: context.path, timestamp: context.timestamp }).send(response);
+            if (runtime?.system?.installed === true) {
+              redirectResponse('/admin').send(response);
               return;
             }
 
@@ -144,7 +144,14 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
           }
 
           if (context.method === 'POST') {
-            (await handleInstall(routeContext.request, runtime)).send(response);
+            const installResult = await handleInstall(routeContext.request, runtime);
+
+            if (installResult?.success === true) {
+              redirectResponse('/admin/login').send(response);
+              return;
+            }
+
+            jsonResponse(installResult, { statusCode: installResult?.error?.code === 'ALREADY_INSTALLED' ? 409 : 500 }).send(response);
             return;
           }
         }

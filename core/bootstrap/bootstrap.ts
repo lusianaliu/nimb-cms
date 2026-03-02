@@ -25,7 +25,6 @@ import { EventEmitter, createEventBus } from '../events/event-bus.ts';
 import { HookRegistry } from '../hooks/index.ts';
 import { loadPlugins } from '../plugin/plugin-loader.ts';
 import type { BootstrapMode } from './bootstrap-mode.ts';
-import { isInstalled } from '../setup/setup-state.ts';
 import { seedSystem } from '../setup/system-seed.ts';
 import { createThemeManager } from '../theme/theme-manager.ts';
 import { createSettingsModule } from '../system/settings.ts';
@@ -202,9 +201,10 @@ export const createBootstrap = async ({
   contentStorageAdapter = undefined,
   mode
 }: CreateBootstrapOptions = {}) => {
-  const selectedMode = mode ?? (isInstalled() ? 'runtime' : 'install');
   const resolvedProject = cwd ? createProjectModel({ projectRoot: cwd }) : project;
   const resolvedPaths = createProjectPaths(resolvedProject.projectRoot ?? resolvedProject.root);
+  const installState = getInstallState({ projectRoot: resolvedPaths.projectRoot, runtimeVersion: version });
+  const selectedMode = mode ?? (installState.installed === true ? 'runtime' : 'install');
   const config = loadConfig({ cwd: resolvedPaths.projectRoot });
   const runtimeMode = resolveRuntimeMode(resolvedPaths);
   const runtime = createRuntime(config, resolvedPaths, { runtimeMode });
@@ -215,7 +215,6 @@ export const createBootstrap = async ({
   runtime.projectPaths = resolvedPaths;
   runtime.project = resolvedPaths;
   runtime.version = version;
-  const installState = getInstallState({ projectRoot: resolvedPaths.projectRoot, runtimeVersion: runtime.version });
   runtime.system = Object.freeze({
     config: installState.config,
     installed: installState.installed
@@ -381,7 +380,7 @@ export const createBootstrap = async ({
   await authService.restore();
   await runtime.start();
 
-  if (selectedMode === 'runtime' && isInstalled()) {
+  if (selectedMode === 'runtime' && installState.installed === true) {
     seedSystem(runtime);
   }
 
