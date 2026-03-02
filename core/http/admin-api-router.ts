@@ -73,6 +73,18 @@ export const createAdminApiRouter = (runtime) => Object.freeze({
       });
     }
 
+    if (context.path === `${ADMIN_API_BASE_PATH}/system/info`) {
+      const siteName = getSetting(runtime, 'site.name', () => 'My Nimb Site');
+      const version = getSetting(runtime, 'site.version', () => runtime?.version ?? '0.0.0');
+      const installedAt = runtime?.system?.config?.installedAt ?? null;
+
+      return () => jsonResponse({
+        siteName: typeof siteName === 'string' && siteName.trim() ? siteName : 'My Nimb Site',
+        version: typeof version === 'string' && version.trim() ? version : runtime?.version ?? '0.0.0',
+        installedAt: typeof installedAt === 'string' ? installedAt : null
+      });
+    }
+
     return null;
   }
 });

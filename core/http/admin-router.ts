@@ -7,127 +7,101 @@ const defaultAdminShell = `<!doctype html>
 <html>
 <head>
   <title>Nimb Admin</title>
-  <style>
-    #admin-root {
-      min-height: 100vh;
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-    }
-
-    #admin-body {
-      display: grid;
-      grid-template-columns: 220px 1fr;
-      min-height: 0;
-    }
-  </style>
 </head>
 <body>
-  <div id="admin-root">
-    <header id="admin-header"><div id="admin-brand"></div></header>
-    <div id="admin-body">
-      <aside id="admin-sidebar"></aside>
-      <main id="admin-main"></main>
-    </div>
-    <footer id="admin-footer"></footer>
-  </div>
+  <div id="admin-root"></div>
   <script src="/admin/app.js"></script>
 </body>
 </html>
 `;
 
-const defaultAdminApp = `const createListElement = (items) => {
+const defaultAdminApp = `const createQuickLinks = () => {
+  const links = [
+    { label: 'Content', href: '/admin/content/page' },
+    { label: 'Media', href: '/admin/media' },
+    { label: 'Settings', href: '/admin/settings' }
+  ];
+
   const list = document.createElement('ul');
 
-  items.forEach((item) => {
-    const listItem = document.createElement('li');
-    listItem.textContent = item;
-    list.append(listItem);
+  links.forEach((link) => {
+    const item = document.createElement('li');
+    const anchor = document.createElement('a');
+    anchor.href = link.href;
+    anchor.textContent = link.label;
+    item.append(anchor);
+    list.append(item);
   });
 
   return list;
 };
 
-const createSystemInfoElement = (system) => {
-  const container = document.createElement('section');
+const renderDashboard = (systemInfo) => {
+  const main = document.createElement('main');
 
-  const lines = [
-    \`Name: \${system.name ?? 'Unknown'}\`,
-    \`Version: \${system.version ?? 'Unknown'}\`,
-    \`Mode: \${system.mode ?? 'Unknown'}\`,
-    \`Installed: \${system.installed === true ? 'Yes' : 'No'}\`
-  ];
+  const title = document.createElement('h1');
+  title.textContent = 'Welcome to Nimb';
+  main.append(title);
 
-  container.innerHTML = lines.join('<br>');
-  return container;
+  const success = document.createElement('p');
+  success.textContent = 'Installation successful';
+  main.append(success);
+
+  const details = document.createElement('section');
+  const detailsTitle = document.createElement('h2');
+  detailsTitle.textContent = 'System';
+  details.append(detailsTitle);
+
+  const detailsList = document.createElement('ul');
+
+  const siteNameItem = document.createElement('li');
+  siteNameItem.textContent = 'Site: ' + (systemInfo?.siteName ?? 'My Nimb Site');
+  detailsList.append(siteNameItem);
+
+  const versionItem = document.createElement('li');
+  versionItem.textContent = 'Version: ' + (systemInfo?.version ?? '0.0.0');
+  detailsList.append(versionItem);
+
+  const installedAtItem = document.createElement('li');
+  installedAtItem.textContent = 'Installed at: ' + (systemInfo?.installedAt ?? 'Unknown');
+  detailsList.append(installedAtItem);
+
+  details.append(detailsList);
+  main.append(details);
+
+  const linksSection = document.createElement('section');
+  const linksTitle = document.createElement('h2');
+  linksTitle.textContent = 'Quick links';
+  linksSection.append(linksTitle);
+  linksSection.append(createQuickLinks());
+  main.append(linksSection);
+
+  return main;
 };
 
 const bootstrapLayout = () => {
-  const slots = {
-    header: document.getElementById('admin-header'),
-    sidebar: document.getElementById('admin-sidebar'),
-    main: document.getElementById('admin-main'),
-    footer: document.getElementById('admin-footer')
-  };
+  const root = document.getElementById('admin-root');
+  if (!root) {
+    return;
+  }
 
-  window.NimbAdmin = {
-    slots
-  };
+  const loading = document.createElement('p');
+  loading.textContent = 'Loading dashboard...';
+  root.replaceChildren(loading);
 
-  const setSlot = (name, element) => {
-    const slot = window.NimbAdmin?.slots?.[name];
-
-    if (!slot) {
-      return;
-    }
-
-    slot.replaceChildren();
-    if (element) {
-      slot.append(element);
-    }
-  };
-
-  const clearSlot = (name) => {
-    const slot = window.NimbAdmin?.slots?.[name];
-
-    if (!slot) {
-      return;
-    }
-
-    slot.replaceChildren();
-  };
-
-  window.NimbAdmin.setSlot = setSlot;
-  window.NimbAdmin.clearSlot = clearSlot;
-
-  const header = document.createElement('div');
-  const brand = document.createElement('div');
-  brand.id = 'admin-brand';
-  header.append(brand);
-  setSlot('header', header);
-
-  setSlot('sidebar', createListElement(['System']));
-
-  const footer = document.createElement('small');
-  footer.textContent = 'Nimb CMS Runtime';
-  setSlot('footer', footer);
-
-  const systemFallback = document.createElement('p');
-  systemFallback.textContent = 'System information unavailable.';
-  setSlot('main', systemFallback);
-
-  void fetch('/admin-api/system')
+  void fetch('/admin-api/system/info')
     .then((response) => {
       if (!response.ok) {
-        throw new Error(\`Failed to load system info: \${response.status}\`);
+        throw new Error('Failed to load dashboard info: ' + response.status);
       }
 
       return response.json();
     })
-    .then((system) => {
-      setSlot('main', createSystemInfoElement(system));
+    .then((systemInfo) => {
+      root.replaceChildren(renderDashboard(systemInfo));
     })
     .catch(() => {
-      // Leave fallback content in place.
+      root.replaceChildren(renderDashboard({}));
     });
 };
 

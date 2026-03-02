@@ -82,10 +82,9 @@ test('phase 82: admin runtime bridge provides system info API', async () => {
       assert.equal(systemPayload.adminBranding.adminTitle, 'Nimb Admin');
       assert.equal(systemPayload.adminBranding.logoText, 'Nimb');
 
-      const adminResponse = await fetch(`http://127.0.0.1:${port}/admin`);
-      assert.equal(adminResponse.status, 200);
-      assert.equal(adminResponse.headers.get('content-type'), 'text/html; charset=utf-8');
-      assert.equal((await adminResponse.text()).includes('Nimb Admin'), true);
+      const adminResponse = await fetch(`http://127.0.0.1:${port}/admin`, { redirect: 'manual' });
+      assert.equal(adminResponse.status, 302);
+      assert.equal(adminResponse.headers.get('location'), '/admin/login');
     } finally {
       await server.stop();
     }
