@@ -31,7 +31,7 @@ const createRuntime = (pluginsDirectory) => {
   return { runtime };
 };
 
-test('capability resolution works through runtime context only', async () => {
+test('capability resolution works through runtime context only', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'nimb-capability-'));
 
   await writePlugin(
@@ -76,6 +76,10 @@ export default register;
   );
 
   const { runtime } = createRuntime(tempRoot);
+  t.after(async () => {
+    await runtime.unloadAll();
+  });
+
   const records = await runtime.start();
   assert.equal(records.every((record) => record.state === 'active'), true);
 
@@ -84,7 +88,7 @@ export default register;
   assert.deepEqual(result, { ok: true, payload: { title: 'hello' } });
 });
 
-test('provider unload invalidates capability references', async () => {
+test('provider unload invalidates capability references', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'nimb-capability-unload-'));
 
   await writePlugin(
@@ -129,6 +133,10 @@ export default register;
   );
 
   const { runtime } = createRuntime(tempRoot);
+  t.after(async () => {
+    await runtime.unloadAll();
+  });
+
   await runtime.start();
 
   const consumer = await import(path.join(tempRoot, 'z-consumer-plugin/register.ts'));
@@ -137,7 +145,7 @@ export default register;
   await assert.rejects(() => consumer.invoke(), /inactive|not found/);
 });
 
-test('duplicate capability providers can coexist without direct consumer dependency', async () => {
+test('duplicate capability providers can coexist without direct consumer dependency', async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'nimb-capability-dupe-'));
 
   const providerManifest = (id) => `
@@ -171,6 +179,10 @@ export const pluginManifest = {
   );
 
   const { runtime } = createRuntime(tempRoot);
+  t.after(async () => {
+    await runtime.unloadAll();
+  });
+
   const records = await runtime.start();
 
   const aProvider = records.find((record) => record.id === 'a-provider-plugin');
