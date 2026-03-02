@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createBootstrap } from '../core/bootstrap/index.ts';
-import { createHttpServer } from '../core/http/index.ts';
+import { createInstalledServer } from './helpers/create-installed-server.ts';
 import { markInstalled } from '../core/setup/setup-state.ts';
 
 const INSTALL_STATE_PATH = '/data/system/install.json';
@@ -71,6 +70,21 @@ const withInstallAndMediaState = async (run: () => Promise<void> | void) => {
   }
 };
 
+
+const loginAsAdmin = async (port: number) => {
+  const loginResponse = await fetch(`http://127.0.0.1:${port}/admin/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ email: 'admin@nimb.local', password: 'admin' }).toString(),
+    redirect: 'manual'
+  });
+
+  assert.equal(loginResponse.status, 302);
+  const cookie = (loginResponse.headers.get('set-cookie') ?? '').split(';')[0];
+  assert.match(cookie, /^nimb_admin_session=/);
+  return cookie;
+};
+
 test('phase 101: core media library upload/list/delete flow works in admin shell', async () => {
   await withInstallAndMediaState(async () => {
     markInstalled({ version: '101.0.0' });
@@ -79,25 +93,18 @@ test('phase 101: core media library upload/list/delete flow works in admin shell
     writeConfig(cwd);
     writeInstallState(cwd);
 
-    const bootstrap = await createBootstrap({ cwd, mode: 'runtime' });
-    const server = createHttpServer({
-      runtime: bootstrap.runtime,
-      config: bootstrap.config,
-      startupTimestamp: '2026-01-01T00:00:00.000Z',
-      port: 0,
-      rootDirectory: cwd
-    });
-
-    const { port } = await server.start();
+    const { server, port } = await createInstalledServer({ cwd });
 
     try {
+      const authCookie = await loginAsAdmin(port);
       const uploadForm = new FormData();
       uploadForm.set('file', new Blob(['hello media'], { type: 'text/plain' }), 'hello.txt');
 
       const uploadResponse = await fetch(`http://127.0.0.1:${port}/admin/media/upload`, {
         method: 'POST',
         body: uploadForm,
-        redirect: 'manual'
+        redirect: 'manual',
+        headers: { cookie: authCookie }
       });
 
       assert.equal(uploadResponse.status, 302);
@@ -115,7 +122,7 @@ test('phase 101: core media library upload/list/delete flow works in admin shell
       assert.equal(fs.existsSync(storedFilePath), true);
       assert.equal(fs.readFileSync(storedFilePath, 'utf8'), 'hello media');
 
-      const listResponse = await fetch(`http://127.0.0.1:${port}/admin/media`);
+      const listResponse = await fetch(`http://127.0.0.1:${port}/admin/media`, { headers: { cookie: authCookie } });
       assert.equal(listResponse.status, 200);
       const listHtml = await listResponse.text();
       assert.equal(listHtml.includes('<aside class="admin-sidebar">'), true);
@@ -124,7 +131,7 @@ test('phase 101: core media library upload/list/delete flow works in admin shell
       assert.equal(listHtml.includes('hello.txt'), true);
       assert.equal(listHtml.includes('<a href="/admin/media" aria-current="page" class="is-active">Media</a>'), true);
 
-      const uploadPageResponse = await fetch(`http://127.0.0.1:${port}/admin/media/upload`);
+      const uploadPageResponse = await fetch(`http://127.0.0.1:${port}/admin/media/upload`, { headers: { cookie: authCookie } });
       assert.equal(uploadPageResponse.status, 200);
       const uploadPageHtml = await uploadPageResponse.text();
       assert.equal(uploadPageHtml.includes('enctype="multipart/form-data"'), true);
@@ -135,7 +142,8 @@ test('phase 101: core media library upload/list/delete flow works in admin shell
 
       const deleteResponse = await fetch(`http://127.0.0.1:${port}/admin/media/${encodeURIComponent(`${record.id}`)}/delete`, {
         method: 'POST',
-        redirect: 'manual'
+        redirect: 'manual',
+        headers: { cookie: authCookie }
       });
       assert.equal(deleteResponse.status, 302);
 

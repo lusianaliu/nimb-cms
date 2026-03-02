@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createBootstrap } from '../core/bootstrap/index.ts';
-import { createHttpServer } from '../core/http/index.ts';
+import { createInstalledServer } from './helpers/create-installed-server.ts';
 import { markInstalled } from '../core/setup/setup-state.ts';
 
 const INSTALL_STATE_PATH = '/data/system/install.json';
@@ -42,18 +41,21 @@ const withInstallState = async (run: () => Promise<void> | void) => {
   }
 };
 
-const createServer = async (cwd: string) => {
-  const bootstrap = await createBootstrap({ cwd, mode: 'runtime' });
-  const server = createHttpServer({
-    runtime: bootstrap.runtime,
-    config: bootstrap.config,
-    startupTimestamp: '2026-01-01T00:00:00.000Z',
-    port: 0,
-    rootDirectory: cwd
+const createServer = async (cwd: string) => createInstalledServer({ cwd });
+
+
+const loginAsAdmin = async (port: number) => {
+  const loginResponse = await fetch(`http://127.0.0.1:${port}/admin/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ email: 'admin@nimb.local', password: 'admin' }).toString(),
+    redirect: 'manual'
   });
 
-  const { port } = await server.start();
-  return { bootstrap, server, port };
+  assert.equal(loginResponse.status, 302);
+  const cookie = (loginResponse.headers.get('set-cookie') ?? '').split(';')[0];
+  assert.match(cookie, /^nimb_admin_session=/);
+  return cookie;
 };
 
 test('phase 100: admin content routes render inside shell with active navigation state', async () => {
@@ -67,10 +69,12 @@ test('phase 100: admin content routes render inside shell with active navigation
     const { bootstrap, server, port } = await createServer(cwd);
 
     try {
+      const authCookie = await loginAsAdmin(port);
+
       assert.equal(bootstrap.runtime.admin.title, 'Acme Admin');
 
       const pageListResponse = await fetch(`http://127.0.0.1:${port}/admin/content/page`, {
-        headers: { 'x-nimb-capabilities': 'content.write' }
+        headers: { 'x-nimb-capabilities': 'content.write', cookie: authCookie }
       });
       assert.equal(pageListResponse.status, 200);
       const pageListHtml = await pageListResponse.text();
@@ -81,7 +85,7 @@ test('phase 100: admin content routes render inside shell with active navigation
       assert.equal(pageListHtml.includes('<title>Content · Acme Admin</title>'), true);
 
       const postListResponse = await fetch(`http://127.0.0.1:${port}/admin/content/post`, {
-        headers: { 'x-nimb-capabilities': 'content.write' }
+        headers: { 'x-nimb-capabilities': 'content.write', cookie: authCookie }
       });
       assert.equal(postListResponse.status, 200);
       const postListHtml = await postListResponse.text();
@@ -89,7 +93,7 @@ test('phase 100: admin content routes render inside shell with active navigation
       assert.equal(postListHtml.includes('<a href="/admin/content/page" aria-current="page" class="is-active">Content</a>'), true);
 
       const adminFallbackResponse = await fetch(`http://127.0.0.1:${port}/admin/content/page/does-not-exist`, {
-        headers: { 'x-nimb-capabilities': 'content.write' }
+        headers: { 'x-nimb-capabilities': 'content.write', cookie: authCookie }
       });
       assert.equal(adminFallbackResponse.status, 200);
       assert.equal((await adminFallbackResponse.text()).includes('<script src="/admin/app.js"></script>'), true);

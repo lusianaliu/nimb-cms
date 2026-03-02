@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createBootstrap } from '../core/bootstrap/index.ts';
-import { createHttpServer } from '../core/http/index.ts';
+import { createInstalledServer } from './helpers/create-installed-server.ts';
 import { markInstalled } from '../core/setup/setup-state.ts';
 
 const INSTALL_STATE_PATH = '/data/system/install.json';
@@ -42,20 +41,10 @@ const withInstallState = async (run: () => Promise<void> | void) => {
   }
 };
 
-const createServer = async (cwd: string) => {
-  const bootstrap = await createBootstrap({ cwd, mode: 'runtime' });
-  const server = createHttpServer({
-    runtime: bootstrap.runtime,
-    config: bootstrap.config,
-    startupTimestamp: '2026-01-01T00:00:00.000Z',
-    port: 0,
-    rootDirectory: cwd,
-    clock: () => '2026-01-01T00:00:10.000Z'
-  });
-
-  const { port } = await server.start();
-  return { server, port, runtime: bootstrap.runtime };
-};
+const createServer = async (cwd: string) => createInstalledServer({
+  cwd,
+  clock: () => '2026-01-01T00:00:10.000Z'
+});
 
 test('phase 98: default site routes render home, blog, page, and 404', async () => {
   await withInstallState(async () => {
