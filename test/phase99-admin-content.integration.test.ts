@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createBootstrap } from '../core/bootstrap/index.ts';
-import { createHttpServer } from '../core/http/index.ts';
+import { createInstalledServer } from './helpers/create-installed-server.ts';
 import { markInstalled } from '../core/setup/setup-state.ts';
 
 const INSTALL_STATE_PATH = '/data/system/install.json';
@@ -42,24 +41,28 @@ const withInstallState = async (run: () => Promise<void> | void) => {
   }
 };
 
-const createServer = async (cwd: string) => {
-  const bootstrap = await createBootstrap({ cwd, mode: 'runtime' });
-  const server = createHttpServer({
-    runtime: bootstrap.runtime,
-    config: bootstrap.config,
-    startupTimestamp: '2026-01-01T00:00:00.000Z',
-    port: 0,
-    rootDirectory: cwd
-  });
-
-  const { port } = await server.start();
-  return { server, port };
-};
+const createServer = async (cwd: string) => createInstalledServer({ cwd });
 
 const adminHeaders = {
   'content-type': 'application/x-www-form-urlencoded',
   'x-nimb-capabilities': 'content.write'
 };
+
+
+const loginAsAdmin = async (port: number) => {
+  const loginResponse = await fetch(`http://127.0.0.1:${port}/admin/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ email: 'admin@nimb.local', password: 'admin' }).toString(),
+    redirect: 'manual'
+  });
+
+  assert.equal(loginResponse.status, 302);
+  const cookie = (loginResponse.headers.get('set-cookie') ?? '').split(';')[0];
+  assert.match(cookie, /^nimb_admin_session=/);
+  return cookie;
+};
+
 
 test('phase 99: admin content routes create, update, and delete blog posts visible on /blog', async () => {
   await withInstallState(async () => {
@@ -72,9 +75,10 @@ test('phase 99: admin content routes create, update, and delete blog posts visib
     const { server, port } = await createServer(cwd);
 
     try {
+      const authCookie = await loginAsAdmin(port);
       const createResponse = await fetch(`http://127.0.0.1:${port}/admin/content/post`, {
         method: 'POST',
-        headers: adminHeaders,
+        headers: { ...adminHeaders, cookie: authCookie },
         body: new URLSearchParams({ title: 'Phase 99 Admin Post', body: 'Created from admin route', published: 'true' }).toString(),
         redirect: 'manual'
       });
@@ -85,7 +89,7 @@ test('phase 99: admin content routes create, update, and delete blog posts visib
       assert.equal(blogAfterCreateHtml.includes('Phase 99 Admin Post'), true);
 
       const listResponse = await fetch(`http://127.0.0.1:${port}/admin/content/post`, {
-        headers: { 'x-nimb-capabilities': 'content.write' }
+        headers: { 'x-nimb-capabilities': 'content.write', cookie: authCookie }
       });
       const listHtml = await listResponse.text();
       const idMatch = listHtml.match(/\/admin\/content\/post\/([^/]+)\/edit/);
@@ -94,7 +98,7 @@ test('phase 99: admin content routes create, update, and delete blog posts visib
 
       const updateResponse = await fetch(`http://127.0.0.1:${port}/admin/content/post/${encodeURIComponent(id)}/update`, {
         method: 'POST',
-        headers: adminHeaders,
+        headers: { ...adminHeaders, cookie: authCookie },
         body: new URLSearchParams({ title: 'Phase 99 Admin Post Updated', slug: 'phase-99-admin-post', body: 'Updated from admin route', published: 'true' }).toString(),
         redirect: 'manual'
       });
@@ -106,7 +110,7 @@ test('phase 99: admin content routes create, update, and delete blog posts visib
 
       const deleteResponse = await fetch(`http://127.0.0.1:${port}/admin/content/post/${encodeURIComponent(id)}/delete`, {
         method: 'POST',
-        headers: { 'x-nimb-capabilities': 'content.write' },
+        headers: { 'x-nimb-capabilities': 'content.write', cookie: authCookie },
         redirect: 'manual'
       });
       assert.equal(deleteResponse.status, 302);
