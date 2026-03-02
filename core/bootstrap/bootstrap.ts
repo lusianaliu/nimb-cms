@@ -1,6 +1,7 @@
 import { loadConfig } from '../config/config-loader.ts';
 import { createRuntime } from './runtime-factory.ts';
 import { BootstrapSnapshot } from './bootstrap-snapshot.ts';
+import { disposeRuntime } from '../runtime/dispose.ts';
 import { FileSystemStorageAdapter, PersistenceEngine } from '../persistence/index.ts';
 import { AuthService, SessionStore, createAuthMiddleware } from '../auth/index.ts';
 import { createAuthService } from '../auth/auth-service.ts';
@@ -207,6 +208,7 @@ export const createBootstrap = async ({
   const config = loadConfig({ cwd: resolvedPaths.projectRoot });
   const runtimeMode = resolveRuntimeMode(resolvedPaths);
   const runtime = createRuntime(config, resolvedPaths, { runtimeMode });
+  runtime.dispose = () => disposeRuntime(runtime);
   runtime.mode = selectedMode;
   runtime.contentTypes = new ContentTypeRegistry();
   registerSystemContentTypes(runtimeMode, runtime.contentTypes);

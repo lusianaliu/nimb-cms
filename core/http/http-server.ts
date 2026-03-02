@@ -279,8 +279,9 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
     start() {
       return listen(port);
     },
-    stop() {
-      return close();
+    async stop() {
+      await close();
+      await runtime?.dispose?.();
     }
   });
 };
