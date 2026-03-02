@@ -1,37 +1,34 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { jsonResponse } from '../http/response.ts';
-import { INSTALL_STATE_FILENAME, readInstallState } from '../project/install-state.ts';
+import { saveSystemConfig } from '../system/system-config.ts';
 import { bootstrapDefaultSite } from './bootstrap-default-site.ts';
 
 const resolveProjectPaths = (runtime) => runtime?.projectPaths ?? runtime?.project ?? null;
 
 export const handleInstall = async (_request, runtime) => {
-  if (runtime?.getRuntimeMode?.() !== 'installer') {
-    return jsonResponse({ success: false, error: { code: 'INSTALLER_MODE_REQUIRED', message: 'Installer API is only available in installer mode' } }, { statusCode: 409 });
-  }
-
   const projectPaths = resolveProjectPaths(runtime);
-  const persistenceDir = projectPaths?.persistenceDir;
+  const projectRoot = projectPaths?.projectRoot;
 
-  if (typeof persistenceDir !== 'string' || persistenceDir.trim() === '') {
-    return jsonResponse({ success: false, error: { code: 'INSTALL_PATH_UNAVAILABLE', message: 'Project persistence path is unavailable' } }, { statusCode: 500 });
+  if (typeof projectRoot !== 'string' || projectRoot.trim() === '') {
+    return { success: false, error: { code: 'INSTALL_PATH_UNAVAILABLE', message: 'Project path is unavailable' } };
   }
 
-  if (readInstallState(projectPaths)) {
-    return jsonResponse({ success: false, error: { code: 'ALREADY_INSTALLED', message: 'Project is already installed' } }, { statusCode: 409 });
+  if (runtime?.system?.installed === true) {
+    return { success: false, error: { code: 'ALREADY_INSTALLED', message: 'Project is already installed' } };
   }
 
-  const installState = Object.freeze({
+  const installState = saveSystemConfig({
     installed: true,
     installedAt: new Date().toISOString(),
     version: runtime?.version ?? 'dev'
+  }, { projectRoot });
+
+  runtime.system = Object.freeze({
+    config: installState,
+    installed: true
   });
 
-  fs.mkdirSync(persistenceDir, { recursive: true });
-  fs.writeFileSync(path.join(persistenceDir, INSTALL_STATE_FILENAME), `${JSON.stringify(installState, null, 2)}\n`);
   await bootstrapDefaultSite(projectPaths);
+  await runtime?.events?.emit?.('system.installed', { version: installState.version, installedAt: installState.installedAt });
   process.stdout.write('installation completed\n');
 
-  return jsonResponse({ success: true, data: { install: installState }, meta: {} }, { statusCode: 200 });
+  return { success: true, data: { install: installState }, meta: {} };
 };
