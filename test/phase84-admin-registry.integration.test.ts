@@ -68,23 +68,23 @@ test('phase 84: admin extension registry exposes default page and admin page lis
 
     try {
       assert.deepEqual(bootstrap.runtime.adminRegistry.getAdminPages(), [
-        { id: 'system', path: '/admin', title: 'System' }
+        { id: 'dashboard', path: '/admin', title: 'Dashboard' }
       ]);
 
       const pagesResponse = await fetch(`http://127.0.0.1:${port}/admin-api/pages`);
       assert.equal(pagesResponse.status, 200);
       assert.equal(pagesResponse.headers.get('content-type'), 'application/json; charset=utf-8');
       assert.deepEqual(await pagesResponse.json(), [
-        { id: 'system', path: '/admin', title: 'System' }
+        { id: 'dashboard', path: '/admin', title: 'Dashboard' }
       ]);
 
       const appScriptResponse = await fetch(`http://127.0.0.1:${port}/admin/app.js`);
       assert.equal(appScriptResponse.status, 200);
 
       const appScript = await appScriptResponse.text();
-      assert.equal(appScript.includes('window.NimbAdmin'), true);
-      assert.equal(appScript.includes("setSlot('sidebar'"), true);
-      assert.equal(appScript.includes("fetch('/admin-api/system')"), true);
+      assert.equal(appScript.includes('Welcome to Nimb'), true);
+      assert.equal(appScript.includes('Installation successful'), true);
+      assert.equal(appScript.includes("fetch('/admin-api/system/info')"), true);
     } finally {
       await server.stop();
     }

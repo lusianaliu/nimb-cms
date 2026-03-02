@@ -270,7 +270,7 @@ export const createBootstrap = async ({
     get: getAdminTheme,
     getDefault: getDefaultAdminTheme
   });
-  registerAdminPage({ id: 'system', path: '/admin', title: 'System' });
+  registerAdminPage({ id: 'dashboard', path: '/admin', title: 'Dashboard' });
   runtime.adminRegistry = Object.freeze({ registerAdminPage, getAdminPages });
   const resolvedContentStorageAdapter = contentStorageAdapter ?? new JsonStorageAdapter({ rootDirectory: resolvedPaths.dataDir });
   const storageAdapter = new FileSystemStorageAdapter({ rootDirectory: resolvedPaths.persistenceDir });
