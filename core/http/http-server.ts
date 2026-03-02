@@ -237,43 +237,50 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
       });
   });
 
+  const listen = (targetPort = port) => new Promise((resolve, reject) => {
+    const onError = (error) => {
+      server.off('listening', onListening);
+      reject(new Error(`Failed to start HTTP server on port ${targetPort}: ${error?.message ?? 'unknown error'}`));
+    };
+
+    const onListening = () => {
+      server.off('error', onError);
+      const address = server.address();
+      const activePort = typeof address === 'object' && address ? address.port : targetPort;
+
+      if (runtime?.getRuntimeMode?.() === 'installer') {
+        process.stdout.write('installer HTTP gate: active\n');
+      }
+
+      resolve({ port: activePort });
+    };
+
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(targetPort);
+  });
+
+  const close = () => new Promise((resolve, reject) => {
+    server.close((error) => {
+      if (error && error.code !== 'ERR_SERVER_NOT_RUNNING') {
+        reject(error);
+        return;
+      }
+
+      resolve(undefined);
+    });
+  });
+
   return Object.freeze({
     port,
+    server,
+    listen,
+    close,
     start() {
-      return new Promise((resolve, reject) => {
-        const onError = (error) => {
-          server.off('listening', onListening);
-          reject(new Error(`Failed to start HTTP server on port ${port}: ${error?.message ?? 'unknown error'}`));
-        };
-
-        const onListening = () => {
-          server.off('error', onError);
-          const address = server.address();
-          const activePort = typeof address === 'object' && address ? address.port : port;
-
-          if (runtime?.getRuntimeMode?.() === 'installer') {
-            process.stdout.write('installer HTTP gate: active\n');
-          }
-
-          resolve({ port: activePort });
-        };
-
-        server.once('error', onError);
-        server.once('listening', onListening);
-        server.listen(port);
-      });
+      return listen(port);
     },
     stop() {
-      return new Promise((resolve, reject) => {
-        server.close((error) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-
-          resolve(undefined);
-        });
-      });
+      return close();
     }
   });
 };
