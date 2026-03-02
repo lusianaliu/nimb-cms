@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createBootstrap } from '../core/bootstrap/index.ts';
 import { createHttpServer } from '../core/http/index.ts';
 import { markInstalled } from '../core/setup/setup-state.ts';
+import { ensureInstalled } from './helpers/install-state.ts';
 
 const INSTALL_STATE_PATH = '/data/system/install.json';
 const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase80-'));
@@ -42,8 +43,18 @@ const withInstallState = async (run: () => Promise<void> | void) => {
   }
 };
 
-const createServer = async (cwd: string, clock = () => '2026-01-01T00:00:10.000Z') => {
+const createServer = async (
+  cwd: string,
+  {
+    clock = () => '2026-01-01T00:00:10.000Z',
+    installed = false
+  }: { clock?: () => string, installed?: boolean } = {}
+) => {
   const bootstrap = await createBootstrap({ cwd });
+
+  if (installed) {
+    await ensureInstalled(bootstrap.runtime);
+  }
   const server = createHttpServer({
     runtime: bootstrap.runtime,
     config: bootstrap.config,
@@ -65,7 +76,7 @@ test('phase 80: runtime mode serves default HTML site at root', async () => {
     writeConfig(cwd);
     writeInstallState(cwd);
 
-    const { server, port } = await createServer(cwd);
+    const { server, port } = await createServer(cwd, { installed: true });
 
     try {
       const response = await fetch(`http://127.0.0.1:${port}/`);

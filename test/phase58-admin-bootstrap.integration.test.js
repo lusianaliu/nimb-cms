@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createBootstrap } from '../core/bootstrap/index.ts';
 import { createHttpServer } from '../core/http/index.ts';
+import { ensureInstalled } from './helpers/install-state.ts';
 
 const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase58-'));
 
@@ -14,7 +15,7 @@ const writeConfig = (cwd, port) => {
     plugins: [],
     runtime: { logLevel: 'info', mode: 'development' },
     server: { port },
-    admin: { enabled: false }
+    admin: { enabled: true }
   }, null, 2)}\n`);
 };
 
@@ -26,6 +27,20 @@ const writeInstallState = (cwd, version = '1.0.0') => {
 
 const createServer = async (cwd) => {
   const bootstrap = await createBootstrap({ cwd });
+  const server = createHttpServer({
+    runtime: bootstrap.runtime,
+    config: bootstrap.config,
+    startupTimestamp: '2026-01-01T00:00:00.000Z',
+    port: 0
+  });
+
+  const { port } = await server.start();
+  return { server, port };
+};
+
+const createInstalledServer = async (cwd) => {
+  const bootstrap = await createBootstrap({ cwd });
+  await ensureInstalled(bootstrap.runtime);
   const server = createHttpServer({
     runtime: bootstrap.runtime,
     config: bootstrap.config,
@@ -57,7 +72,7 @@ test('phase 58: normal mode redirects /admin to login and serves login page', as
   writeConfig(cwd, 3271);
   writeInstallState(cwd, '2.0.0');
 
-  const { server, port } = await createServer(cwd);
+  const { server, port } = await createInstalledServer(cwd);
 
   try {
     const adminResponse = await fetch(`http://127.0.0.1:${port}/admin`, { redirect: 'manual' });
@@ -69,8 +84,8 @@ test('phase 58: normal mode redirects /admin to login and serves login page', as
     assert.equal(loginResponse.headers.get('content-type'), 'text/html; charset=utf-8');
 
     const html = await loginResponse.text();
-    assert.equal(html.includes('<title>Nimb Admin Login</title>'), true);
-    assert.equal(html.includes('<h1>Nimb Admin Login</h1>'), true);
+    assert.equal(html.includes('<title>Login · Nimb Admin</title>'), true);
+    assert.equal(html.includes('<h1>Admin Login</h1>'), true);
   } finally {
     await server.stop();
   }
@@ -92,14 +107,14 @@ test('phase 58: admin login page endpoint remains cwd-independent', async () => 
   let server;
 
   try {
-    const started = await createServer(firstProjectRoot);
+    const started = await createInstalledServer(firstProjectRoot);
     server = started.server;
 
     const response = await fetch(`http://127.0.0.1:${started.port}/admin/login`);
     assert.equal(response.status, 200);
 
     const html = await response.text();
-    assert.equal(html.includes('<h1>Nimb Admin Login</h1>'), true);
+    assert.equal(html.includes('<h1>Admin Login</h1>'), true);
   } finally {
     process.chdir(originalCwd);
 
@@ -126,14 +141,14 @@ test('phase 58: admin login endpoint persists across restart', async () => {
     await started.server.stop();
   }
 
-  const restarted = await createServer(cwd);
+  const restarted = await createInstalledServer(cwd);
   try {
     const response = await fetch(`http://127.0.0.1:${restarted.port}/admin/login`);
     assert.equal(response.status, 200);
 
     const html = await response.text();
-    assert.equal(html.includes('<title>Nimb Admin Login</title>'), true);
-    assert.equal(html.includes('<h1>Nimb Admin Login</h1>'), true);
+    assert.equal(html.includes('<title>Login · Nimb Admin</title>'), true);
+    assert.equal(html.includes('<h1>Admin Login</h1>'), true);
   } finally {
     await restarted.server.stop();
   }
