@@ -2,11 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const DEFAULT_CONFIG = Object.freeze({
-  name: 'nimb-app',
+  name: 'My Nimb Site',
   plugins: Object.freeze([]),
   runtime: Object.freeze({
     logLevel: 'info',
-    mode: 'development'
+    mode: 'production'
   }),
   server: Object.freeze({}),
   admin: Object.freeze({
@@ -132,14 +132,22 @@ const validateRoot = (input) => {
   }
 };
 
-export const resolveConfigPath = (cwd = process.cwd()) => path.resolve(cwd, 'nimb.config.json');
+export const resolveConfigPath = (cwd = process.cwd()) => path.resolve(cwd, 'config', 'nimb.config.json');
+
+const resolveLegacyConfigPath = (cwd = process.cwd()) => path.resolve(cwd, 'nimb.config.json');
 
 export const loadConfig = ({ cwd = process.cwd(), fsModule = fs } = {}) => {
-  const configPath = resolveConfigPath(cwd);
+  const packagedConfigPath = resolveConfigPath(cwd);
+  const legacyConfigPath = resolveLegacyConfigPath(cwd);
+  const configPath = fsModule.existsSync(packagedConfigPath) ? packagedConfigPath : legacyConfigPath;
   let parsed = {};
 
   if (fsModule.existsSync(configPath)) {
     parsed = JSON.parse(fsModule.readFileSync(configPath, 'utf8'));
+  } else {
+    fsModule.mkdirSync(path.dirname(packagedConfigPath), { recursive: true });
+    fsModule.writeFileSync(packagedConfigPath, `${JSON.stringify(DEFAULT_CONFIG, null, 2)}\n`, 'utf8');
+    parsed = JSON.parse(fsModule.readFileSync(packagedConfigPath, 'utf8'));
   }
 
   validateRoot(parsed);

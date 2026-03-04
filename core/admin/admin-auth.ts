@@ -12,7 +12,7 @@ const SESSION_COOKIE = 'nimb_admin_session';
 const hashPassword = (password: string) => crypto.createHash('sha256').update(password).digest('hex');
 
 const readAdminState = (projectPaths: { persistenceDir?: string, projectRoot?: string }) => {
-  const persistenceDir = projectPaths?.persistenceDir ?? path.join(projectPaths?.projectRoot ?? process.cwd(), '.nimb');
+  const persistenceDir = projectPaths?.persistenceDir ?? path.join(projectPaths?.projectRoot ?? process.cwd(), 'data', 'system');
   const statePath = path.join(persistenceDir, ADMIN_STATE_FILE);
 
   if (!fs.existsSync(statePath)) {

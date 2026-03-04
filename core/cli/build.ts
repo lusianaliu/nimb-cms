@@ -60,9 +60,10 @@ const writeRuntimeEntrypoints = (distRoot: string) => {
       '',
       'export const start = async () => {',
       "  const distRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');",
+      "  const projectRoot = path.resolve(distRoot, '..');",
       "  const serverRoot = path.resolve(distRoot, 'server');",
-      "  const projectPaths = createProjectPaths(distRoot);",
-      "  const config = loadConfig({ cwd: serverRoot });",
+      '  const projectPaths = createProjectPaths(projectRoot);',
+      '  const config = loadConfig({ cwd: projectRoot });',
       "  const port = Number(process.env.PORT ?? config?.server?.port ?? 3000);",
       '  validateAdminStaticDir(config, serverRoot);',
       '  await validateStartupInvariants({ config, project: projectPaths, runtimeRoot: serverRoot, port });',
@@ -93,34 +94,8 @@ const writeRuntimeEntrypoints = (distRoot: string) => {
 
   fs.writeFileSync(path.join(serverRoot, 'http-server.js'), "export { createHttpServer } from './core/http/index.ts';\n", 'utf8');
   fs.writeFileSync(path.join(serverRoot, 'runtime-adapters.js'), "export { createRuntimeAdapter } from './core/runtime/adapters/index.ts';\n", 'utf8');
-  fs.writeFileSync(
-    path.join(serverRoot, 'bridge.js'),
-    [
-      "import { createBootstrap } from './core/bootstrap/index.ts';",
-      "import { createEmbeddedAdapter } from './core/runtime/adapters/embedded-adapter.ts';",
-      '',
-      'export const createBridge = async () => {',
-      "  const bootstrap = await createBootstrap({ cwd: process.cwd(), startupTimestamp: new Date().toISOString() });",
-      '  const adapter = createEmbeddedAdapter({',
-      '    runtime: bootstrap.runtime,',
-      '    config: bootstrap.config,',
-      "    startupTimestamp: new Date().toISOString(),",
-      '    rootDirectory: process.cwd(),',
-      '    authService: bootstrap.authService,',
-      '    authMiddleware: bootstrap.authMiddleware,',
-      '    adminController: bootstrap.adminController,',
-      '    contentRegistry: bootstrap.contentRegistry,',
-      '    persistContentTypes: bootstrap.persistContentTypes,',
-      '    entryRegistry: bootstrap.entryRegistry,',
-      '    persistEntries: bootstrap.persistEntries',
-      '  });',
-      '  return adapter.handler;',
-      '};',
-      ''
-    ].join('\n'),
-    'utf8'
-  );
-  fs.writeFileSync(path.join(serverRoot, 'start.js'), "import { start } from './bootstrap.js';\n\nstart();\n", 'utf8');
+  fs.writeFileSync(path.join(serverRoot, 'bridge.js'), "export const createBridge = async () => { throw new Error('Bridge mode is unavailable in packaged runtime.'); };\n", 'utf8');
+  fs.writeFileSync(path.join(serverRoot, 'start.js'), "export { start } from './bootstrap.js';\n", 'utf8');
 };
 
 const writeManifest = (distRoot: string) => {
@@ -135,13 +110,18 @@ const writeManifest = (distRoot: string) => {
   fs.writeFileSync(manifestPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
 };
 
-const writeServerConfig = ({ projectRoot, distRoot }: { projectRoot: string; distRoot: string }) => {
-  const projectConfigPath = path.join(projectRoot, 'nimb.config.json');
-  const targetPath = path.join(distRoot, 'server', 'nimb.config.json');
-  const config = fs.existsSync(projectConfigPath) ? JSON.parse(fs.readFileSync(projectConfigPath, 'utf8')) : {};
+const writePackagedConfig = ({ projectRoot }: { projectRoot: string }) => {
+  const legacyConfigPath = path.join(projectRoot, 'nimb.config.json');
+  const packagedConfigPath = path.join(projectRoot, 'config', 'nimb.config.json');
+  const config = fs.existsSync(packagedConfigPath)
+    ? JSON.parse(fs.readFileSync(packagedConfigPath, 'utf8'))
+    : fs.existsSync(legacyConfigPath)
+      ? JSON.parse(fs.readFileSync(legacyConfigPath, 'utf8'))
+      : {};
 
   const normalized = {
     ...config,
+    name: String(config?.name ?? 'My Nimb Site'),
     runtime: {
       ...(config.runtime ?? {}),
       mode: 'production'
@@ -153,7 +133,19 @@ const writeServerConfig = ({ projectRoot, distRoot }: { projectRoot: string; dis
     }
   };
 
-  fs.writeFileSync(targetPath, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8');
+  fs.mkdirSync(path.dirname(packagedConfigPath), { recursive: true });
+  fs.writeFileSync(packagedConfigPath, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8');
+};
+
+const writeRootStartScript = (projectRoot: string) => {
+  const startPath = path.join(projectRoot, 'start.js');
+  fs.writeFileSync(startPath, "import { start } from './dist/server/start.js'\n\nstart()\n", 'utf8');
+};
+
+const ensureRuntimeDirectories = (projectRoot: string) => {
+  for (const directory of ['data/system', 'data/content', 'data/uploads', 'logs']) {
+    fs.mkdirSync(path.join(projectRoot, directory), { recursive: true });
+  }
 };
 
 export const runBuild = ({ runtimeRoot, projectRoot = process.cwd() }: { runtimeRoot: string; projectRoot?: string }) => {
@@ -177,9 +169,11 @@ export const runBuild = ({ runtimeRoot, projectRoot = process.cwd() }: { runtime
   }
 
   copyFile(path.join(runtimeRoot, 'package.json'), path.join(distRoot, 'server', 'package.json'));
-  writeServerConfig({ projectRoot, distRoot });
   writeRuntimeEntrypoints(distRoot);
   writeManifest(distRoot);
+  writePackagedConfig({ projectRoot });
+  ensureRuntimeDirectories(projectRoot);
+  writeRootStartScript(projectRoot);
 
   return Object.freeze({ distRoot });
 };

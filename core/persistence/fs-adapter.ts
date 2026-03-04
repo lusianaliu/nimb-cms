@@ -8,7 +8,7 @@ const normalizeKey = (key) => `${String(key ?? '').replace(/\\/g, '/').replace(/
 const fileFromKey = (key) => `${normalizeKey(key)}.json`;
 
 export class FileSystemStorageAdapter extends StorageAdapter {
-  constructor({ rootDirectory = path.join(process.cwd(), '.nimb') } = {}) {
+  constructor({ rootDirectory = path.join(process.cwd(), 'data', 'system') } = {}) {
     super();
     this.rootDirectory = rootDirectory;
   }

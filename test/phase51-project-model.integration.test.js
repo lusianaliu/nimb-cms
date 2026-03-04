@@ -73,7 +73,7 @@ test('phase 51: startup from empty project root auto-creates data and persistenc
   try {
     await waitForReady(child);
     assert.equal(fs.existsSync(path.join(projectRoot, 'data')), true);
-    assert.equal(fs.existsSync(path.join(projectRoot, '.nimb')), true);
+    assert.equal(fs.existsSync(path.join(projectRoot, 'data', 'system')), true);
   } finally {
     if (child.exitCode === null) {
       await terminate(child);
@@ -105,7 +105,7 @@ test('phase 51: two project roots run sequentially with isolated persistence sto
   });
 
   const run = async (projectRoot, port) => {
-    const child = spawn('node', ['/workspace/nimb-cms/bin/nimb.js', 'start', projectRoot], {
+    const child = spawn('node', ['/workspace/nimb-cms/bin/nimb.js', '--project-root', projectRoot, 'start'], {
       cwd: workspaceRoot,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, PORT: String(port) }
@@ -123,9 +123,9 @@ test('phase 51: two project roots run sequentially with isolated persistence sto
   await run(firstProjectRoot, 3221);
   await run(secondProjectRoot, 3222);
 
-  assert.equal(fs.existsSync(path.join(firstProjectRoot, '.nimb', 'runtime.json')), true);
-  assert.equal(fs.existsSync(path.join(secondProjectRoot, '.nimb', 'runtime.json')), true);
-  assert.equal(fs.existsSync(path.join(workspaceRoot, '.nimb', 'runtime.json')), false);
+  assert.equal(fs.existsSync(path.join(firstProjectRoot, 'data', 'system')), true);
+  assert.equal(fs.existsSync(path.join(secondProjectRoot, 'data', 'system')), true);
+  assert.equal(fs.existsSync(path.join(workspaceRoot, 'data', 'system')), false);
 });
 
 test('phase 51: standalone cwd execution remains compatible', async () => {
@@ -146,7 +146,7 @@ test('phase 51: standalone cwd execution remains compatible', async () => {
 
   try {
     await waitForReady(child);
-    const response = await fetch('http://127.0.0.1:3223/health');
+    const response = await fetch('http://127.0.0.1:3223/');
     assert.equal(response.status, 200);
   } finally {
     if (child.exitCode === null) {

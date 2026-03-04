@@ -5,8 +5,8 @@ import crypto from 'node:crypto';
 const resolveProjectRoot = (projectModel) => projectModel?.projectRoot ?? projectModel?.root;
 const resolveConfigDir = (projectModel) => projectModel?.configDir ?? path.join(resolveProjectRoot(projectModel), 'config');
 const resolvePublicDir = (projectModel) => projectModel?.publicDir ?? projectModel?.publicDirectory ?? path.join(resolveProjectRoot(projectModel), 'public');
-const resolveConfigFile = (projectModel) => projectModel?.configFile ?? path.join(resolveProjectRoot(projectModel), 'nimb.config.json');
-const resolvePersistenceDir = (projectModel) => projectModel?.persistenceDir ?? path.join(resolveProjectRoot(projectModel), '.nimb');
+const resolveConfigFile = (projectModel) => projectModel?.configFile ?? path.join(resolveConfigDir(projectModel), 'nimb.config.json');
+const resolvePersistenceDir = (projectModel) => projectModel?.persistenceDir ?? path.join(resolveProjectRoot(projectModel), 'data', 'system');
 
 const writeFileIfMissing = (filePath, content) => {
   if (fs.existsSync(filePath)) {

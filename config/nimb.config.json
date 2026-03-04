@@ -1,0 +1,10 @@
+{
+  "name": "My Nimb Site",
+  "runtime": {
+    "mode": "production"
+  },
+  "admin": {
+    "enabled": true,
+    "staticDir": "../public/admin"
+  }
+}
