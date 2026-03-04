@@ -9,6 +9,7 @@ import { createProjectModel, createProjectPaths, PROJECT_DIRECTORY_NAMES, isProj
 import { version, resolveRuntimeMode as resolveEnvironmentMode } from '../core/runtime/version.ts';
 import { resolveRuntimeMode } from '../core/runtime/resolve-runtime-mode.ts';
 import { runBuild } from '../core/cli/build.ts';
+import { runRelease } from '../core/cli/release.ts';
 
 const invocationCwd = process.cwd();
 const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -337,6 +338,16 @@ if (args[0] === 'init') {
   } catch (error) {
     process.stderr.write(`Build failed: ${error?.message ?? String(error)}\n`);
     appendErrorLog({ projectRoot, error, context: 'build' });
+    process.exitCode = 1;
+  }
+} else if (args[0] === 'release') {
+  try {
+    const { releaseRoot, zipPath } = runRelease({ runtimeRoot, projectRoot });
+    process.stdout.write(`Release complete: ${releaseRoot}\n`);
+    process.stdout.write(`Package created: ${zipPath}\n`);
+  } catch (error) {
+    process.stderr.write(`Release failed: ${error?.message ?? String(error)}\n`);
+    appendErrorLog({ projectRoot, error, context: 'release' });
     process.exitCode = 1;
   }
 } else if (args[0] === 'bridge') {
