@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, createBootstrap, validateAdminStaticDir, validateStartupInvariants } from '../core/bootstrap/index.ts';
-import { createRuntimeAdapter, resolveAdapterType } from '../core/runtime/adapters/index.ts';
+import { createRuntimeAdapter, createEmbeddedAdapter, resolveAdapterType } from '../core/runtime/adapters/index.ts';
 import { createProjectModel, createProjectPaths, PROJECT_DIRECTORY_NAMES, isProjectInstalled } from '../core/project/index.ts';
 import { version, resolveRuntimeMode as resolveEnvironmentMode } from '../core/runtime/version.ts';
 import { resolveRuntimeMode } from '../core/runtime/resolve-runtime-mode.ts';
@@ -137,6 +138,69 @@ const createProject = (projectName) => {
   process.stdout.write('npx nimb\n');
 };
 
+
+const startBridge = async () => {
+  const projectPaths = createProjectPaths(projectRoot);
+  const project = createProjectModel({ projectRoot: projectPaths.projectRoot });
+  let bridgeServer;
+
+  try {
+    const config = loadConfig({ cwd: projectPaths.projectRoot });
+    const port = resolvePort(config);
+    await validateStartupInvariants({ config, project: projectPaths, runtimeRoot, port });
+
+    const bootstrap = await createBootstrap({ project: projectPaths, startupTimestamp });
+    const adapter = createEmbeddedAdapter({
+      runtime: bootstrap.runtime,
+      config: bootstrap.config,
+      startupTimestamp,
+      rootDirectory: runtimeRoot,
+      authService: bootstrap.authService,
+      authMiddleware: bootstrap.authMiddleware,
+      adminController: bootstrap.adminController,
+      contentRegistry: bootstrap.contentRegistry,
+      persistContentTypes: bootstrap.persistContentTypes,
+      entryRegistry: bootstrap.entryRegistry,
+      persistEntries: bootstrap.persistEntries
+    });
+
+    await adapter.start();
+
+    bridgeServer = http.createServer((request, response) => {
+      void adapter.handler(request, response);
+    });
+
+    await new Promise((resolve, reject) => {
+      bridgeServer.once('error', reject);
+      bridgeServer.listen(port, '0.0.0.0', () => resolve(undefined));
+    });
+
+    process.stdout.write(`Nimb v${version}\n`);
+    process.stdout.write('mode: bridge\n');
+    process.stdout.write(`project: ${project.projectRoot}\n`);
+    process.stdout.write('Bridge target: adapter.handler(request, response)\n');
+    process.stdout.write('Reverse proxy hint: forward method/url/headers/body to this handler.\n');
+    process.stdout.write(`Debug port: ${port}\n`);
+    process.stdout.write('Ready.\n');
+
+    const shutdown = async () => {
+      if (bridgeServer) {
+        await new Promise((resolve) => bridgeServer.close(() => resolve(undefined)));
+      }
+
+      await adapter.stop();
+      await bootstrap.runtime.dispose?.();
+      process.exit();
+    };
+
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+  } catch (error) {
+    process.stderr.write(`Bridge startup failed: ${error?.message ?? String(error)}\n`);
+    process.exitCode = 1;
+  }
+};
+
 const startServer = async () => {
   const projectPaths = createProjectPaths(projectRoot);
   const project = createProjectModel({ projectRoot: projectPaths.projectRoot });
@@ -249,6 +313,8 @@ if (args[0] === 'init') {
     process.stderr.write(`Build failed: ${error?.message ?? String(error)}\n`);
     process.exitCode = 1;
   }
+} else if (args[0] === 'bridge') {
+  await startBridge();
 } else {
   await startServer();
 }
