@@ -93,6 +93,33 @@ const writeRuntimeEntrypoints = (distRoot: string) => {
 
   fs.writeFileSync(path.join(serverRoot, 'http-server.js'), "export { createHttpServer } from './core/http/index.ts';\n", 'utf8');
   fs.writeFileSync(path.join(serverRoot, 'runtime-adapters.js'), "export { createRuntimeAdapter } from './core/runtime/adapters/index.ts';\n", 'utf8');
+  fs.writeFileSync(
+    path.join(serverRoot, 'bridge.js'),
+    [
+      "import { createBootstrap } from './core/bootstrap/index.ts';",
+      "import { createEmbeddedAdapter } from './core/runtime/adapters/embedded-adapter.ts';",
+      '',
+      'export const createBridge = async () => {',
+      "  const bootstrap = await createBootstrap({ cwd: process.cwd(), startupTimestamp: new Date().toISOString() });",
+      '  const adapter = createEmbeddedAdapter({',
+      '    runtime: bootstrap.runtime,',
+      '    config: bootstrap.config,',
+      "    startupTimestamp: new Date().toISOString(),",
+      '    rootDirectory: process.cwd(),',
+      '    authService: bootstrap.authService,',
+      '    authMiddleware: bootstrap.authMiddleware,',
+      '    adminController: bootstrap.adminController,',
+      '    contentRegistry: bootstrap.contentRegistry,',
+      '    persistContentTypes: bootstrap.persistContentTypes,',
+      '    entryRegistry: bootstrap.entryRegistry,',
+      '    persistEntries: bootstrap.persistEntries',
+      '  });',
+      '  return adapter.handler;',
+      '};',
+      ''
+    ].join('\n'),
+    'utf8'
+  );
   fs.writeFileSync(path.join(serverRoot, 'start.js'), "import { start } from './bootstrap.js';\n\nstart();\n", 'utf8');
 };
 
