@@ -4,10 +4,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import { runBuild } from '../core/cli/build.ts';
 
-const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase47-'));
+const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase108-'));
 
-const waitForReady = (child) => new Promise((resolve, reject) => {
+const waitForReady = (child) => new Promise<void>((resolve, reject) => {
   let stdout = '';
   let stderr = '';
 
@@ -27,7 +28,7 @@ const waitForReady = (child) => new Promise((resolve, reject) => {
     stdout += chunk.toString('utf8');
     if (stdout.includes('Ready.')) {
       cleanup();
-      resolve({ stdout, stderr });
+      resolve();
     }
   };
 
@@ -50,7 +51,7 @@ const terminate = (child) => new Promise((resolve) => {
   child.kill('SIGTERM');
 });
 
-test('phase 47: nimb build produces deployable output that serves /', async () => {
+test('phase 108: nimb build creates dist runtime that serves / with 200', async () => {
   const cwd = mkdtemp();
   const projectName = 'demo-build';
   const projectRoot = path.join(cwd, projectName);
@@ -62,33 +63,29 @@ test('phase 47: nimb build produces deployable output that serves /', async () =
 
   assert.equal(initResult.status, 0, initResult.stderr);
 
-  fs.writeFileSync(path.join(projectRoot, 'public', 'index.html'), '<h1>Phase 47</h1>\n', 'utf8');
+  fs.writeFileSync(path.join(projectRoot, 'public', 'index.html'), '<h1>Nimb Dist</h1>\n', 'utf8');
 
-  const buildResult = spawnSync('node', ['/workspace/nimb-cms/bin/nimb.js', 'build'], {
-    cwd: projectRoot,
-    encoding: 'utf8'
+  const { distRoot } = runBuild({
+    runtimeRoot: '/workspace/nimb-cms',
+    projectRoot
   });
 
-  assert.equal(buildResult.status, 0, buildResult.stderr);
-
-  const buildRoot = path.join(projectRoot, 'dist');
-  assert.equal(fs.existsSync(buildRoot), true);
-
-  const requiredBuildEntries = ['server', 'public', 'manifest.json'];
-  for (const entry of requiredBuildEntries) {
-    assert.equal(fs.existsSync(path.join(buildRoot, entry)), true, `Expected build entry: ${entry}`);
-  }
+  assert.equal(fs.existsSync(distRoot), true);
+  assert.equal(fs.existsSync(path.join(distRoot, 'server', 'start.js')), true);
+  assert.equal(fs.existsSync(path.join(distRoot, 'server', 'bootstrap.js')), true);
+  assert.equal(fs.existsSync(path.join(distRoot, 'public', 'admin')), true);
+  assert.equal(fs.existsSync(path.join(distRoot, 'manifest.json')), true);
 
   const child = spawn('node', ['dist/server/start.js'], {
     cwd: projectRoot,
-    env: { ...process.env, PORT: '3212' },
+    env: { ...process.env, PORT: '3318' },
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
   try {
     await waitForReady(child);
 
-    const response = await fetch('http://127.0.0.1:3212/');
+    const response = await fetch('http://127.0.0.1:3318/');
     assert.equal(response.status, 200);
   } finally {
     if (child.exitCode === null) {

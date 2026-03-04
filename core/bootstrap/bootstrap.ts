@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { loadConfig } from '../config/config-loader.ts';
 import { createRuntime } from './runtime-factory.ts';
 import { BootstrapSnapshot } from './bootstrap-snapshot.ts';
@@ -186,6 +187,20 @@ const restoreContentStore = async (contentStore, snapshot) => {
   }
 };
 
+
+const isDistRuntimePath = (inputPath: string) => {
+  const normalized = path.resolve(inputPath).split(path.sep).filter(Boolean);
+  return normalized.includes('dist');
+};
+
+const resolveBootstrapProject = ({ cwd, project }: { cwd?: string | undefined; project: ReturnType<typeof createProjectModel> }) => {
+  if (cwd && isDistRuntimePath(cwd)) {
+    return createProjectModel({ projectRoot: cwd });
+  }
+
+  return cwd ? createProjectModel({ projectRoot: cwd }) : project;
+};
+
 export type CreateBootstrapOptions = {
   project?: ReturnType<typeof createProjectModel>
   cwd?: string | undefined
@@ -201,7 +216,7 @@ export const createBootstrap = async ({
   contentStorageAdapter = undefined,
   mode
 }: CreateBootstrapOptions = {}) => {
-  const resolvedProject = cwd ? createProjectModel({ projectRoot: cwd }) : project;
+  const resolvedProject = resolveBootstrapProject({ cwd, project });
   const resolvedPaths = createProjectPaths(resolvedProject.projectRoot ?? resolvedProject.root);
   const installState = getInstallState({ projectRoot: resolvedPaths.projectRoot, runtimeVersion: version });
   const selectedMode = mode ?? (installState.installed === true ? 'runtime' : 'install');
