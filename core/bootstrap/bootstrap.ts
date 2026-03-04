@@ -456,6 +456,13 @@ export const createBootstrap = async ({
   });
 
   const adminController = createAdminController({ dispatcher });
+  runtime.authService = authService;
+  runtime.authMiddleware = authMiddleware;
+  runtime.adminController = adminController;
+  runtime.contentRegistry = contentRegistry;
+  runtime.persistContentTypes = persistContentTypes;
+  runtime.entryRegistry = entryRegistry;
+  runtime.persistEntries = persistEntries;
 
   const inspector = runtime.getInspector();
   const pluginIds = inspector.snapshot().plugins.map((plugin) => plugin.id).filter(Boolean);

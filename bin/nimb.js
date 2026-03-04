@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, createBootstrap, validateAdminStaticDir, validateStartupInvariants } from '../core/bootstrap/index.ts';
-import { createHttpServer } from '../core/http/index.ts';
+import { createRuntimeAdapter, resolveAdapterType } from '../core/runtime/adapters/index.ts';
 import { createProjectModel, createProjectPaths, PROJECT_DIRECTORY_NAMES, isProjectInstalled } from '../core/project/index.ts';
 import { version, resolveRuntimeMode as resolveEnvironmentMode } from '../core/runtime/version.ts';
 import { resolveRuntimeMode } from '../core/runtime/resolve-runtime-mode.ts';
@@ -47,6 +47,13 @@ const resolvePort = (config) => {
   }
 
   return 3000;
+};
+
+
+const resolveRuntimeAdapter = (config, env = process.env) => {
+  const fromEnv = env.NIMB_RUNTIME_ADAPTER;
+  const fromConfig = config?.runtime?.adapter;
+  return resolveAdapterType(fromEnv ?? fromConfig ?? 'node');
 };
 
 const resolveProjectRoot = (argv, env = process.env) => {
@@ -139,7 +146,9 @@ const startServer = async () => {
 
   const startBootstrapServer = async (bootstrapOptions = {}) => {
     const bootstrap = await createBootstrap({ project: projectPaths, startupTimestamp, ...bootstrapOptions });
-    const server = createHttpServer({
+    const adapterType = resolveRuntimeAdapter(bootstrap.config);
+    const adapter = createRuntimeAdapter({
+      type: adapterType,
       runtime: bootstrap.runtime,
       config: bootstrap.config,
       startupTimestamp,
@@ -162,7 +171,7 @@ const startServer = async () => {
       restartHandled = true;
 
       try {
-        await server.stop();
+        await adapter.stop();
         const restarted = await startBootstrapServer({ mode: 'runtime' });
         httpServer = restarted.server;
         currentBootstrap = restarted.bootstrap;
@@ -175,8 +184,9 @@ const startServer = async () => {
       void transitionHandler();
     });
 
-    const { port: activePort } = await server.start();
-    return { bootstrap, server, activePort };
+    await adapter.start();
+    const activePort = typeof adapter.getPort === 'function' ? adapter.getPort() : null;
+    return { bootstrap, server: adapter, activePort: activePort ?? port };
   };
 
   let port;

@@ -55,7 +55,7 @@ const writeRuntimeEntrypoints = (distRoot: string) => {
       "import path from 'node:path';",
       "import { fileURLToPath } from 'node:url';",
       "import { loadConfig, createBootstrap, validateAdminStaticDir, validateStartupInvariants } from './core/bootstrap/index.ts';",
-      "import { createHttpServer } from './core/http/index.ts';",
+      "import { createRuntimeAdapter } from './core/runtime/adapters/index.ts';",
       "import { createProjectPaths } from './core/project/index.ts';",
       '',
       'export const start = async () => {',
@@ -67,7 +67,8 @@ const writeRuntimeEntrypoints = (distRoot: string) => {
       '  validateAdminStaticDir(config, serverRoot);',
       '  await validateStartupInvariants({ config, project: projectPaths, runtimeRoot: serverRoot, port });',
       "  const bootstrap = await createBootstrap({ project: projectPaths, startupTimestamp: new Date().toISOString(), mode: 'runtime' });",
-      '  const server = createHttpServer({',
+      "  const server = createRuntimeAdapter({",
+      "    type: 'node',",
       '    runtime: bootstrap.runtime,',
       '    config: bootstrap.config,',
       "    startupTimestamp: new Date().toISOString(),",
@@ -91,6 +92,7 @@ const writeRuntimeEntrypoints = (distRoot: string) => {
   );
 
   fs.writeFileSync(path.join(serverRoot, 'http-server.js'), "export { createHttpServer } from './core/http/index.ts';\n", 'utf8');
+  fs.writeFileSync(path.join(serverRoot, 'runtime-adapters.js'), "export { createRuntimeAdapter } from './core/runtime/adapters/index.ts';\n", 'utf8');
   fs.writeFileSync(path.join(serverRoot, 'start.js'), "import { start } from './bootstrap.js';\n\nstart();\n", 'utf8');
 };
 
