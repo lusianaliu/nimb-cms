@@ -47,9 +47,15 @@ const ensureDirectory = (directoryPath, label, log) => {
 
 export const validateDataDirectoryWritable = (project, options = {}) => {
   const dataDirectory = project.dataDir ?? project.dataDirectory;
+  const systemDirectory = project.dataSystemDir ?? path.join(dataDirectory, 'system');
+  const contentDirectory = project.dataContentDir ?? path.join(dataDirectory, 'content');
+  const uploadsDirectory = project.dataUploadsDir ?? path.join(dataDirectory, 'uploads');
 
   try {
     ensureDirectory(dataDirectory, 'data directory', options.log);
+    ensureDirectory(systemDirectory, 'data system directory', options.log);
+    ensureDirectory(contentDirectory, 'data content directory', options.log);
+    ensureDirectory(uploadsDirectory, 'data uploads directory', options.log);
   } catch (error) {
     throw new Error(`Startup invariant failed: data directory is not writable: ${dataDirectory}`);
   }
@@ -73,6 +79,17 @@ export const validatePersistenceStorage = (project, options = {}) => {
     JSON.parse(fs.readFileSync(runtimePath, 'utf8'));
   } catch (_error) {
     throw new Error(`Startup invariant failed: persistence file is invalid JSON: ${runtimePath}`);
+  }
+};
+
+
+export const validateLogsDirectoryWritable = (project, options = {}) => {
+  const logsDirectory = project.logsDir ?? path.join(project.projectRoot ?? process.cwd(), 'logs');
+
+  try {
+    ensureDirectory(logsDirectory, 'logs directory', options.log);
+  } catch (error) {
+    throw new Error(`Startup invariant failed: logs directory is not writable: ${logsDirectory}`);
   }
 };
 
@@ -105,5 +122,6 @@ export const validateStartupInvariants = async ({ config, project, runtimeRoot, 
   validateAdminStaticDir(config, runtimeRoot);
   validateDataDirectoryWritable(project, { log });
   validatePersistenceStorage(project, { log });
+  validateLogsDirectoryWritable(project, { log });
   await validatePortAvailable(port);
 };

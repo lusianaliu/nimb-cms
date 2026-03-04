@@ -7,8 +7,9 @@ export const PROJECT_DIRECTORY_NAMES = Object.freeze({
   plugins: 'plugins',
   themes: 'themes',
   public: 'public',
-  persistence: '.nimb',
-  build: '.nimb-build'
+  persistence: 'data/system',
+  build: '.nimb-build',
+  logs: 'logs'
 });
 
 export const createProjectModel = ({ projectRoot = process.cwd() } = {}) => {
@@ -24,7 +25,11 @@ export const createProjectModel = ({ projectRoot = process.cwd() } = {}) => {
     themesDir: projectPaths.themesDir,
     persistenceDir: projectPaths.persistenceDir,
     publicDir: projectPaths.publicDir,
-    configFile: path.join(root, 'nimb.config.json'),
+    logsDir: projectPaths.logsDir,
+    dataSystemDir: projectPaths.dataSystemDir,
+    dataContentDir: projectPaths.dataContentDir,
+    dataUploadsDir: projectPaths.dataUploadsDir,
+    configFile: path.join(projectPaths.configDir, 'nimb.config.json'),
     contentDirectory: path.join(root, PROJECT_DIRECTORY_NAMES.content),
     dataDirectory: projectPaths.dataDir,
     pluginsDirectory: projectPaths.pluginsDir,

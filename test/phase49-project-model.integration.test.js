@@ -8,13 +8,13 @@ test('phase 49: project model resolves canonical project boundaries from project
   const project = createProjectModel({ projectRoot });
 
   assert.equal(project.root, path.resolve(projectRoot));
-  assert.equal(project.configFile, path.join(project.root, 'nimb.config.json'));
+  assert.equal(project.configFile, path.join(project.root, 'config', 'nimb.config.json'));
   assert.equal(project.contentDirectory, path.join(project.root, 'content'));
   assert.equal(project.dataDirectory, path.join(project.root, 'data'));
   assert.equal(project.pluginsDirectory, path.join(project.root, 'plugins'));
   assert.equal(project.themesDirectory, path.join(project.root, 'themes'));
   assert.equal(project.publicDirectory, path.join(project.root, 'public'));
-  assert.equal(project.persistenceDirectory, path.join(project.root, '.nimb'));
+  assert.equal(project.persistenceDirectory, path.join(project.root, 'data', 'system'));
   assert.equal(project.buildDirectory, path.join(project.root, '.nimb-build'));
 });
 
@@ -27,7 +27,8 @@ test('phase 49: project paths resolve canonical absolute directories', () => {
   assert.equal(paths.dataDir, path.join(paths.projectRoot, 'data'));
   assert.equal(paths.pluginsDir, path.join(paths.projectRoot, 'plugins'));
   assert.equal(paths.themesDir, path.join(paths.projectRoot, 'themes'));
-  assert.equal(paths.persistenceDir, path.join(paths.projectRoot, '.nimb'));
+  assert.equal(paths.persistenceDir, path.join(paths.projectRoot, 'data', 'system'));
   assert.equal(paths.publicDir, path.join(paths.projectRoot, 'public'));
+  assert.equal(paths.logsDir, path.join(paths.projectRoot, 'logs'));
   assert.equal(Object.isFrozen(paths), true);
 });

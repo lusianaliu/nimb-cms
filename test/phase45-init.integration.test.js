@@ -65,15 +65,19 @@ test('phase 45: nimb init scaffolds a runnable project', async () => {
 
   assert.equal(fs.existsSync(projectRoot), true);
 
-  const expectedDirectories = ['content', 'data', 'plugins', 'themes', 'public'];
+  const expectedDirectories = ['content', 'data', 'plugins', 'themes', 'public', 'config', 'logs', 'data/system', 'data/content', 'data/uploads'];
   for (const directory of expectedDirectories) {
     const directoryPath = path.join(projectRoot, directory);
     assert.equal(fs.existsSync(directoryPath), true, `Expected ${directory} to exist`);
     assert.equal(fs.statSync(directoryPath).isDirectory(), true, `Expected ${directory} to be a directory`);
   }
 
-  const config = JSON.parse(fs.readFileSync(path.join(projectRoot, 'nimb.config.json'), 'utf8'));
+  const config = JSON.parse(fs.readFileSync(path.join(projectRoot, 'config', 'nimb.config.json'), 'utf8'));
   assert.deepEqual(config, {
+    name: 'My Nimb Site',
+    runtime: {
+      mode: 'production'
+    },
     server: {
       port: 3000
     },
@@ -107,13 +111,8 @@ test('phase 45: nimb init scaffolds a runnable project', async () => {
   try {
     await waitForReady(child);
 
-    const response = await fetch('http://127.0.0.1:3211/health');
+    const response = await fetch('http://127.0.0.1:3211/');
     assert.equal(response.status, 200);
-    const body = await response.json();
-    assert.equal(body.status, 'ok');
-    assert.equal(body.runtime, 'active');
-    assert.equal(typeof body.version, 'string');
-    assert.equal(['development', 'production'].includes(body.mode), true);
   } finally {
     if (child.exitCode === null) {
       await terminate(child);

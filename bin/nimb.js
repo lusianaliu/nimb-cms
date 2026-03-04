@@ -15,6 +15,10 @@ const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const startupTimestamp = new Date().toISOString();
 
 const DEFAULT_CONFIG = {
+  name: 'My Nimb Site',
+  runtime: {
+    mode: 'production'
+  },
   server: {
     port: 3000
   },
@@ -29,8 +33,27 @@ const INIT_DIRECTORIES = [
   PROJECT_DIRECTORY_NAMES.data,
   PROJECT_DIRECTORY_NAMES.plugins,
   PROJECT_DIRECTORY_NAMES.themes,
-  PROJECT_DIRECTORY_NAMES.public
+  PROJECT_DIRECTORY_NAMES.public,
+  PROJECT_DIRECTORY_NAMES.logs,
+  'config',
+  'data/system',
+  'data/content',
+  'data/uploads'
 ];
+
+
+const appendErrorLog = ({ projectRoot, error, context }) => {
+  try {
+    const logsDir = path.join(projectRoot, 'logs');
+    fs.mkdirSync(logsDir, { recursive: true });
+    const logPath = path.join(logsDir, 'runtime-error.log');
+    const message = `[${new Date().toISOString()}] ${context}: ${error?.stack ?? error?.message ?? String(error)}
+`;
+    fs.appendFileSync(logPath, message, 'utf8');
+  } catch (_loggingError) {
+    // best-effort logging only
+  }
+};
 
 const resolvePort = (config) => {
   const fromEnv = process.env.PORT;
@@ -77,13 +100,12 @@ const resolveProjectRoot = (argv, env = process.env) => {
     cleaned.push(arg);
   }
 
-  const fromEnv = env.NIMB_PROJECT_ROOT;
-  const fromStartCommand = cleaned[0] === 'start' && cleaned[1] && !cleaned[1].startsWith('-') ? cleaned[1] : undefined;
-  const normalizedArgs = fromStartCommand ? [cleaned[0], ...cleaned.slice(2)] : cleaned;
-  const configuredRoot = fromArg ?? fromEnv ?? fromStartCommand;
-  const projectRoot = configuredRoot ? path.resolve(invocationCwd, configuredRoot) : invocationCwd;
+  const fromCwd = invocationCwd;
+  const fromEnv = env.NIMB_ROOT ?? env.NIMB_PROJECT_ROOT;
+  const configuredRoot = fromArg ?? fromCwd ?? fromEnv;
+  const projectRoot = path.resolve(invocationCwd, configuredRoot);
 
-  return Object.freeze({ projectRoot, args: Object.freeze(normalizedArgs) });
+  return Object.freeze({ projectRoot, args: Object.freeze(cleaned) });
 };
 
 const createProject = (projectName) => {
@@ -197,6 +219,7 @@ const startBridge = async () => {
     process.on('SIGTERM', shutdown);
   } catch (error) {
     process.stderr.write(`Bridge startup failed: ${error?.message ?? String(error)}\n`);
+    appendErrorLog({ projectRoot, error, context: 'bridge-startup' });
     process.exitCode = 1;
   }
 };
@@ -281,6 +304,7 @@ const startServer = async () => {
     process.stdout.write('Ready.\n');
   } catch (error) {
     process.stderr.write(`Startup failed: ${error?.message ?? String(error)}\n`);
+    appendErrorLog({ projectRoot, error, context: 'startup' });
     process.exitCode = 1;
   }
 
@@ -303,6 +327,7 @@ if (args[0] === 'init') {
     createProject(args[1]);
   } catch (error) {
     process.stderr.write(`Init failed: ${error?.message ?? String(error)}\n`);
+    appendErrorLog({ projectRoot, error, context: 'init' });
     process.exitCode = 1;
   }
 } else if (args[0] === 'build') {
@@ -311,6 +336,7 @@ if (args[0] === 'init') {
     process.stdout.write(`Build complete: ${distRoot}\n`);
   } catch (error) {
     process.stderr.write(`Build failed: ${error?.message ?? String(error)}\n`);
+    appendErrorLog({ projectRoot, error, context: 'build' });
     process.exitCode = 1;
   }
 } else if (args[0] === 'bridge') {
