@@ -86,6 +86,31 @@ const trySendPublicIndex = (response, requestPath, publicRoot) => {
   return true;
 };
 
+const trySendPublicAsset = (response, requestPath, publicRoot) => {
+  if (!requestPath.startsWith('/assets/')) {
+    return false;
+  }
+
+  const relativePath = requestPath.replace(/^\/+assets\//, 'assets/');
+  const absolutePath = path.resolve(publicRoot, relativePath);
+
+  if (absolutePath !== publicRoot && !absolutePath.startsWith(`${publicRoot}${path.sep}`)) {
+    return false;
+  }
+
+  if (!fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
+    return false;
+  }
+
+  const body = fs.readFileSync(absolutePath);
+  response.writeHead(200, {
+    'content-length': body.byteLength,
+    'content-type': 'application/octet-stream'
+  });
+  response.end(body);
+  return true;
+};
+
 export const createRequestHandler = (runtime, {
   config,
   startupTimestamp = new Date().toISOString(),
@@ -248,6 +273,10 @@ export const createRequestHandler = (runtime, {
       }
 
       if (trySendPublicIndex(response, context.path, publicRoot)) {
+        return;
+      }
+
+      if (trySendPublicAsset(response, context.path, publicRoot)) {
         return;
       }
 
