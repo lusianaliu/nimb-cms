@@ -16,9 +16,9 @@ import { createSiteRouter } from '../http/site-router.ts';
 import { createAdminRouter } from '../http/admin-router.ts';
 import { createAdminApiRouter } from '../http/admin-api-router.ts';
 import { createAdminContentRouter } from '../http/admin-content-router.ts';
-import { createAdminMediaRouter } from '../http/admin-media-router.ts';
 import { createAdminAuthRouter } from '../http/admin-auth-router.ts';
 import { ADMIN_SESSION_COOKIE, setCookie } from '../http/cookies.ts';
+import { createMediaController } from '../http/media-controller.ts';
 
 const resolvePublicRoot = ({ runtime, rootDirectory }) => {
   const projectRoot = runtime?.projectPaths?.projectRoot ?? runtime?.project?.projectRoot;
@@ -110,7 +110,7 @@ export const createRequestHandler = (runtime, {
   const adminApiRouter = !installMode && runtime?.mode === 'runtime' ? createAdminApiRouter(runtime) : null;
   const adminAuthRouter = !installMode && runtime?.mode === 'runtime' ? createAdminAuthRouter(runtime) : null;
   const adminContentRouter = !installMode && runtime?.mode === 'runtime' ? createAdminContentRouter(runtime) : null;
-  const adminMediaRouter = !installMode && runtime?.mode === 'runtime' ? createAdminMediaRouter(runtime) : null;
+  const mediaController = !installMode && runtime?.mode === 'runtime' ? createMediaController({ rootDirectory }) : null;
   const router = installMode ? installRouter : runtimeRouter;
   const apiRouter = installMode
     ? { handle: async () => null }
@@ -184,15 +184,6 @@ export const createRequestHandler = (runtime, {
         }
       }
 
-      if (adminMediaRouter) {
-        const adminMediaHandler = adminMediaRouter.dispatch(routeContext);
-        if (adminMediaHandler) {
-          const adminMediaResponse = await Promise.resolve(adminMediaHandler(routeContext));
-          adminMediaResponse.send(response);
-          return;
-        }
-      }
-
       if (adminRouter) {
         const adminHandler = adminRouter.dispatch(routeContext);
         if (adminHandler) {
@@ -211,6 +202,15 @@ export const createRequestHandler = (runtime, {
         }
       }
 
+      if (mediaController) {
+        const mediaHandler = mediaController.dispatch(routeContext);
+        if (mediaHandler) {
+          const mediaResponse = await Promise.resolve(mediaHandler(routeContext));
+          mediaResponse.send(response);
+          return;
+        }
+      }
+
       if (siteRouter) {
         const siteHandler = siteRouter.dispatch(routeContext);
         if (siteHandler) {
@@ -223,6 +223,10 @@ export const createRequestHandler = (runtime, {
       const apiResponse = await apiRouter.handle(routeContext);
       if (apiResponse) {
         apiResponse.send(response);
+        return;
+      }
+
+      if (mediaController && await mediaController.tryServeMediaAsset(response, context.path)) {
         return;
       }
 
