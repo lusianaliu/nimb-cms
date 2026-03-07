@@ -28,7 +28,6 @@ test('phase 120: post system supports CRUD and blog rendering', async () => {
 
     const adminCreatePage = await fetch(`http://127.0.0.1:${port}/admin/posts/new`);
     assert.equal(adminCreatePage.status, 200);
-
     const createResponse = await fetch(`http://127.0.0.1:${port}/admin-api/posts`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -67,7 +66,6 @@ test('phase 120: post system supports CRUD and blog rendering', async () => {
 
     const adminEditPage = await fetch(`http://127.0.0.1:${port}/admin/posts/${encodeURIComponent(created.id)}/edit`);
     assert.equal(adminEditPage.status, 200);
-
     const blogResponse = await fetch(`http://127.0.0.1:${port}/blog`);
     assert.equal(blogResponse.status, 200);
     const blogHtml = await blogResponse.text();

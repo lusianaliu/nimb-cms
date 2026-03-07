@@ -33,7 +33,17 @@ export const renderAdminMediaPage = () => `<!doctype html>
 
     <script>
       function insertImage(url) {
-        window.dispatchEvent(new CustomEvent('nimb:insert-image', { detail: { url } }));
+        const payload = { type: 'nimb:media-selected', url };
+
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage(payload, window.location.origin);
+          window.close();
+          return;
+        }
+
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(payload, window.location.origin);
+        }
       }
 
       const escapeHtml = (value) => String(value ?? '')

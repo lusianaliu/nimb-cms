@@ -48,6 +48,15 @@ test('phase 119: admin pages UI supports listing, creating, editing, and deletin
     assert.equal(emptyListHtml.includes('<h1>Pages</h1>'), true);
     assert.equal(emptyListHtml.includes('Create Page'), true);
 
+    const createFormResponse = await fetch(`http://127.0.0.1:${port}/admin/pages/new`, {
+      headers: { cookie: authCookie }
+    });
+
+    assert.equal(createFormResponse.status, 200);
+    const createFormHtml = await createFormResponse.text();
+    assert.equal(createFormHtml.includes('/admin/editor/tinymce/tinymce.min.js'), true);
+    assert.equal(createFormHtml.includes('/admin/editor/editor.js'), true);
+
     const createResponse = await fetch(`http://127.0.0.1:${port}/admin/pages/new`, {
       method: 'POST',
       headers: {
@@ -86,6 +95,8 @@ test('phase 119: admin pages UI supports listing, creating, editing, and deletin
     const editFormHtml = await editFormResponse.text();
     assert.equal(editFormHtml.includes('Edit Page'), true);
     assert.equal(editFormHtml.includes('phase-119-home'), true);
+    assert.equal(editFormHtml.includes('/admin/editor/tinymce/tinymce.min.js'), true);
+    assert.equal(editFormHtml.includes('/admin/editor/editor.js'), true);
 
     const updateResponse = await fetch(`http://127.0.0.1:${port}/admin/pages/${encodeURIComponent(pageId)}/edit`, {
       method: 'POST',
@@ -112,6 +123,14 @@ test('phase 119: admin pages UI supports listing, creating, editing, and deletin
     const listAfterUpdateHtml = await listAfterUpdateResponse.text();
     assert.equal(listAfterUpdateHtml.includes('Phase 119 Home Updated'), true);
     assert.equal(listAfterUpdateHtml.includes('phase-119-home-updated'), true);
+
+    const updatedPageResponse = await fetch(`http://127.0.0.1:${port}/admin-api/pages/${encodeURIComponent(pageId)}`, {
+      headers: { cookie: authCookie }
+    });
+
+    assert.equal(updatedPageResponse.status, 200);
+    const updatedPage = await updatedPageResponse.json();
+    assert.equal(updatedPage.data.body, 'Updated from admin pages UI');
 
     const deleteResponse = await fetch(`http://127.0.0.1:${port}/admin/pages/${encodeURIComponent(pageId)}/delete`, {
       method: 'POST',
