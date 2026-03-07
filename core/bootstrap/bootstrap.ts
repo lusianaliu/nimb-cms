@@ -15,7 +15,7 @@ import { createAdminNavRegistry } from '../admin/admin-nav-registry.ts';
 import { createAdminMiddlewareRegistry } from '../admin/admin-middleware.ts';
 import type { Middleware, MiddlewareContext } from '../http/middleware.ts';
 import { createDefaultAdminTheme } from '../admin/themes/default-theme.ts';
-import { ContentRegistry, ContentStore, ContentQueryService, ContentCommandService, EntryRegistry, ContentTypeRegistry, type ContentEvents } from '../content/index.ts';
+import { ContentRegistry, ContentStore, ContentQueryService, ContentCommandService, EntryRegistry, ContentTypeRegistry, registerDefaultContentTypes, type ContentEvents } from '../content/index.ts';
 import { createProjectModel, createProjectPaths } from '../project/index.ts';
 import { resolveRuntimeMode } from '../runtime/resolve-runtime-mode.ts';
 import { version } from '../runtime/version.ts';
@@ -104,29 +104,6 @@ const createScopedRuntime = (runtime, pluginId: string, capabilities: Capability
       list: () => runtime.plugins?.list() ?? []
     })
   });
-};
-
-const SYSTEM_PAGE_CONTENT_TYPE = Object.freeze({
-  name: 'Page',
-  slug: 'page',
-  fields: Object.freeze([
-    Object.freeze({ name: 'title', type: 'string', required: true }),
-    Object.freeze({ name: 'slug', type: 'string', required: true }),
-    Object.freeze({ name: 'body', type: 'text' }),
-    Object.freeze({ name: 'published', type: 'boolean' })
-  ])
-});
-
-const registerSystemContentTypes = (runtimeMode, contentTypes) => {
-  if (runtimeMode !== 'normal') {
-    return;
-  }
-
-  if (contentTypes.get(SYSTEM_PAGE_CONTENT_TYPE.slug)) {
-    return;
-  }
-
-  contentTypes.register(SYSTEM_PAGE_CONTENT_TYPE);
 };
 
 const toRuntimeStatus = (runtime) => {
@@ -227,7 +204,7 @@ export const createBootstrap = async ({
   runtime.dispose = () => disposeRuntime(runtime);
   runtime.mode = selectedMode;
   runtime.contentTypes = new ContentTypeRegistry();
-  registerSystemContentTypes(runtimeMode, runtime.contentTypes);
+  registerDefaultContentTypes(runtime.contentTypes);
   runtime.projectPaths = resolvedPaths;
   runtime.project = resolvedPaths;
   runtime.version = version;
@@ -301,7 +278,7 @@ export const createBootstrap = async ({
   const contentRegistry = new ContentRegistry();
   const entryRegistry = new EntryRegistry({ contentRegistry, rootDirectory: resolvedPaths.projectRoot });
 
-  runtime.contentStore = new ContentStore(runtime.contentTypes);
+  runtime.contentStore = new ContentStore(runtime.contentTypes, { rootDirectory: resolvedPaths.dataContentDir });
   runtime.contentQuery = new ContentQueryService(runtime.contentStore);
   runtime.settings = createSettingsModule(runtime);
   runtime.createScopedRuntime = (pluginOrCapabilities: string | Capability[] = [], maybeCapabilities: Capability[] = []) => {
@@ -343,6 +320,11 @@ export const createBootstrap = async ({
     createEntry: async (typeSlug: string, data: Record<string, unknown>) => runtime.contentCommand.create(typeSlug, data),
     updateEntry: async (typeSlug: string, id: string, data: Record<string, unknown>) => runtime.contentCommand.update(typeSlug, id, data),
     deleteEntry: async (typeSlug: string, id: string) => runtime.contentCommand.delete(typeSlug, id),
+    create: async (typeSlug: string, data: Record<string, unknown>) => runtime.contentCommand.create(typeSlug, data),
+    update: async (typeSlug: string, id: string, data: Record<string, unknown>) => runtime.contentCommand.update(typeSlug, id, data),
+    delete: async (typeSlug: string, id: string) => runtime.contentCommand.delete(typeSlug, id),
+    get: (typeSlug: string, id: string) => runtime.contentQuery.get(typeSlug, id),
+    list: (typeSlug: string) => runtime.contentQuery.list(typeSlug),
     invalidateRenderCache: () => runtime.renderCache?.invalidate?.()
   });
 
