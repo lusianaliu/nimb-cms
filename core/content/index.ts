@@ -12,3 +12,5 @@ export { EntryStore } from './entry-store.ts';
 export { ContentTypeRegistry } from './content-type-registry.ts';
 
 export { createContentEntry, type ContentEntry } from './content-entry.ts';
+
+export { PAGE_CONTENT_TYPE, POST_CONTENT_TYPE, SETTINGS_CONTENT_TYPE, DEFAULT_CONTENT_TYPES, registerDefaultContentTypes } from './content-types.ts';

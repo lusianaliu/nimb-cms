@@ -3,9 +3,15 @@ import { validateContentSchema } from './content-validator.ts';
 
 const mutationAllowed = (source) => source === 'admin.command' || source === 'restore';
 
+type FlatContentType = {
+  name: string;
+  fields: Record<string, string>;
+};
+
 export class ContentRegistry {
   constructor() {
     this.schemas = new Map();
+    this.contentTypes = new Map<string, FlatContentType>();
   }
 
   register(schemaInput, { source = 'unknown' } = {}) {
@@ -33,6 +39,36 @@ export class ContentRegistry {
     return Object.freeze([...this.schemas.values()]
       .map((entry) => entry.schema)
       .sort((left, right) => left.name.localeCompare(right.name)));
+  }
+
+  registerContentType(type: FlatContentType) {
+    if (!type || typeof type !== 'object') {
+      throw new Error('Content type must be an object');
+    }
+
+    const name = String(type.name ?? '').trim();
+    if (!name) {
+      throw new Error('Content type name is required');
+    }
+
+    if (this.contentTypes.has(name)) {
+      throw new Error(`Content type already registered: ${name}`);
+    }
+
+    const fields = type.fields && typeof type.fields === 'object' && !Array.isArray(type.fields)
+      ? { ...type.fields }
+      : {};
+
+    this.contentTypes.set(name, Object.freeze({ name, fields: Object.freeze(fields) }));
+    return this.getContentType(name);
+  }
+
+  getContentType(name: string): FlatContentType | null {
+    return this.contentTypes.get(name) ?? null;
+  }
+
+  listContentTypes(): FlatContentType[] {
+    return [...this.contentTypes.values()];
   }
 
   inspectorSnapshot() {
