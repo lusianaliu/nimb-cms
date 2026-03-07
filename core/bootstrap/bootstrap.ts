@@ -25,6 +25,7 @@ import { JsonStorageAdapter } from '../storage/json-storage-adapter.ts';
 import { EventEmitter, createEventBus } from '../events/event-bus.ts';
 import { HookRegistry } from '../hooks/index.ts';
 import { loadPlugins } from '../plugin/plugin-loader.ts';
+import { createPluginRegistry } from '../plugin/plugin-registry.ts';
 import type { BootstrapMode } from './bootstrap-mode.ts';
 import { seedSystem } from '../setup/system-seed.ts';
 import { createThemeManager } from '../theme/theme-manager.ts';
@@ -295,14 +296,7 @@ export const createBootstrap = async ({
     const capabilities = Array.isArray(pluginOrCapabilities) ? pluginOrCapabilities : maybeCapabilities;
     return createScopedRuntime(runtime, pluginId, capabilities);
   };
-  const pluginRegistry = new Map<string, Record<string, unknown>>();
-  runtime.plugins = Object.freeze({
-    get: (id: string) => pluginRegistry.get(id),
-    list: () => Array.from(pluginRegistry.values()),
-    register: (id: string, plugin: Record<string, unknown>) => {
-      pluginRegistry.set(id, Object.freeze({ ...(plugin ?? {}), id }));
-    }
-  });
+  runtime.plugins = createPluginRegistry();
   runtime.eventBus = new EventEmitter<ContentEvents>();
   runtime.events = createEventBus();
   runtime.events.on('system.installed', () => {
