@@ -7,10 +7,26 @@ const DEFAULT_ADMIN_BRANDING = Object.freeze({
   logoText: 'Nimb'
 });
 
-const resolveSettings = (runtime) => {
-  const entries = runtime?.contentStore?.list?.('settings') ?? [];
-  return entries[0]?.data ?? {};
+const readJsonBody = async (request): Promise<Record<string, unknown>> => {
+  const chunks: Buffer[] = [];
+
+  for await (const chunk of request) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  if (chunks.length === 0) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
 };
+
+const resolveSettings = (runtime) => runtime?.settings?.getSettings?.() ?? {};
 
 const getSetting = (runtime, key, fallback) => {
   try {
@@ -19,7 +35,7 @@ const getSetting = (runtime, key, fallback) => {
       return value;
     }
   } catch {
-    // Fallback to legacy storage reads.
+    // Fallback to storage reads.
   }
 
   return fallback();
@@ -52,10 +68,21 @@ const resolveAdminTheme = (runtime) => {
 
 export const createAdminApiRouter = (runtime) => Object.freeze({
   dispatch(context) {
+    if (context.path === `${ADMIN_API_BASE_PATH}/settings` && context.method === 'GET') {
+      return () => jsonResponse(resolveSettings(runtime));
+    }
+
+    if (context.path === `${ADMIN_API_BASE_PATH}/settings` && context.method === 'PUT') {
+      return async (requestContext) => {
+        const payload = await readJsonBody(requestContext.request);
+        const settings = await runtime?.settings?.updateSettings?.(payload);
+        return jsonResponse(settings ?? resolveSettings(runtime));
+      };
+    }
+
     if (context.method !== 'GET') {
       return null;
     }
-
 
     if (context.path === `${ADMIN_API_BASE_PATH}/pages`) {
       const pages = runtime?.adminRegistry?.getAdminPages?.() ?? [];

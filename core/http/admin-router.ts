@@ -6,6 +6,7 @@ import { renderAdminDashboardPage } from '../admin/admin-dashboard-page.ts';
 import { renderAdminMediaPage } from '../admin/admin-media-page.ts';
 import { renderAdminPageFormPage, renderAdminPagesListPage } from '../admin/admin-pages-page.ts';
 import { renderAdminPostFormPage, renderAdminPostsListPage } from '../admin/admin-posts-page.ts';
+import { renderAdminSettingsPage } from '../admin/admin-settings-page.ts';
 import { createPageController } from './page-controller.ts';
 import { createPostController } from './post-controller.ts';
 import type { MiddlewareContext } from './middleware.ts';
@@ -414,6 +415,10 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
 
       if (context.path === '/admin/media' && context.method === 'GET') {
         return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(renderAdminMediaPage()));
+      }
+
+      if (context.path === '/admin/settings' && context.method === 'GET') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(renderAdminSettingsPage(runtime?.settings?.getSettings?.() ?? {})));
       }
 
       if (context.path === '/admin/posts/new' && context.method === 'GET') {
