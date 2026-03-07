@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import { runMiddlewareStack } from './run-middleware.ts';
 import { renderAdminDashboardPage } from '../admin/admin-dashboard-page.ts';
+import { renderAdminPageFormPage, renderAdminPagesListPage } from '../admin/admin-pages-page.ts';
 import { createPageController } from './page-controller.ts';
 import type { MiddlewareContext } from './middleware.ts';
 
@@ -138,6 +140,57 @@ const toStaticResponse = (body: Buffer, contentType: string) => ({
   }
 });
 
+const toRedirectResponse = (location: string, statusCode = 302) => ({
+  statusCode,
+  send(response) {
+    response.writeHead(statusCode, {
+      location,
+      'content-length': '0'
+    });
+    response.end();
+  }
+});
+
+const toTextResponse = (statusCode: number, bodyText: string) => ({
+  statusCode,
+  send(response) {
+    const body = Buffer.from(bodyText, 'utf8');
+    response.writeHead(statusCode, {
+      'content-length': body.byteLength,
+      'content-type': 'text/plain; charset=utf-8'
+    });
+    response.end(body);
+  }
+});
+
+const parseFormBody = async (request) => {
+  const chunks: Buffer[] = [];
+
+  for await (const chunk of request) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  return Object.fromEntries(new URLSearchParams(Buffer.concat(chunks).toString('utf8')));
+};
+
+const createJsonRequest = (method: string, payload?: Record<string, unknown>) => {
+  const body = typeof payload === 'undefined' ? '' : JSON.stringify(payload);
+  const request = Readable.from(body ? [Buffer.from(body, 'utf8')] : []);
+  (request as Record<string, unknown>).headers = { 'content-type': 'application/json' };
+  (request as Record<string, unknown>).method = method;
+  return request;
+};
+
+const invokePageApi = async (pageController, context) => {
+  const handler = pageController.dispatch(context);
+  if (!handler) {
+    return null;
+  }
+
+  const response = await Promise.resolve(handler(context));
+  return response;
+};
+
 const loadAdminShell = (rootDirectory: string) => {
   const shellPath = path.resolve(rootDirectory, 'admin/index.html');
 
@@ -212,6 +265,120 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
     dispatch(context) {
       if (context.path.startsWith('/admin-api/pages')) {
         return pageController.dispatch(context);
+      }
+
+      if (context.path === '/admin/pages' && context.method === 'GET') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
+          const apiResponse = await invokePageApi(pageController, {
+            method: 'GET',
+            path: '/admin-api/pages',
+            params: {},
+            request: createJsonRequest('GET')
+          });
+
+          if (!apiResponse || apiResponse.statusCode !== 200) {
+            return toTextResponse(500, 'Failed to load pages.');
+          }
+
+          const pages = runtime.content.list('page');
+          return toHtmlResponse(renderAdminPagesListPage({ pages }));
+        });
+      }
+
+      if (context.path === '/admin/pages/new' && context.method === 'GET') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(renderAdminPageFormPage({ mode: 'new' })));
+      }
+
+      if (context.path === '/admin/pages/new' && context.method === 'POST') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
+          const formData = await parseFormBody(requestContext.request);
+          const payload = {
+            title: `${formData.title ?? ''}`,
+            slug: `${formData.slug ?? ''}`,
+            body: `${formData.body ?? ''}`
+          };
+
+          const apiResponse = await invokePageApi(pageController, {
+            method: 'POST',
+            path: '/admin-api/pages',
+            params: {},
+            request: createJsonRequest('POST', payload)
+          });
+
+          if (!apiResponse || apiResponse.statusCode >= 400) {
+            return toTextResponse(400, 'Failed to create page.');
+          }
+
+          return toRedirectResponse('/admin/pages');
+        });
+      }
+
+      const editMatch = context.path.match(/^\/admin\/pages\/([^/]+)\/edit$/);
+      if (editMatch && context.method === 'GET') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
+          const id = decodeURIComponent(editMatch[1]);
+          const page = runtime.content.get('page', id);
+          if (!page) {
+            return toTextResponse(404, 'Page not found.');
+          }
+
+          const apiResponse = await invokePageApi(pageController, {
+            method: 'GET',
+            path: `/admin-api/pages/${encodeURIComponent(id)}`,
+            params: { id },
+            request: createJsonRequest('GET')
+          });
+
+          if (!apiResponse || apiResponse.statusCode !== 200) {
+            return toTextResponse(404, 'Page not found.');
+          }
+
+          return toHtmlResponse(renderAdminPageFormPage({ mode: 'edit', page }));
+        });
+      }
+
+      if (editMatch && context.method === 'POST') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
+          const id = decodeURIComponent(editMatch[1]);
+          const formData = await parseFormBody(requestContext.request);
+          const payload = {
+            title: `${formData.title ?? ''}`,
+            slug: `${formData.slug ?? ''}`,
+            body: `${formData.body ?? ''}`
+          };
+
+          const apiResponse = await invokePageApi(pageController, {
+            method: 'PUT',
+            path: `/admin-api/pages/${encodeURIComponent(id)}`,
+            params: { id },
+            request: createJsonRequest('PUT', payload)
+          });
+
+          if (!apiResponse || apiResponse.statusCode >= 400) {
+            return toTextResponse(400, 'Failed to update page.');
+          }
+
+          return toRedirectResponse('/admin/pages');
+        });
+      }
+
+      const deleteMatch = context.path.match(/^\/admin\/pages\/([^/]+)\/delete$/);
+      if (deleteMatch && context.method === 'POST') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
+          const id = decodeURIComponent(deleteMatch[1]);
+          const apiResponse = await invokePageApi(pageController, {
+            method: 'DELETE',
+            path: `/admin-api/pages/${encodeURIComponent(id)}`,
+            params: { id },
+            request: createJsonRequest('DELETE')
+          });
+
+          if (!apiResponse || apiResponse.statusCode >= 400) {
+            return toTextResponse(404, 'Page not found.');
+          }
+
+          return toRedirectResponse('/admin/pages');
+        });
       }
 
       if (context.method !== 'GET') {
