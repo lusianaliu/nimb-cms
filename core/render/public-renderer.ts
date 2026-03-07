@@ -60,7 +60,14 @@ const parseNavigationItems = (value: unknown) => {
 };
 
 const resolveNavigation = (runtime) => {
-  const entries = runtime?.contentStore?.list?.('navigation') ?? [];
+  let entries = [];
+
+  try {
+    entries = runtime?.contentStore?.list?.('navigation') ?? [];
+  } catch {
+    entries = [];
+  }
+
   const primary = entries.find((entry) => `${entry?.data?.slug ?? ''}` === 'primary');
   const items = parseNavigationItems(primary?.data?.items);
 
