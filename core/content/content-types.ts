@@ -19,8 +19,7 @@ export const POST_CONTENT_TYPE: ContentTypeDefinition = Object.freeze({
     Object.freeze({ name: 'title', type: 'string', required: true }),
     Object.freeze({ name: 'slug', type: 'string', required: true }),
     Object.freeze({ name: 'body', type: 'text' }),
-    Object.freeze({ name: 'publishedAt', type: 'datetime' }),
-    Object.freeze({ name: 'published', type: 'boolean' })
+    Object.freeze({ name: 'publishedAt', type: 'datetime' })
   ])
 });
 

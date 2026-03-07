@@ -108,6 +108,16 @@ const coerceFieldValue = (type: string, rawValue: unknown) => {
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
+  if (type === 'datetime') {
+    const text = `${rawValue ?? ''}`.trim();
+    if (!text) {
+      return undefined;
+    }
+
+    const parsed = new Date(text);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+  }
+
   return `${rawValue ?? ''}`;
 };
 
@@ -117,7 +127,10 @@ const buildEntryData = (schema, formData: Record<string, unknown>, existingEntri
   for (const field of schema?.fields ?? []) {
     const name = `${field?.name ?? ''}`;
     const raw = formData[name];
-    data[name] = coerceFieldValue(`${field?.type ?? 'string'}`, raw);
+    const value = coerceFieldValue(`${field?.type ?? 'string'}`, raw);
+    if (typeof value !== 'undefined') {
+      data[name] = value;
+    }
   }
 
   if (!`${data.slug ?? ''}`.trim()) {

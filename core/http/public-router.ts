@@ -18,9 +18,35 @@ const toRenderableEntry = (entry) => {
   return Object.freeze({
     title: `${data.title ?? 'Untitled'}`,
     slug: `${data.slug ?? ''}`,
-    content: `${data.body ?? ''}`
+    content: `${data.body ?? ''}`,
+    publishedAt: `${data.publishedAt ?? ''}`
   });
 };
+
+const escapeHtml = (value: unknown): string => `${value ?? ''}`
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#39;');
+
+const renderThemeBlogList = (runtime, posts) => {
+  const postsHtml = (posts ?? []).map((post) => `<article>
+      <h2><a href="/blog/${encodeURIComponent(`${post?.slug ?? ''}`)}">${escapeHtml(post?.title ?? 'Untitled')}</a></h2>
+      <p><small>${escapeHtml(post?.publishedAt || 'Unscheduled')}</small></p>
+    </article>`).join('');
+
+  return runtime?.themeRenderer?.renderThemePage?.('blog', runtime, {
+    posts: postsHtml,
+    title: 'Blog'
+  }) ?? '';
+};
+
+const renderThemePost = (runtime, post) => runtime?.themeRenderer?.renderThemePage?.('post', runtime, {
+  title: `${post?.title ?? ''}`,
+  body: `${post?.content ?? ''}`,
+  publishedAt: `${post?.publishedAt ?? ''}`
+}) ?? '';
 
 export const createPublicRouter = (runtime) => {
   const renderer = createPublicRenderer(runtime);
@@ -62,7 +88,10 @@ export const createPublicRouter = (runtime) => {
           template: 'blog-list',
           content: { posts: getLatestPosts(runtime, 50) }
         });
-        return toHtmlResponse(html);
+
+        const posts = getLatestPosts(runtime, 50);
+        const themedHtml = renderThemeBlogList(runtime, posts);
+        return toHtmlResponse(themedHtml || html);
       }
     },
     {
@@ -87,7 +116,8 @@ export const createPublicRouter = (runtime) => {
           content: { post: toRenderableEntry(post) }
         });
 
-        return toHtmlResponse(html);
+        const themedHtml = renderThemePost(runtime, toRenderableEntry(post));
+        return toHtmlResponse(themedHtml || html);
       }
     },
     {

@@ -4,7 +4,9 @@ import { Readable } from 'node:stream';
 import { runMiddlewareStack } from './run-middleware.ts';
 import { renderAdminDashboardPage } from '../admin/admin-dashboard-page.ts';
 import { renderAdminPageFormPage, renderAdminPagesListPage } from '../admin/admin-pages-page.ts';
+import { renderAdminPostFormPage, renderAdminPostsListPage } from '../admin/admin-posts-page.ts';
 import { createPageController } from './page-controller.ts';
+import { createPostController } from './post-controller.ts';
 import type { MiddlewareContext } from './middleware.ts';
 
 const defaultAdminShell = `<!doctype html>
@@ -260,11 +262,16 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
   const normalizedBasePath = '/admin';
   const shell = loadAdminShell(rootDirectory);
   const pageController = createPageController(runtime);
+  const postController = createPostController(runtime);
 
   return Object.freeze({
     dispatch(context) {
       if (context.path.startsWith('/admin-api/pages')) {
         return pageController.dispatch(context);
+      }
+
+      if (context.path.startsWith('/admin-api/posts')) {
+        return postController.dispatch(context);
       }
 
       if (context.path === '/admin/pages' && context.method === 'GET') {
@@ -378,6 +385,111 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
           }
 
           return toRedirectResponse('/admin/pages');
+        });
+      }
+
+      if (context.path === '/admin/posts' && context.method === 'GET') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
+          const posts = runtime.content.list('post');
+          return toHtmlResponse(renderAdminPostsListPage({ posts }));
+        });
+      }
+
+      if (context.path === '/admin/posts/new' && context.method === 'GET') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(renderAdminPostFormPage({ mode: 'new' })));
+      }
+
+      if (context.path === '/admin/posts/new' && context.method === 'POST') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
+          const formData = await parseFormBody(requestContext.request);
+          const payload = {
+            title: `${formData.title ?? ''}`,
+            slug: `${formData.slug ?? ''}`,
+            body: `${formData.body ?? ''}`,
+            publishedAt: `${formData.publishedAt ?? ''}`
+          };
+
+          const apiResponse = await invokePageApi(postController, {
+            method: 'POST',
+            path: '/admin-api/posts',
+            params: {},
+            request: createJsonRequest('POST', payload)
+          });
+
+          if (!apiResponse || apiResponse.statusCode >= 400) {
+            return toTextResponse(400, 'Failed to create post.');
+          }
+
+          return toRedirectResponse('/admin/posts');
+        });
+      }
+
+      const editPostMatch = context.path.match(/^\/admin\/posts\/([^/]+)\/edit$/);
+      if (editPostMatch && context.method === 'GET') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
+          const id = decodeURIComponent(editPostMatch[1]);
+          const post = runtime.content.get('post', id);
+          if (!post) {
+            return toTextResponse(404, 'Post not found.');
+          }
+
+          const apiResponse = await invokePageApi(postController, {
+            method: 'GET',
+            path: `/admin-api/posts/${encodeURIComponent(id)}`,
+            params: { id },
+            request: createJsonRequest('GET')
+          });
+
+          if (!apiResponse || apiResponse.statusCode !== 200) {
+            return toTextResponse(404, 'Post not found.');
+          }
+
+          return toHtmlResponse(renderAdminPostFormPage({ mode: 'edit', post }));
+        });
+      }
+
+      if (editPostMatch && context.method === 'POST') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
+          const id = decodeURIComponent(editPostMatch[1]);
+          const formData = await parseFormBody(requestContext.request);
+          const payload = {
+            title: `${formData.title ?? ''}`,
+            slug: `${formData.slug ?? ''}`,
+            body: `${formData.body ?? ''}`,
+            publishedAt: `${formData.publishedAt ?? ''}`
+          };
+
+          const apiResponse = await invokePageApi(postController, {
+            method: 'PUT',
+            path: `/admin-api/posts/${encodeURIComponent(id)}`,
+            params: { id },
+            request: createJsonRequest('PUT', payload)
+          });
+
+          if (!apiResponse || apiResponse.statusCode >= 400) {
+            return toTextResponse(400, 'Failed to update post.');
+          }
+
+          return toRedirectResponse('/admin/posts');
+        });
+      }
+
+      const deletePostMatch = context.path.match(/^\/admin\/posts\/([^/]+)\/delete$/);
+      if (deletePostMatch && context.method === 'POST') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
+          const id = decodeURIComponent(deletePostMatch[1]);
+          const apiResponse = await invokePageApi(postController, {
+            method: 'DELETE',
+            path: `/admin-api/posts/${encodeURIComponent(id)}`,
+            params: { id },
+            request: createJsonRequest('DELETE')
+          });
+
+          if (!apiResponse || apiResponse.statusCode >= 400) {
+            return toTextResponse(404, 'Post not found.');
+          }
+
+          return toRedirectResponse('/admin/posts');
         });
       }
 
