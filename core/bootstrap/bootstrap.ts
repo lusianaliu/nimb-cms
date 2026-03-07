@@ -28,6 +28,7 @@ import { loadPlugins } from '../plugin/plugin-loader.ts';
 import type { BootstrapMode } from './bootstrap-mode.ts';
 import { seedSystem } from '../setup/system-seed.ts';
 import { createThemeManager } from '../theme/theme-manager.ts';
+import { createThemeRenderer } from '../theme/theme-renderer.ts';
 import { createSettingsModule } from '../system/settings.ts';
 import { createMediaService } from '../media/media-service.ts';
 import type { Capability } from '../runtime/capabilities.ts';
@@ -323,6 +324,7 @@ export const createBootstrap = async ({
   });
   runtime.hooks = new HookRegistry();
   runtime.theme = createThemeManager(runtime);
+  runtime.themeRenderer = createThemeRenderer(runtime);
 
   const persistContentSnapshot = async () => {
     await resolvedContentStorageAdapter.saveContentSnapshot(serializeContentStore(runtime.contentStore, runtime.contentTypes));
