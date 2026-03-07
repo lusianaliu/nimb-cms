@@ -204,6 +204,27 @@ const loadAdminShell = (rootDirectory: string) => {
   return fs.readFileSync(shellPath, 'utf8');
 };
 
+const resolveStaticAsset = (assetRoot: string, relativePath: string) => {
+  const assetPath = path.resolve(assetRoot, relativePath);
+  if (!assetPath.startsWith(`${assetRoot}${path.sep}`) || !fs.existsSync(assetPath) || !fs.statSync(assetPath).isFile()) {
+    return null;
+  }
+
+  if (assetPath.endsWith('.js')) {
+    return toStaticResponse(fs.readFileSync(assetPath), 'application/javascript; charset=utf-8');
+  }
+
+  if (assetPath.endsWith('.css')) {
+    return toStaticResponse(fs.readFileSync(assetPath), 'text/css; charset=utf-8');
+  }
+
+  if (assetPath.endsWith('.svg')) {
+    return toStaticResponse(fs.readFileSync(assetPath), 'image/svg+xml');
+  }
+
+  return toStaticResponse(fs.readFileSync(assetPath), 'application/octet-stream');
+};
+
 const resolveAdminAsset = (rootDirectory: string, requestPath: string) => {
   const relativePath = requestPath.replace(/^\/admin\/?/, '');
 
@@ -211,19 +232,14 @@ const resolveAdminAsset = (rootDirectory: string, requestPath: string) => {
     return null;
   }
 
-  const assetRoot = path.resolve(rootDirectory, 'admin');
-  const assetPath = path.resolve(assetRoot, relativePath);
+  const adminAsset = resolveStaticAsset(path.resolve(rootDirectory, 'admin'), relativePath);
+  if (adminAsset) {
+    return adminAsset;
+  }
 
-  if (assetPath.startsWith(`${assetRoot}${path.sep}`) && fs.existsSync(assetPath) && fs.statSync(assetPath).isFile()) {
-    if (assetPath.endsWith('.js')) {
-      return toStaticResponse(fs.readFileSync(assetPath), 'application/javascript; charset=utf-8');
-    }
-
-    if (assetPath.endsWith('.css')) {
-      return toStaticResponse(fs.readFileSync(assetPath), 'text/css; charset=utf-8');
-    }
-
-    return null;
+  const publicAdminAsset = resolveStaticAsset(path.resolve(rootDirectory, 'public/admin'), relativePath);
+  if (publicAdminAsset) {
+    return publicAdminAsset;
   }
 
   if (relativePath === 'app.js') {

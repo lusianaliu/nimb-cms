@@ -104,6 +104,11 @@ export const renderAdminPageFormPage = ({ mode, page = null }) => {
           <button type="submit">${isEdit ? 'Update' : 'Create'} Page</button>
           <a href="/admin/pages">Cancel</a>
         </p>
-      </form>`
+      </form>
+      <script src="/admin/editor/tinymce/tinymce.min.js"></script>
+      <script src="/admin/editor/editor.js"></script>
+      <script>
+        initEditor('#body');
+      </script>`
   });
 };

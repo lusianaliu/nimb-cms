@@ -109,6 +109,11 @@ export const renderAdminPostFormPage = ({ mode, post = null }) => {
           <button type="submit">${isEdit ? 'Update' : 'Create'} Post</button>
           <a href="/admin/posts">Cancel</a>
         </p>
-      </form>`
+      </form>
+      <script src="/admin/editor/tinymce/tinymce.min.js"></script>
+      <script src="/admin/editor/editor.js"></script>
+      <script>
+        initEditor('#body');
+      </script>`
   });
 };
