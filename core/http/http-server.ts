@@ -31,7 +31,7 @@ export const createHttpServer = ({ runtime, config, startupTimestamp, rootDirect
       const address = server.address();
       const activePort = typeof address === 'object' && address ? address.port : targetPort;
 
-      if (runtime?.getRuntimeMode?.() === 'installer') {
+      if (runtime?.getRuntimeMode?.() === 'installer' && process.env.NODE_ENV !== 'production') {
         process.stdout.write('installer HTTP gate: active\n');
       }
 
