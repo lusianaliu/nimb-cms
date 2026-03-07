@@ -246,6 +246,12 @@ export const createBootstrap = async ({
     path: '/admin/media',
     order: 20
   });
+  navRegistry.register({
+    id: 'settings',
+    label: 'Settings',
+    path: '/admin/settings',
+    order: 30
+  });
   runtime.adminApi = Object.freeze({
     basePath: '/admin-api'
   });

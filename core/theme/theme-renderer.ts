@@ -16,26 +16,46 @@ const readTemplate = (filePath: string) => {
   return fs.readFileSync(filePath, 'utf8');
 };
 
+const readSiteSettings = (runtime) => runtime?.settings?.getSettings?.() ?? {};
 
 const readSiteName = (runtime) => {
   try {
+    const settings = readSiteSettings(runtime);
+    if (typeof settings.siteName === 'string' && settings.siteName.trim() !== '') {
+      return settings.siteName;
+    }
+
     const value = runtime?.settings?.get?.('site.name');
     if (typeof value === 'string' && value.trim() !== '') {
       return value;
     }
   } catch {
-    // Default while settings content type is not initialized.
+    // Default while settings storage is not initialized.
   }
 
   return DEFAULT_SITE_NAME;
 };
+
+const readThemeName = (runtime) => {
+  try {
+    const settings = readSiteSettings(runtime);
+    if (typeof settings.theme === 'string' && settings.theme.trim() !== '') {
+      return settings.theme;
+    }
+  } catch {
+    // Default while settings storage is not initialized.
+  }
+
+  return `${runtime?.theme?.activePublicTheme?.id ?? DEFAULT_THEME_NAME}`.trim() || DEFAULT_THEME_NAME;
+};
+
 export const createThemeRenderer = (runtime) => {
   const projectRoot = runtime?.projectPaths?.projectRoot ?? runtime?.project?.projectRoot ?? process.cwd();
   const fallbackProjectRoot = process.cwd();
 
   return Object.freeze({
     renderThemePage(page = 'index', rendererRuntime = runtime, pageVariables: Record<string, unknown> = {}) {
-      const activeTheme = `${rendererRuntime?.theme?.activePublicTheme?.id ?? DEFAULT_THEME_NAME}`.trim() || DEFAULT_THEME_NAME;
+      const activeTheme = readThemeName(rendererRuntime);
       const siteName = readSiteName(rendererRuntime);
       const primaryThemePath = path.join(projectRoot, 'themes', activeTheme);
       const fallbackThemePath = path.join(fallbackProjectRoot, 'themes', activeTheme);
