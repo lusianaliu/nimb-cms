@@ -7,18 +7,17 @@ import { createRuntimeRoute } from '../http/routes/runtime.ts';
 import { createInspectorRoute } from '../http/routes/inspector.ts';
 import { registerContentApiRoutes } from '../http/routes/content-api.ts';
 import { createApiRouter } from '../api/index.ts';
-import { errorResponse, jsonResponse, notFoundResponse, redirectResponse } from '../http/response.ts';
+import { errorResponse, jsonResponse, notFoundResponse } from '../http/response.ts';
 import { installGuardMiddleware } from '../http/install-guard-middleware.ts';
 import { handleInstall } from '../installer/install-controller.ts';
 import { renderInstallPage } from '../installer/install-page.ts';
-import { createInstallRouter } from '../install/install-router.ts';
 import { createSiteRouter } from '../http/site-router.ts';
 import { createAdminRouter } from '../http/admin-router.ts';
 import { createAdminApiRouter } from '../http/admin-api-router.ts';
 import { createAdminContentRouter } from '../http/admin-content-router.ts';
 import { createAdminAuthRouter } from '../http/admin-auth-router.ts';
-import { ADMIN_SESSION_COOKIE, setCookie } from '../http/cookies.ts';
 import { createMediaController } from '../http/media-controller.ts';
+import { hasInstallLock } from '../installer/install-lock.ts';
 
 const resolvePublicRoot = ({ runtime, rootDirectory }) => {
   const projectRoot = runtime?.projectPaths?.projectRoot ?? runtime?.project?.projectRoot;
@@ -57,6 +56,17 @@ const trySendUploadsAsset = (response, requestPath, uploadsRoot) => {
   return true;
 };
 
+
+const readFormBody = async (request) => {
+  const chunks: Buffer[] = [];
+
+  for await (const chunk of request) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  return Object.fromEntries(new URLSearchParams(Buffer.concat(chunks).toString('utf8')));
+};
+
 const trySendPublicIndex = (response, requestPath, publicRoot) => {
   if (requestPath !== '/') {
     return false;
@@ -89,7 +99,6 @@ export const createRequestHandler = (runtime, {
   entryRegistry = runtime?.entryRegistry,
   persistEntries = runtime?.persistEntries
 } = {}) => {
-  const installMode = runtime?.mode === 'install';
   const resolvedConfig = config ?? runtime?.getConfig?.() ?? Object.freeze({});
 
   const runtimeRouter = createRouter([
@@ -98,23 +107,16 @@ export const createRequestHandler = (runtime, {
     createInspectorRoute({ runtime })
   ]);
 
-  if (!installMode) {
-    registerContentApiRoutes(runtimeRouter, runtime);
-  }
+  registerContentApiRoutes(runtimeRouter, runtime);
 
-  const installRouter = createInstallRouter(runtime);
-  const siteRouter = !installMode && runtime?.mode === 'runtime' ? createSiteRouter(runtime) : null;
-  const adminRouter = !installMode && runtime?.mode === 'runtime'
-    ? createAdminRouter({ rootDirectory, runtime })
-    : null;
-  const adminApiRouter = !installMode && runtime?.mode === 'runtime' ? createAdminApiRouter(runtime) : null;
-  const adminAuthRouter = !installMode && runtime?.mode === 'runtime' ? createAdminAuthRouter(runtime) : null;
-  const adminContentRouter = !installMode && runtime?.mode === 'runtime' ? createAdminContentRouter(runtime) : null;
-  const mediaController = !installMode && runtime?.mode === 'runtime' ? createMediaController({ rootDirectory }) : null;
-  const router = installMode ? installRouter : runtimeRouter;
-  const apiRouter = installMode
-    ? { handle: async () => null }
-    : createApiRouter({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries });
+  const siteRouter = createSiteRouter(runtime);
+  const adminRouter = createAdminRouter({ rootDirectory, runtime });
+  const adminApiRouter = createAdminApiRouter(runtime);
+  const adminAuthRouter = createAdminAuthRouter(runtime);
+  const adminContentRouter = createAdminContentRouter(runtime);
+  const mediaController = createMediaController({ rootDirectory });
+  const router = runtimeRouter;
+  const apiRouter = createApiRouter({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries });
   const guardRequest = installGuardMiddleware(runtime);
   const publicRoot = resolvePublicRoot({ runtime, rootDirectory });
   const uploadsRoot = '/data/uploads';
@@ -124,21 +126,21 @@ export const createRequestHandler = (runtime, {
 
     try {
       const routeContext = { ...context, response };
-      if (!installMode) {
-        const guardResponse = await guardRequest(context, () => null);
-        if (guardResponse) {
-          guardResponse.send(response);
-          return;
-        }
+      const guardResponse = await guardRequest(context, () => null);
+      if (guardResponse) {
+        guardResponse.send(response);
+        return;
       }
 
-      if (!installMode && context.path === '/install') {
-        if (context.method === 'GET') {
-          if (runtime?.system?.installed === true) {
-            redirectResponse('/admin').send(response);
-            return;
-          }
+      if (context.path === '/install') {
+        const projectRoot = runtime?.projectPaths?.projectRoot ?? runtime?.project?.projectRoot;
 
+        if (hasInstallLock({ projectRoot })) {
+          notFoundResponse({ path: context.path, timestamp: context.timestamp }).send(response);
+          return;
+        }
+
+        if (context.method === 'GET') {
           const body = Buffer.from(renderInstallPage(), 'utf8');
           response.writeHead(200, {
             'content-length': body.byteLength,
@@ -149,15 +151,26 @@ export const createRequestHandler = (runtime, {
         }
 
         if (context.method === 'POST') {
-          const installResult = await handleInstall(routeContext.request, runtime);
+          const form = await readFormBody(routeContext.request);
+          const installResult = await handleInstall(routeContext.request, runtime, {
+            adminEmail: `${form.adminEmail ?? ''}`,
+            adminPassword: `${form.adminPassword ?? ''}`,
+            siteName: `${form.siteName ?? ''}`
+          });
 
           if (installResult?.success === true) {
-            if (installResult?.data?.session?.id) {
-              setCookie(response, ADMIN_SESSION_COOKIE, installResult.data.session.id);
-            }
-
-            response.writeHead(302, { location: '/admin/setup', 'content-length': '0' });
+            response.writeHead(302, { location: '/admin', 'content-length': '0' });
             response.end();
+            return;
+          }
+
+          if (installResult?.error?.code === 'INVALID_INSTALL_INPUT') {
+            const body = Buffer.from(renderInstallPage({ error: installResult.error.message }), 'utf8');
+            response.writeHead(400, {
+              'content-length': body.byteLength,
+              'content-type': 'text/html; charset=utf-8'
+            });
+            response.end(body);
             return;
           }
 

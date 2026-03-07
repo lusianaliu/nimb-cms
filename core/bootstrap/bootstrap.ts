@@ -34,6 +34,7 @@ import { createMediaService } from '../media/media-service.ts';
 import type { Capability } from '../runtime/capabilities.ts';
 import type { ScopedRuntime } from '../plugin/plugin-api.ts';
 import { getInstallState } from '../system/system-config.ts';
+import { hasInstallLock } from '../installer/install-lock.ts';
 
 
 const CONTENT_TYPES_STORAGE_KEY = 'content-types';
@@ -197,7 +198,9 @@ export const createBootstrap = async ({
   const resolvedProject = resolveBootstrapProject({ cwd, project });
   const resolvedPaths = createProjectPaths(resolvedProject.projectRoot ?? resolvedProject.root);
   const installState = getInstallState({ projectRoot: resolvedPaths.projectRoot, runtimeVersion: version });
-  const selectedMode = mode ?? (installState.installed === true ? 'runtime' : 'install');
+  const installLockPresent = hasInstallLock({ projectRoot: resolvedPaths.projectRoot });
+  const isInstalled = installLockPresent && installState.installed === true;
+  const selectedMode = mode ?? (isInstalled ? 'runtime' : 'install');
   const config = loadConfig({ cwd: resolvedPaths.projectRoot });
   const runtimeMode = resolveRuntimeMode(resolvedPaths);
   const runtime = createRuntime(config, resolvedPaths, { runtimeMode });
@@ -210,7 +213,7 @@ export const createBootstrap = async ({
   runtime.version = version;
   runtime.system = Object.freeze({
     config: installState.config,
-    installed: installState.installed
+    installed: isInstalled
   });
   runtime.setRuntimeMode?.(runtimeMode);
   runtime.setConfig?.(config);

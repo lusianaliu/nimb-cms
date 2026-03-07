@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createInstalledServer } from './helpers/create-installed-server.ts';
 
-const USERS_PATH = '/data/system/users.json';
+const USERS_PATH = '/data/users.json';
 const INSTALL_STATE_PATH = '/data/system/install.json';
 const SESSIONS_PATH = '/data/system/sessions.json';
 const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase114-'));

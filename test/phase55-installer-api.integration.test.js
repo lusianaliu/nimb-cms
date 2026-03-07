@@ -32,10 +32,16 @@ const createServer = async (cwd) => {
 };
 
 const readInstallState = (cwd) => {
-  const installPath = path.join(cwd, '.nimb', 'install.json');
+  const installPath = path.join(cwd, 'data', 'system', 'config.json');
   assert.equal(fs.existsSync(installPath), true);
   return JSON.parse(fs.readFileSync(installPath, 'utf8'));
 };
+
+const installFormBody = new URLSearchParams({
+  adminEmail: 'admin@example.com',
+  adminPassword: 'super-secret-password',
+  siteName: 'Nimb Site'
+});
 
 test('phase 55: installer mode allows POST /install', async () => {
   const cwd = mkdtemp();
@@ -46,14 +52,13 @@ test('phase 55: installer mode allows POST /install', async () => {
   try {
     const response = await fetch(`http://127.0.0.1:${port}/install`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}'
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: installFormBody,
+      redirect: 'manual'
     });
 
-    assert.equal(response.status, 200);
-    const payload = await response.json();
-    assert.equal(payload.success, true);
-    assert.equal(payload.data.install.installed, true);
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get('location'), '/admin');
   } finally {
     await server.stop();
   }
@@ -68,14 +73,16 @@ test('phase 55: POST /install creates install.json', async () => {
   try {
     await fetch(`http://127.0.0.1:${port}/install`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}'
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: installFormBody,
+      redirect: 'manual'
     });
 
     const installState = readInstallState(cwd);
     assert.equal(installState.installed, true);
     assert.equal(typeof installState.installedAt, 'string');
     assert.equal(typeof installState.version, 'string');
+    assert.equal(fs.existsSync(path.join(cwd, 'data', 'install.lock')), true);
   } finally {
     await server.stop();
   }
@@ -90,17 +97,19 @@ test('phase 55: second POST /install returns 409', async () => {
   try {
     const first = await fetch(`http://127.0.0.1:${port}/install`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}'
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: installFormBody,
+      redirect: 'manual'
     });
-    assert.equal(first.status, 200);
+    assert.equal(first.status, 302);
 
     const second = await fetch(`http://127.0.0.1:${port}/install`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}'
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: installFormBody,
+      redirect: 'manual'
     });
-    assert.equal(second.status, 409);
+    assert.equal(second.status, 404);
   } finally {
     await server.stop();
   }
@@ -115,16 +124,17 @@ test('phase 55: restart resolves normal mode after installation', async () => {
   try {
     const response = await fetch(`http://127.0.0.1:${started.port}/install`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}'
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: installFormBody,
+      redirect: 'manual'
     });
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 302);
   } finally {
     await started.server.stop();
   }
 
   const restartedBootstrap = await createBootstrap({ cwd });
-  assert.equal(restartedBootstrap.runtimeMode, 'normal');
+  assert.equal(restartedBootstrap.runtime.mode, 'runtime');
 });
 
 test('phase 55: installer API remains cwd-independent', async () => {
@@ -149,13 +159,14 @@ test('phase 55: installer API remains cwd-independent', async () => {
 
     const response = await fetch(`http://127.0.0.1:${activePort}/install`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}'
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: installFormBody,
+      redirect: 'manual'
     });
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 302);
 
-    assert.equal(fs.existsSync(path.join(firstProjectRoot, '.nimb', 'install.json')), true);
-    assert.equal(fs.existsSync(path.join(secondProjectRoot, '.nimb', 'install.json')), false);
+        assert.equal(fs.existsSync(path.join(firstProjectRoot, 'data', 'install.lock')), true);
+    assert.equal(fs.existsSync(path.join(secondProjectRoot, 'data', 'install.lock')), false);
   } finally {
     process.chdir(originalCwd);
 

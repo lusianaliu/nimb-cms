@@ -1,4 +1,5 @@
 import { saveSystemConfig } from '../../core/system/system-config.ts';
+import { writeInstallLock } from '../../core/installer/install-lock.ts';
 
 type RuntimeLike = {
   version: string
@@ -19,6 +20,8 @@ export async function ensureInstalled(runtime: RuntimeLike) {
   }, {
     projectRoot: runtime.projectPaths?.projectRoot
   });
+
+  writeInstallLock({ projectRoot: runtime.projectPaths?.projectRoot });
 
   runtime.system = {
     ...(runtime.system ?? {}),
