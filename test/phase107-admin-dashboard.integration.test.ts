@@ -91,7 +91,7 @@ test('phase 107: admin dashboard renders after login in installed mode and expos
 
       assert.equal(dashboard.status, 200);
       const html = await dashboard.text();
-      assert.equal(html.includes('<div id="admin-root"></div>'), true);
+      assert.equal(html.includes('Welcome to Nimb CMS'), true);
 
       const systemInfo = await fetch(`http://127.0.0.1:${port}/admin-api/system/info`);
       assert.equal(systemInfo.status, 200);

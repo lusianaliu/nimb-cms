@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { runMiddlewareStack } from './run-middleware.ts';
+import { renderAdminDashboardPage } from '../admin/admin-dashboard-page.ts';
 import type { MiddlewareContext } from './middleware.ts';
 
 const defaultAdminShell = `<!doctype html>
@@ -212,7 +213,7 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
       }
 
       if (context.path === normalizedBasePath || context.path === `${normalizedBasePath}/`) {
-        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(shell));
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(renderAdminDashboardPage(runtime)));
       }
 
       if (context.path.startsWith(`${normalizedBasePath}/`)) {
