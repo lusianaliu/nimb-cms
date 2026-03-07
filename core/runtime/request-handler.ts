@@ -18,6 +18,7 @@ import { createAdminApiRouter } from '../http/admin-api-router.ts';
 import { createAdminContentRouter } from '../http/admin-content-router.ts';
 import { createAdminMediaRouter } from '../http/admin-media-router.ts';
 import { createAdminAuthRouter } from '../http/admin-auth-router.ts';
+import { ADMIN_SESSION_COOKIE, setCookie } from '../http/cookies.ts';
 
 const resolvePublicRoot = ({ runtime, rootDirectory }) => {
   const projectRoot = runtime?.projectPaths?.projectRoot ?? runtime?.project?.projectRoot;
@@ -151,7 +152,12 @@ export const createRequestHandler = (runtime, {
           const installResult = await handleInstall(routeContext.request, runtime);
 
           if (installResult?.success === true) {
-            redirectResponse('/admin/login').send(response);
+            if (installResult?.data?.session?.id) {
+              setCookie(response, ADMIN_SESSION_COOKIE, installResult.data.session.id);
+            }
+
+            response.writeHead(302, { location: '/admin/setup', 'content-length': '0' });
+            response.end();
             return;
           }
 

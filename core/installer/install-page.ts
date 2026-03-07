@@ -26,8 +26,8 @@ export const renderInstallPage = () => `<!doctype html>
             throw new Error('Install request failed');
           }
 
-          installStatus.textContent = 'Installation completed. Redirecting to login...';
-          window.location.assign('/admin/login');
+          installStatus.textContent = 'Installation completed. Redirecting to admin setup...';
+          window.location.assign('/admin/setup');
         } catch (_error) {
           installButton.disabled = false;
           installStatus.textContent = 'Installation failed. Please retry.';

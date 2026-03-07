@@ -9,7 +9,14 @@ const scryptAsync = promisify(crypto.scrypt);
 const USERS_FILE_PATH = path.resolve('/data/system/users.json');
 const SCRYPT_PREFIX = 'scrypt';
 
-type PasswordUser = Readonly<{ id: string, email: string, passwordHash: string, createdAt: string }>;
+type PasswordUser = Readonly<{
+  id: string
+  username: string
+  email: string
+  passwordHash: string
+  createdAt: string
+  passwordChangedAt?: string | null
+}>;
 
 type AuthUser = Readonly<{ id: string, username: string, passwordHash: string, createdAt: string }>;
 type AuthSession = Readonly<{ token: string, userId: string, issuedAt: string, expiresAt: string }>;
@@ -153,14 +160,19 @@ const safeParseUsers = (raw: string): PasswordUser[] => {
       .filter((entry) => entry && typeof entry === 'object')
       .map((entry) => {
         const record = entry as Record<string, unknown>;
+        const hasPasswordChangedAt = Object.prototype.hasOwnProperty.call(record, 'passwordChangedAt');
         return Object.freeze({
           id: `${record.id ?? ''}`,
+          username: typeof record.username === 'string' ? record.username : 'admin',
           email: `${record.email ?? ''}`,
           passwordHash: `${record.passwordHash ?? ''}`,
-          createdAt: `${record.createdAt ?? ''}`
+          createdAt: `${record.createdAt ?? ''}`,
+          passwordChangedAt: typeof record.passwordChangedAt === 'string'
+            ? record.passwordChangedAt
+            : (hasPasswordChangedAt ? null : `${record.createdAt ?? ''}`)
         });
       })
-      .filter((entry) => entry.id && entry.email && entry.passwordHash && entry.createdAt);
+      .filter((entry) => entry.id && entry.username && entry.email && entry.passwordHash && entry.createdAt);
   } catch {
     return [];
   }
@@ -213,11 +225,17 @@ export const createAuthService = (runtime) => {
     return users.find((entry) => entry.id === normalized) ?? null;
   };
 
-  const createUser = async (email: string, password: string) => {
-    const normalized = `${email ?? ''}`.trim().toLowerCase();
+  const createUser = async (emailOrInput: string | { username?: string, email: string, password: string, requirePasswordChange?: boolean }, passwordInput?: string) => {
+    const input = typeof emailOrInput === 'string'
+      ? { email: emailOrInput, password: `${passwordInput ?? ''}` }
+      : emailOrInput;
+
+    const normalized = `${input?.email ?? ''}`.trim().toLowerCase();
     if (!normalized) {
       throw new Error('Email is required');
     }
+
+    const username = `${input?.username ?? 'admin'}`.trim() || 'admin';
 
     const users = await readUsers();
     if (users.some((entry) => entry.email.toLowerCase() === normalized)) {
@@ -225,16 +243,57 @@ export const createAuthService = (runtime) => {
     }
 
     const salt = crypto.randomBytes(16).toString('hex');
-    const passwordHash = await deriveScryptHash(`${password ?? ''}`, salt);
+    const passwordHash = await deriveScryptHash(`${input?.password ?? ''}`, salt);
+    const createdAt = now();
     const user = Object.freeze({
       id: crypto.randomUUID(),
+      username,
       email: normalized,
       passwordHash,
-      createdAt: now()
+      createdAt,
+      passwordChangedAt: input?.requirePasswordChange === true ? null : createdAt
     });
 
     await writeUsers([...users, user]);
     return user;
+  };
+
+  const hasPendingCredentialSetup = async () => {
+    const users = await readUsers();
+    return users.some((entry) => entry.username === 'admin' && !entry.passwordChangedAt);
+  };
+
+  const updateAdminCredentials = async ({ email, password }: { email: string, password: string }) => {
+    const users = await readUsers();
+    const admin = users.find((entry) => entry.username === 'admin');
+    if (!admin) {
+      throw new Error('Admin user not found');
+    }
+
+    const normalizedEmail = `${email ?? ''}`.trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new Error('Email is required');
+    }
+
+    const salt = crypto.randomBytes(16).toString('hex');
+    const passwordHash = await deriveScryptHash(`${password ?? ''}`, salt);
+    const passwordChangedAt = now();
+
+    const nextUsers = users.map((entry) => {
+      if (entry.id !== admin.id) {
+        return entry;
+      }
+
+      return Object.freeze({
+        ...entry,
+        email: normalizedEmail,
+        passwordHash,
+        passwordChangedAt
+      });
+    });
+
+    await writeUsers(nextUsers);
+    return nextUsers.find((entry) => entry.id === admin.id) ?? null;
   };
 
   const verifyPassword = async (password: string, hash: string) => {
@@ -259,6 +318,8 @@ export const createAuthService = (runtime) => {
     createUser,
     findUserByEmail,
     findUserById,
-    verifyPassword
+    verifyPassword,
+    hasPendingCredentialSetup,
+    updateAdminCredentials
   });
 };
