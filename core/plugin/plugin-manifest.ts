@@ -1,4 +1,5 @@
-const MANIFEST_FIELDS = new Set(['id', 'name', 'version', 'entry', 'apiVersion', 'capabilities']);
+const LEGACY_MANIFEST_FIELDS = new Set(['id', 'name', 'version', 'entry', 'apiVersion', 'capabilities']);
+const PHASE127_MANIFEST_FIELDS = new Set(['name', 'version', 'main']);
 const PLUGIN_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export interface PluginManifest {
@@ -6,7 +7,7 @@ export interface PluginManifest {
   name: string
   version: string
   entry: string
-  apiVersion: string
+  apiVersion?: string
   capabilities?: string[]
 }
 
@@ -18,15 +19,21 @@ const asString = (value: unknown, field: string): string => {
   return value;
 };
 
-export const validatePluginManifest = (value: unknown): PluginManifest => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('plugin manifest must be a JSON object');
+const normalizeCapabilities = (value: unknown): string[] | undefined => {
+  if (value === undefined) {
+    return undefined;
   }
 
-  const manifest = value as Record<string, unknown>;
+  if (!Array.isArray(value) || value.some((capability) => typeof capability !== 'string')) {
+    throw new Error('plugin manifest field "capabilities" must be an array of strings');
+  }
 
+  return [...value];
+};
+
+const validateLegacyManifest = (manifest: Record<string, unknown>): PluginManifest => {
   for (const key of Object.keys(manifest)) {
-    if (!MANIFEST_FIELDS.has(key)) {
+    if (!LEGACY_MANIFEST_FIELDS.has(key)) {
       throw new Error(`plugin manifest has unknown field "${key}"`);
     }
   }
@@ -40,21 +47,47 @@ export const validatePluginManifest = (value: unknown): PluginManifest => {
     throw new Error('plugin manifest field "id" must be kebab-case');
   }
 
-  let capabilities: string[] | undefined;
-  if (manifest.capabilities !== undefined) {
-    if (!Array.isArray(manifest.capabilities) || manifest.capabilities.some((capability) => typeof capability !== 'string')) {
-      throw new Error('plugin manifest field "capabilities" must be an array of strings');
-    }
-
-    capabilities = [...manifest.capabilities];
-  }
-
   return Object.freeze({
     id,
     name: typeof manifest.name === 'string' && manifest.name.trim().length > 0 ? manifest.name : id,
     version,
     entry,
     apiVersion,
-    capabilities
+    capabilities: normalizeCapabilities(manifest.capabilities)
   });
+};
+
+const validatePhase127Manifest = (manifest: Record<string, unknown>): PluginManifest => {
+  for (const key of Object.keys(manifest)) {
+    if (!PHASE127_MANIFEST_FIELDS.has(key)) {
+      throw new Error(`plugin manifest has unknown field "${key}"`);
+    }
+  }
+
+  const name = asString(manifest.name, 'name');
+
+  if (!PLUGIN_ID_PATTERN.test(name)) {
+    throw new Error('plugin manifest field "name" must be kebab-case');
+  }
+
+  return Object.freeze({
+    id: name,
+    name,
+    version: asString(manifest.version, 'version'),
+    entry: asString(manifest.main, 'main')
+  });
+};
+
+export const validatePluginManifest = (value: unknown): PluginManifest => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('plugin manifest must be a JSON object');
+  }
+
+  const manifest = value as Record<string, unknown>;
+
+  if (typeof manifest.main === 'string') {
+    return validatePhase127Manifest(manifest);
+  }
+
+  return validateLegacyManifest(manifest);
 };

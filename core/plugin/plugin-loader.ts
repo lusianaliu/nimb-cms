@@ -3,7 +3,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { isCompatible } from './api-compat.ts';
 import { PLUGIN_API_VERSION, type PluginAPI, type ScopedRuntime } from './plugin-api.ts';
-import { validatePluginManifest } from './plugin-manifest.ts';
+import { type PluginManifest, validatePluginManifest } from './plugin-manifest.ts';
 
 type PluginLoaderLogger = {
   error?: (message: string, context?: Record<string, unknown>) => void;
@@ -21,10 +21,44 @@ type RuntimeWithPlugins = {
   };
 };
 
-const readManifest = async (pluginDirectory: string) => {
+const readManifest = async (pluginDirectory: string): Promise<PluginManifest> => {
   const manifestPath = path.join(pluginDirectory, PLUGIN_MANIFEST_FILE);
   const content = await fs.readFile(manifestPath, 'utf8');
   return validatePluginManifest(JSON.parse(content) as unknown);
+};
+
+const runPluginLifecycle = async (
+  imported: Record<string, unknown>,
+  runtime: RuntimeWithPlugins,
+  manifest: PluginManifest
+) => {
+  const activate = imported.activate;
+
+  if (typeof activate === 'function') {
+    await activate(runtime);
+    return;
+  }
+
+  const register = imported.default;
+
+  if (typeof register !== 'function') {
+    throw new Error('plugin entry must export activate(runtime) or default register(api)');
+  }
+
+  if (manifest.apiVersion && !isCompatible(PLUGIN_API_VERSION, manifest.apiVersion)) {
+    throw new Error(`plugin api version "${manifest.apiVersion}" is incompatible with core api "${PLUGIN_API_VERSION}"`);
+  }
+
+  const scopedRuntime = runtime.createScopedRuntime(manifest.id, manifest.capabilities ?? []);
+  const pluginAPI: PluginAPI = Object.freeze({
+    version: PLUGIN_API_VERSION,
+    runtime: scopedRuntime
+  });
+
+  await register(Object.freeze({
+    apiVersion: PLUGIN_API_VERSION,
+    ...pluginAPI
+  }));
 };
 
 export const loadPlugins = async (
@@ -52,9 +86,6 @@ export const loadPlugins = async (
 
     try {
       const manifest = await readManifest(pluginDirectory);
-      if (!isCompatible(PLUGIN_API_VERSION, manifest.apiVersion)) {
-        throw new Error(`plugin api version \"${manifest.apiVersion}\" is incompatible with core api \"${PLUGIN_API_VERSION}\"`);
-      }
 
       if (runtime.plugins?.get(manifest.id)) {
         logger?.warn?.('plugin loader skipped duplicate plugin id', { plugin: manifest.id });
@@ -63,31 +94,23 @@ export const loadPlugins = async (
 
       const pluginEntryPath = path.resolve(pluginDirectory, manifest.entry);
       const imported = await import(pathToFileURL(pluginEntryPath).href);
-      const register = imported.default;
 
-      if (typeof register !== 'function') {
-        throw new Error('plugin entry must export a default register(api) function');
-      }
+      await runPluginLifecycle(imported as Record<string, unknown>, runtime, manifest);
 
-      const scopedRuntime = runtime.createScopedRuntime(manifest.id, manifest.capabilities ?? []);
-      const pluginAPI: PluginAPI = Object.freeze({
-        version: PLUGIN_API_VERSION,
-        runtime: scopedRuntime
-      });
-
-      await register(Object.freeze({
-        apiVersion: PLUGIN_API_VERSION,
-        ...pluginAPI
-      }));
-
-      runtime.plugins?.register?.(manifest.id, Object.freeze({
+      const metadata: Record<string, unknown> = {
         id: manifest.id,
         name: manifest.name,
         version: manifest.version,
+        entry: pluginEntryPath,
         apiVersion: manifest.apiVersion,
-        capabilities: Object.freeze([...(manifest.capabilities ?? [])]),
-        entry: pluginEntryPath
-      }));
+        capabilities: Object.freeze([...(manifest.capabilities ?? [])])
+      };
+
+      if (!manifest.apiVersion) {
+        metadata.path = pluginDirectory;
+      }
+
+      runtime.plugins?.register?.(manifest.id, Object.freeze(metadata));
 
       loadedPlugins.push(manifest.id);
     } catch (error) {
