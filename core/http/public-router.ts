@@ -94,24 +94,19 @@ export const createPublicRouter = (runtime) => {
       method: 'GET',
       path: '/:pageSlug',
       handler: (context) => {
-        const page = getPageBySlug(runtime, context.params?.pageSlug);
+        const slug = `${context.params?.pageSlug ?? ''}`;
+        const page = runtime.content.list('page').find((entry) => `${entry?.data?.slug ?? ''}` === slug);
+
         if (!page) {
-          const html = renderer.renderRoute({
-            path: context.path,
-            params: context.params,
-            template: 'not-found',
-            content: null
-          });
-          return toHtmlResponse(html, 404);
+          return toHtmlResponse('Not Found', 404);
         }
 
-        const html = renderer.renderRoute({
-          path: context.path,
-          params: context.params,
-          template: 'page',
-          content: { page: toRenderableEntry(page) }
+        const html = runtime?.themeRenderer?.renderThemePage?.('page', runtime, {
+          title: `${page?.data?.title ?? ''}`,
+          body: `${page?.data?.body ?? ''}`
         });
-        return toHtmlResponse(html);
+
+        return toHtmlResponse(html ?? '');
       }
     }
   ]);
