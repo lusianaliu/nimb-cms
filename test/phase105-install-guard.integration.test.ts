@@ -89,6 +89,8 @@ test('phase 105: install-state guard blocks runtime routes until installed confi
       version: '105.0.0',
       installedAt: '2026-01-01T00:00:00.000Z'
     }, { projectRoot: cwd });
+    fs.mkdirSync(path.join(cwd, 'data'), { recursive: true });
+    fs.writeFileSync(path.join(cwd, 'data', 'install.lock'), 'installed\n', 'utf8');
 
     started = await createServer(cwd);
 

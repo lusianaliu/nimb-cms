@@ -6,7 +6,8 @@ import { issueToken, verifyToken } from './token.ts';
 import { SessionStore } from './session-store.ts';
 
 const scryptAsync = promisify(crypto.scrypt);
-const USERS_FILE_PATH = path.resolve('/data/system/users.json');
+const USERS_FILE_PATH = path.join('data', 'users.json');
+const LEGACY_USERS_FILE_PATH = path.resolve('/data/system/users.json');
 const SCRYPT_PREFIX = 'scrypt';
 
 type PasswordUser = Readonly<{
@@ -178,22 +179,31 @@ const safeParseUsers = (raw: string): PasswordUser[] => {
   }
 };
 
-const readUsers = async (): Promise<PasswordUser[]> => {
+const readUsers = async (usersFilePath: string, legacyUsersFilePath: string): Promise<PasswordUser[]> => {
   try {
-    const raw = await fs.readFile(USERS_FILE_PATH, 'utf8');
+    const raw = await fs.readFile(usersFilePath, 'utf8');
     return safeParseUsers(raw);
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
-      return [];
+      try {
+        const rawLegacy = await fs.readFile(legacyUsersFilePath, 'utf8');
+        return safeParseUsers(rawLegacy);
+      } catch (legacyError) {
+        if ((legacyError as NodeJS.ErrnoException)?.code === 'ENOENT') {
+          return [];
+        }
+
+        throw legacyError;
+      }
     }
 
     throw error;
   }
 };
 
-const writeUsers = async (users: PasswordUser[]) => {
-  await ensureParentDirectory(USERS_FILE_PATH);
-  await fs.writeFile(USERS_FILE_PATH, `${JSON.stringify(users, null, 2)}\n`, 'utf8');
+const writeUsers = async (usersFilePath: string, users: PasswordUser[]) => {
+  await ensureParentDirectory(usersFilePath);
+  await fs.writeFile(usersFilePath, `${JSON.stringify(users, null, 2)}\n`, 'utf8');
 };
 
 const deriveScryptHash = async (password: string, salt: string) => {
@@ -203,6 +213,9 @@ const deriveScryptHash = async (password: string, salt: string) => {
 
 export const createAuthService = (runtime) => {
   const now = () => runtime?.clock?.() ?? new Date().toISOString();
+  const projectRoot = runtime?.projectPaths?.projectRoot ?? runtime?.project?.projectRoot ?? process.cwd();
+  const usersFilePath = path.join(projectRoot, USERS_FILE_PATH);
+  const legacyUsersFilePath = LEGACY_USERS_FILE_PATH;
 
   const findUserByEmail = async (email: string) => {
     const normalized = `${email ?? ''}`.trim().toLowerCase();
@@ -210,7 +223,7 @@ export const createAuthService = (runtime) => {
       return null;
     }
 
-    const users = await readUsers();
+    const users = await readUsers(usersFilePath, legacyUsersFilePath);
     return users.find((entry) => entry.email.toLowerCase() === normalized) ?? null;
   };
 
@@ -221,7 +234,7 @@ export const createAuthService = (runtime) => {
       return null;
     }
 
-    const users = await readUsers();
+    const users = await readUsers(usersFilePath, legacyUsersFilePath);
     return users.find((entry) => entry.id === normalized) ?? null;
   };
 
@@ -237,7 +250,7 @@ export const createAuthService = (runtime) => {
 
     const username = `${input?.username ?? 'admin'}`.trim() || 'admin';
 
-    const users = await readUsers();
+    const users = await readUsers(usersFilePath, legacyUsersFilePath);
     if (users.some((entry) => entry.email.toLowerCase() === normalized)) {
       throw new Error('User already exists');
     }
@@ -254,17 +267,17 @@ export const createAuthService = (runtime) => {
       passwordChangedAt: input?.requirePasswordChange === true ? null : createdAt
     });
 
-    await writeUsers([...users, user]);
+    await writeUsers(usersFilePath, [...users, user]);
     return user;
   };
 
   const hasPendingCredentialSetup = async () => {
-    const users = await readUsers();
+    const users = await readUsers(usersFilePath, legacyUsersFilePath);
     return users.some((entry) => entry.username === 'admin' && !entry.passwordChangedAt);
   };
 
   const updateAdminCredentials = async ({ email, password }: { email: string, password: string }) => {
-    const users = await readUsers();
+    const users = await readUsers(usersFilePath, legacyUsersFilePath);
     const admin = users.find((entry) => entry.username === 'admin');
     if (!admin) {
       throw new Error('Admin user not found');
@@ -292,7 +305,7 @@ export const createAuthService = (runtime) => {
       });
     });
 
-    await writeUsers(nextUsers);
+    await writeUsers(usersFilePath, nextUsers);
     return nextUsers.find((entry) => entry.id === admin.id) ?? null;
   };
 

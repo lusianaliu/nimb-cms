@@ -8,7 +8,7 @@ import { createTestServer } from './helpers/create-test-server.ts';
 import { markInstalled } from '../core/setup/setup-state.ts';
 
 const INSTALL_STATE_PATH = '/data/system/install.json';
-const USERS_PATH = '/data/system/users.json';
+const USERS_PATH = '/data/users.json';
 const SESSIONS_PATH = '/data/system/sessions.json';
 const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase107-'));
 

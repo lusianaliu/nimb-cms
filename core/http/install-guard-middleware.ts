@@ -1,3 +1,4 @@
+import { hasInstallLock } from '../installer/install-lock.ts';
 import { redirectResponse } from './response.ts';
 
 const staticAssetPrefixes = Object.freeze(['/assets/', '/static/', '/public/', '/uploads/']);
@@ -23,7 +24,10 @@ const isAllowedPath = (path: string, method: string) => {
 };
 
 export const installGuardMiddleware = (runtime) => (context, next) => {
-  if (runtime?.system?.installed === true) {
+  const projectRoot = runtime?.projectPaths?.projectRoot ?? runtime?.project?.projectRoot;
+  const installed = hasInstallLock({ projectRoot });
+
+  if (installed) {
     return next();
   }
 
@@ -33,4 +37,3 @@ export const installGuardMiddleware = (runtime) => (context, next) => {
 
   return redirectResponse('/install');
 };
-

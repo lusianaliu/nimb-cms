@@ -19,9 +19,10 @@ const writeConfig = (cwd, port) => {
 };
 
 const writeInstallState = (cwd, version = '1.0.0') => {
-  const nimbDir = path.join(cwd, '.nimb');
-  fs.mkdirSync(nimbDir, { recursive: true });
-  fs.writeFileSync(path.join(nimbDir, 'install.json'), `${JSON.stringify({ installed: true, version, installedAt: '2026-01-01T00:00:00.000Z' }, null, 2)}\n`);
+  fs.mkdirSync(path.join(cwd, 'data'), { recursive: true });
+  fs.writeFileSync(path.join(cwd, 'data', 'install.lock'), 'installed\n');
+  fs.mkdirSync(path.join(cwd, 'data', 'system'), { recursive: true });
+  fs.writeFileSync(path.join(cwd, 'data', 'system', 'config.json'), `${JSON.stringify({ installed: true, version, installedAt: '2026-01-01T00:00:00.000Z' }, null, 2)}\n`);
 };
 
 const createServer = async (cwd) => {
@@ -80,9 +81,9 @@ test('phase 56: installer HTML contains install trigger', async () => {
     const response = await fetch(`http://127.0.0.1:${port}/install`);
     const body = await response.text();
 
-    assert.match(body, /Install/);
-    assert.match(body, /fetch\('\/install', \{ method: 'POST' \}\)/);
-    assert.match(body, /Installation completed\. Restart server\./);
+    assert.match(body, /Admin Email/);
+    assert.match(body, /Admin Password/);
+    assert.match(body, /Site Name/);
   } finally {
     await server.stop();
   }
