@@ -23,7 +23,7 @@ import { resolveAdminBasePath } from '../admin/resolve-admin-path.ts';
 import type { StorageAdapter as ContentStorageAdapter } from '../storage/storage-adapter.ts';
 import { JsonStorageAdapter } from '../storage/json-storage-adapter.ts';
 import { EventEmitter, createEventBus } from '../events/event-bus.ts';
-import { HookRegistry } from '../hooks/index.ts';
+import { createHookSystem } from '../plugin/plugin-hooks.ts';
 import { loadPlugins } from '../plugin/plugin-loader.ts';
 import { createPluginRegistry } from '../plugin/plugin-registry.ts';
 import type { BootstrapMode } from './bootstrap-mode.ts';
@@ -92,7 +92,7 @@ const createScopedRuntime = (runtime, pluginId: string, capabilities: Capability
     hooks: Object.freeze({
       register: (hookName: string, handler: (value: unknown, context: Record<string, unknown>) => unknown | Promise<unknown>) => {
         validateHookDomain(hookName);
-        return runtime.hooks.register(hookName, handler, { pluginId });
+        return runtime.hooks.register(hookName, handler);
       },
       execute: (hookName: string, initialValue: unknown, context: Record<string, unknown>) => runtime.hooks.execute(hookName, initialValue, context)
     }),
@@ -302,7 +302,7 @@ export const createBootstrap = async ({
   runtime.events.on('system.installed', () => {
     seedSystem(runtime);
   });
-  runtime.hooks = new HookRegistry();
+  runtime.hooks = createHookSystem();
   runtime.theme = createThemeManager(runtime);
   runtime.themeRenderer = createThemeRenderer(runtime);
 
@@ -396,6 +396,12 @@ export const createBootstrap = async ({
   if (shouldLoadPlugins) {
     await loadPlugins(runtime, { pluginsDirectory: resolvedPaths.pluginsDir });
   }
+
+  await runtime.hooks.run('content-type.register', Object.freeze({ runtime, contentTypes: runtime.contentTypes }));
+  await runtime.hooks.run('routes.register', Object.freeze({ runtime }));
+  await runtime.hooks.run('admin.menu', Object.freeze({ runtime, navRegistry: runtime.admin.navRegistry }));
+  await runtime.hooks.run('editor.extend', Object.freeze({ runtime }));
+  await runtime.hooks.run('system.start', runtime);
 
   await runtime.events.emit('admin.nav.register', Object.freeze({
     navRegistry: runtime.admin.navRegistry
