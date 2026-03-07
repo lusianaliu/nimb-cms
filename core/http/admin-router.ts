@@ -3,6 +3,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { runMiddlewareStack } from './run-middleware.ts';
 import { renderAdminDashboardPage } from '../admin/admin-dashboard-page.ts';
+import { renderAdminMediaPage } from '../admin/admin-media-page.ts';
 import { renderAdminPageFormPage, renderAdminPagesListPage } from '../admin/admin-pages-page.ts';
 import { renderAdminPostFormPage, renderAdminPostsListPage } from '../admin/admin-posts-page.ts';
 import { createPageController } from './page-controller.ts';
@@ -393,6 +394,10 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
           const posts = runtime.content.list('post');
           return toHtmlResponse(renderAdminPostsListPage({ posts }));
         });
+      }
+
+      if (context.path === '/admin/media' && context.method === 'GET') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(renderAdminMediaPage()));
       }
 
       if (context.path === '/admin/posts/new' && context.method === 'GET') {
