@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { runMiddlewareStack } from './run-middleware.ts';
 import { renderAdminDashboardPage } from '../admin/admin-dashboard-page.ts';
+import { createPageController } from './page-controller.ts';
 import type { MiddlewareContext } from './middleware.ts';
 
 const defaultAdminShell = `<!doctype html>
@@ -205,9 +206,14 @@ const withAdminMiddleware = (runtime, context, handler: () => Promise<unknown> |
 export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = null } = {}) => {
   const normalizedBasePath = '/admin';
   const shell = loadAdminShell(rootDirectory);
+  const pageController = createPageController(runtime);
 
   return Object.freeze({
     dispatch(context) {
+      if (context.path.startsWith('/admin-api/pages')) {
+        return pageController.dispatch(context);
+      }
+
       if (context.method !== 'GET') {
         return null;
       }
