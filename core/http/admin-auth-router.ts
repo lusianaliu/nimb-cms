@@ -14,13 +14,36 @@ const toHtmlResponse = (html: string, statusCode = 200) => ({
   }
 });
 
-const toRedirectResponse = (location: string, statusCode = 302) => ({
-  statusCode,
-  send(response) {
-    response.writeHead(statusCode, { location, 'content-length': '0' });
-    response.end();
-  }
-});
+const setupView = ({ error = '', siteName = 'My Nimb Site', email = 'admin@nimb.local' }: { error?: string, siteName?: string, email?: string } = {}) => `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin Setup · Nimb</title>
+  </head>
+  <body>
+    <main>
+      <h1>Admin setup</h1>
+      <p>Complete first-time setup to continue.</p>
+      ${error ? `<p role="alert" style="color:#b00020;">${error}</p>` : ''}
+      <form method="post" action="/admin/setup">
+        <label>
+          Site name
+          <input name="siteName" type="text" value="${siteName}" required>
+        </label>
+        <label>
+          Admin email
+          <input name="email" type="email" value="${email}" required>
+        </label>
+        <label>
+          New password
+          <input name="password" type="password" minlength="8" required>
+        </label>
+        <button type="submit">Save and continue</button>
+      </form>
+    </main>
+  </body>
+</html>`;
 
 const readFormBody = async (request) => {
   const chunks: Buffer[] = [];
@@ -67,6 +90,47 @@ export const createAdminAuthRouter = (runtime) => {
           statusCode: 302,
           send(response) {
             setCookie(response, ADMIN_SESSION_COOKIE, session.id);
+            response.writeHead(302, {
+              location: '/admin',
+              'content-length': '0'
+            });
+            response.end();
+          }
+        };
+      }
+    },
+    {
+      method: 'GET',
+      path: '/admin/setup',
+      handler: async () => {
+        const adminUser = await runtime?.auth?.findUserByEmail?.('admin@nimb.local');
+        const siteName = `${runtime?.settings?.get?.('site.name') ?? 'My Nimb Site'}`;
+        return toHtmlResponse(setupView({ siteName, email: `${adminUser?.email ?? 'admin@nimb.local'}` }));
+      }
+    },
+    {
+      method: 'POST',
+      path: '/admin/setup',
+      handler: async (context) => {
+        const form = await readFormBody(context.request);
+        const siteName = `${form.siteName ?? ''}`.trim();
+        const email = `${form.email ?? ''}`.trim().toLowerCase();
+        const password = `${form.password ?? ''}`;
+
+        if (!siteName || !email || password.length < 8) {
+          return toHtmlResponse(setupView({
+            error: 'Site name, valid email, and a password with at least 8 characters are required.',
+            siteName: siteName || 'My Nimb Site',
+            email: email || 'admin@nimb.local'
+          }), 400);
+        }
+
+        await runtime?.settings?.set?.('site.name', siteName);
+        await runtime?.auth?.updateAdminCredentials?.({ email, password });
+
+        return {
+          statusCode: 302,
+          send(response) {
             response.writeHead(302, {
               location: '/admin',
               'content-length': '0'

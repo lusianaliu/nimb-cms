@@ -345,10 +345,16 @@ export const createBootstrap = async ({
   });
 
 
-  const defaultAdminEmail = 'admin@nimb.local';
-  const existingAdmin = await runtime.auth.findUserByEmail(defaultAdminEmail);
-  if (!existingAdmin) {
-    await runtime.auth.createUser(defaultAdminEmail, 'admin');
+  if (runtime.system?.installed === true) {
+    const defaultAdminEmail = 'admin@nimb.local';
+    const existingAdmin = await runtime.auth.findUserByEmail(defaultAdminEmail);
+    if (!existingAdmin) {
+      await runtime.auth.createUser({
+        username: 'admin',
+        email: defaultAdminEmail,
+        password: 'admin'
+      });
+    }
   }
 
 

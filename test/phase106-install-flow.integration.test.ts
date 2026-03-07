@@ -35,7 +35,7 @@ test('phase 106: install flow transitions runtime and persists installed state',
 
     const installResponse = await fetch(`http://127.0.0.1:${firstStart.port}/install`, { method: 'POST', redirect: 'manual' });
     assert.equal(installResponse.status, 302);
-    assert.equal(installResponse.headers.get('location'), '/admin/login');
+    assert.equal(installResponse.headers.get('location'), '/admin/setup');
 
     const systemConfig = loadSystemConfig({ projectRoot: cwd, runtimeVersion: '0.1.0' });
     assert.equal(systemConfig.installed, true);

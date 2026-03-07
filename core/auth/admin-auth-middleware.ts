@@ -20,11 +20,33 @@ const isLoginRoute = (ctx) => {
   return method === 'GET' || method === 'POST';
 };
 
+const isSetupRoute = (ctx) => {
+  const method = `${ctx?.req?.method ?? 'GET'}`.toUpperCase();
+  const pathname = toRequestPath(ctx);
+
+  if (pathname !== '/admin/setup') {
+    return false;
+  }
+
+  return method === 'GET' || method === 'POST';
+};
+
 const loginRedirectResponse = Object.freeze({
   statusCode: 302,
   send(response) {
     response.writeHead(302, {
       location: '/admin/login',
+      'content-length': '0'
+    });
+    response.end();
+  }
+});
+
+const setupRedirectResponse = Object.freeze({
+  statusCode: 302,
+  send(response) {
+    response.writeHead(302, {
+      location: '/admin/setup',
       'content-length': '0'
     });
     response.end();
@@ -59,6 +81,12 @@ export const createAdminAuthMiddleware = (runtime) => async (ctx, next) => {
   const user = await runtime?.auth?.findUserById?.(session.userId);
   if (!user) {
     ctx.state.response = loginRedirectResponse;
+    return;
+  }
+
+  const setupPending = await runtime?.auth?.hasPendingCredentialSetup?.();
+  if (setupPending === true && !isSetupRoute(ctx)) {
+    ctx.state.response = setupRedirectResponse;
     return;
   }
 
