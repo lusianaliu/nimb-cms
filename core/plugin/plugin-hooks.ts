@@ -2,6 +2,7 @@ const CORE_HOOKS = Object.freeze([
   'system.start',
   'routes.register',
   'admin.menu',
+  'admin.page',
   'editor.extend',
   'content-type.register'
 ] as const);
