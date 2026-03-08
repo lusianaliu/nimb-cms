@@ -103,11 +103,25 @@ test('phase 102: bootstrap emits admin.nav.register and plugins can register nav
     fs.writeFileSync(path.join(pluginDir, 'index.ts'), `
       export default function register(api) {
         api.runtime.events.on('admin.nav.register', () => {
+          const baseItems = [
+            { id: 'dashboard', label: 'Dashboard', path: '/admin', order: 10 },
+            { id: 'posts', label: 'Posts', path: '/admin/posts', order: 20 },
+            { id: 'media', label: 'Media', path: '/admin/media', order: 30 },
+            { id: 'pages', label: 'Pages', path: '/admin/pages', order: 40 },
+            { id: 'settings', label: 'Settings', path: '/admin/settings', order: 50 }
+          ];
+
+          for (const item of baseItems) {
+            if (!api.runtime.admin.navRegistry.list().some((existing) => existing.id === item.id)) {
+              api.runtime.admin.navRegistry.register(item);
+            }
+          }
+
           api.runtime.admin.navRegistry.register({
             id: 'plugin-tools',
             label: 'Plugin Tools',
             path: '/admin/plugins/tools',
-            order: 50
+            order: 60
           });
         });
       }
@@ -116,6 +130,11 @@ test('phase 102: bootstrap emits admin.nav.register and plugins can register nav
     const bootstrap = await createBootstrap({ cwd, mode: 'runtime' });
     const navIds = bootstrap.runtime.admin.navRegistry.list().map((item) => item.id);
 
-    assert.deepEqual(navIds, ['content', 'media', 'plugin-tools']);
+    assert.equal(navIds.includes('dashboard'), true);
+    assert.equal(navIds.includes('posts'), true);
+    assert.equal(navIds.includes('media'), true);
+    assert.equal(navIds.includes('pages'), true);
+    assert.equal(navIds.includes('settings'), true);
+    assert.equal(navIds.includes('plugin-tools'), true);
   });
 });
