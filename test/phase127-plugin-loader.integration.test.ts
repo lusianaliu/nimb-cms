@@ -60,6 +60,7 @@ test('phase 127: loader scans plugins directory, loads plugin and executes activ
     version: '1.0.0',
     path: pluginDirectory,
     entry: path.join(pluginDirectory, 'index.ts'),
+    main: 'index.ts',
     apiVersion: undefined,
     capabilities: []
   });

@@ -10,7 +10,8 @@ type PluginLoaderLogger = {
   warn?: (message: string, context?: Record<string, unknown>) => void;
 };
 
-const PLUGIN_MANIFEST_FILE = 'plugin.json';
+const PLUGIN_MANIFEST_FILE = 'manifest.json';
+const LEGACY_PLUGIN_MANIFEST_FILE = 'plugin.json';
 
 type RuntimeWithPlugins = {
   createScopedRuntime: (pluginId: string, capabilities?: string[]) => ScopedRuntime;
@@ -23,8 +24,19 @@ type RuntimeWithPlugins = {
 
 const readManifest = async (pluginDirectory: string): Promise<PluginManifest> => {
   const manifestPath = path.join(pluginDirectory, PLUGIN_MANIFEST_FILE);
-  const content = await fs.readFile(manifestPath, 'utf8');
-  return validatePluginManifest(JSON.parse(content) as unknown);
+
+  try {
+    const content = await fs.readFile(manifestPath, 'utf8');
+    return validatePluginManifest(JSON.parse(content) as unknown);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw error;
+    }
+  }
+
+  const legacyManifestPath = path.join(pluginDirectory, LEGACY_PLUGIN_MANIFEST_FILE);
+  const legacyContent = await fs.readFile(legacyManifestPath, 'utf8');
+  return validatePluginManifest(JSON.parse(legacyContent) as unknown);
 };
 
 const runPluginLifecycle = async (
@@ -32,6 +44,15 @@ const runPluginLifecycle = async (
   runtime: RuntimeWithPlugins,
   manifest: PluginManifest
 ) => {
+  const pluginModule = imported.default;
+
+  if (pluginModule && typeof pluginModule === 'object' && typeof (pluginModule as { setup?: unknown }).setup === 'function') {
+    const plugin = pluginModule as { name?: unknown; setup: (runtime: ScopedRuntime) => unknown | Promise<unknown> };
+    const runtimeApi = runtime.createScopedRuntime(manifest.id, manifest.capabilities ?? []);
+    await plugin.setup(runtimeApi);
+    return;
+  }
+
   const activate = imported.activate;
 
   if (typeof activate === 'function') {
@@ -42,7 +63,7 @@ const runPluginLifecycle = async (
   const register = imported.default;
 
   if (typeof register !== 'function') {
-    throw new Error('plugin entry must export activate(runtime) or default register(api)');
+    throw new Error('plugin entry must export default { name, setup(runtime) }');
   }
 
   if (manifest.apiVersion && !isCompatible(PLUGIN_API_VERSION, manifest.apiVersion)) {
@@ -102,6 +123,7 @@ export const loadPlugins = async (
         name: manifest.name,
         version: manifest.version,
         entry: pluginEntryPath,
+        main: manifest.entry,
         apiVersion: manifest.apiVersion,
         capabilities: Object.freeze([...(manifest.capabilities ?? [])])
       };

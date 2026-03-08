@@ -1,5 +1,5 @@
 const LEGACY_MANIFEST_FIELDS = new Set(['id', 'name', 'version', 'entry', 'apiVersion', 'capabilities']);
-const PHASE127_MANIFEST_FIELDS = new Set(['name', 'version', 'main']);
+const SDK_MANIFEST_FIELDS = new Set(['name', 'version', 'main']);
 const PLUGIN_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export interface PluginManifest {
@@ -57,9 +57,9 @@ const validateLegacyManifest = (manifest: Record<string, unknown>): PluginManife
   });
 };
 
-const validatePhase127Manifest = (manifest: Record<string, unknown>): PluginManifest => {
+const validateSdkManifest = (manifest: Record<string, unknown>): PluginManifest => {
   for (const key of Object.keys(manifest)) {
-    if (!PHASE127_MANIFEST_FIELDS.has(key)) {
+    if (!SDK_MANIFEST_FIELDS.has(key)) {
       throw new Error(`plugin manifest has unknown field "${key}"`);
     }
   }
@@ -86,7 +86,7 @@ export const validatePluginManifest = (value: unknown): PluginManifest => {
   const manifest = value as Record<string, unknown>;
 
   if (typeof manifest.main === 'string') {
-    return validatePhase127Manifest(manifest);
+    return validateSdkManifest(manifest);
   }
 
   return validateLegacyManifest(manifest);
