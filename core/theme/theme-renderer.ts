@@ -1,20 +1,6 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import { defaultThemeTemplates } from '../../themes/default/index.ts';
 
-const DEFAULT_THEME_NAME = 'default';
 const DEFAULT_SITE_NAME = 'My Nimb Site';
-
-const replaceVariables = (template = '', variables: Record<string, unknown> = {}) => (
-  template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, variableName) => `${variables[variableName] ?? ''}`)
-);
-
-const readTemplate = (filePath: string) => {
-  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
-    throw new Error(`Theme template not found: ${filePath}`);
-  }
-
-  return fs.readFileSync(filePath, 'utf8');
-};
 
 const readSiteSettings = (runtime) => runtime?.settings?.getSettings?.() ?? {};
 
@@ -36,38 +22,36 @@ const readSiteName = (runtime) => {
   return DEFAULT_SITE_NAME;
 };
 
-const readThemeName = (runtime) => {
-  try {
-    const settings = readSiteSettings(runtime);
-    if (typeof settings.theme === 'string' && settings.theme.trim() !== '') {
-      return settings.theme;
-    }
-  } catch {
-    // Default while settings storage is not initialized.
+const mapLegacyTemplateName = (templateName: string): string => {
+  if (templateName === 'index' || templateName === 'home') {
+    return 'homepage';
   }
 
-  return `${runtime?.theme?.activePublicTheme?.id ?? DEFAULT_THEME_NAME}`.trim() || DEFAULT_THEME_NAME;
+  if (templateName === 'blog' || templateName === 'blog-list') {
+    return 'post-list';
+  }
+
+  if (templateName === 'post' || templateName === 'blog-single') {
+    return 'post-page';
+  }
+
+  return templateName;
 };
 
-export const createThemeRenderer = (runtime) => {
-  const projectRoot = runtime?.projectPaths?.projectRoot ?? runtime?.project?.projectRoot ?? process.cwd();
-  const fallbackProjectRoot = process.cwd();
+export const createThemeRenderer = (runtime) => Object.freeze({
+  renderTemplate(templateName = 'homepage', rendererRuntime = runtime, pageVariables: Record<string, unknown> = {}) {
+    const resolvedTemplateName = mapLegacyTemplateName(templateName);
+    const template = defaultThemeTemplates[resolvedTemplateName] ?? defaultThemeTemplates.page;
 
-  return Object.freeze({
-    renderThemePage(page = 'index', rendererRuntime = runtime, pageVariables: Record<string, unknown> = {}) {
-      const activeTheme = readThemeName(rendererRuntime);
-      const siteName = readSiteName(rendererRuntime);
-      const primaryThemePath = path.join(projectRoot, 'themes', activeTheme);
-      const fallbackThemePath = path.join(fallbackProjectRoot, 'themes', activeTheme);
-      const themePath = fs.existsSync(primaryThemePath) ? primaryThemePath : fallbackThemePath;
-      const layoutTemplate = readTemplate(path.join(themePath, 'layout.html'));
-      const pageTemplate = readTemplate(path.join(themePath, `${page}.html`));
-      const pageContent = replaceVariables(pageTemplate, { siteName, ...pageVariables });
-      const html = layoutTemplate.replace('{{content}}', pageContent);
-
-      return replaceVariables(html, { siteName });
-    }
-  });
-};
+    return template({
+      siteName: readSiteName(rendererRuntime),
+      routePath: `${pageVariables.routePath ?? '/'}`,
+      ...pageVariables
+    });
+  },
+  renderThemePage(page = 'index', rendererRuntime = runtime, pageVariables: Record<string, unknown> = {}) {
+    return this.renderTemplate(page, rendererRuntime, pageVariables);
+  }
+});
 
 export const renderThemePage = (page, runtime) => createThemeRenderer(runtime).renderThemePage(page, runtime);
