@@ -1,12 +1,10 @@
 import { createRouter } from './router.ts';
 import { createContentAdminService } from '../admin/content-admin.ts';
 import { renderContentList } from '../admin/views/content-list.ts';
-import { renderContentForm } from '../admin/views/content-form.ts';
+import { generateAdminForm } from '../admin/form-generator.ts';
 import { renderAdminShell } from '../admin/admin-shell.ts';
 import { runMiddlewareStack } from './run-middleware.ts';
 import type { MiddlewareContext } from './middleware.ts';
-
-const SUPPORTED_TYPES = new Set(['page', 'post']);
 
 const toHtmlResponse = (html: string, statusCode = 200) => ({
   statusCode,
@@ -40,13 +38,13 @@ const toTextResponse = (statusCode: number, text: string) => ({
   }
 });
 
-const getRequestedType = (context) => {
+const getRequestedType = (runtime, context) => {
   const rawType = `${context.params?.type ?? ''}`.trim();
-  if (!SUPPORTED_TYPES.has(rawType)) {
+  if (!rawType) {
     return null;
   }
 
-  return rawType;
+  return runtime.contentTypes?.get(rawType) ? rawType : null;
 };
 
 const hasCapability = (context, capability: string) => {
@@ -67,6 +65,29 @@ const parseFormBody = async (request) => {
 
   const body = Buffer.concat(chunks).toString('utf8');
   return Object.fromEntries(new URLSearchParams(body));
+};
+
+const assertFieldTypes = (runtime, schema, data: Record<string, unknown>) => {
+  for (const field of schema?.fields ?? []) {
+    const name = `${field?.name ?? ''}`;
+    const fieldTypeName = `${field?.type ?? 'string'}`;
+    const fieldType = runtime.fieldTypes?.get?.(fieldTypeName);
+
+    if (!fieldType) {
+      throw new Error(`Unknown field type "${fieldTypeName}" for field "${name}"`);
+    }
+
+    if (data[name] === undefined) {
+      if (field?.required) {
+        throw new Error(`Missing required field "${name}"`);
+      }
+      continue;
+    }
+
+    if (!fieldType.validate(data[name])) {
+      throw new Error(`Invalid value for field "${name}"`);
+    }
+  }
 };
 
 const slugify = (value: unknown) => `${value ?? ''}`
@@ -108,7 +129,7 @@ const coerceFieldValue = (type: string, rawValue: unknown) => {
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
-  if (type === 'datetime') {
+  if (type === 'date' || type === 'datetime') {
     const text = `${rawValue ?? ''}`.trim();
     if (!text) {
       return undefined;
@@ -116,6 +137,15 @@ const coerceFieldValue = (type: string, rawValue: unknown) => {
 
     const parsed = new Date(text);
     return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+  }
+
+  if (type === 'json') {
+    const text = `${rawValue ?? ''}`.trim();
+    if (!text) {
+      return null;
+    }
+
+    return JSON.parse(text);
   }
 
   return `${rawValue ?? ''}`;
@@ -133,13 +163,34 @@ const buildEntryData = (schema, formData: Record<string, unknown>, existingEntri
     }
   }
 
-  if (!`${data.slug ?? ''}`.trim()) {
-    data.slug = slugify(data.title);
+  const hasSlugField = (schema?.fields ?? []).some((field) => `${field?.name ?? ''}` === 'slug');
+  if (hasSlugField) {
+    if (!`${data.slug ?? ''}`.trim()) {
+      data.slug = slugify(data.title);
+    }
+
+    data.slug = withUniqueSlug(existingEntries, slugify(data.slug), currentId);
   }
 
-  data.slug = withUniqueSlug(existingEntries, slugify(data.slug), currentId);
-
   return data;
+};
+
+
+const renderGeneratedContentForm = ({ type, schema, entry, mode }) => {
+  const safeType = encodeURIComponent(type);
+  const action = mode === 'edit'
+    ? `/admin/content/${safeType}/${encodeURIComponent(`${entry?.id ?? ''}`)}/edit`
+    : `/admin/content/${safeType}`;
+
+  const formHtml = generateAdminForm(schema, {
+    action,
+    values: entry?.data ?? {},
+    submitLabel: 'Save'
+  });
+
+  return `<h1>${mode === 'edit' ? 'Edit' : 'Create'} ${type}</h1>
+  ${formHtml}
+  <p><a href="/admin/content/${safeType}">Cancel</a></p>`;
 };
 
 
@@ -170,7 +221,7 @@ export const createAdminContentRouter = (runtime) => {
       method: 'GET',
       path: '/admin/content/:type',
       handler: (context) => withAdminMiddleware(runtime, context, async () => {
-        const type = getRequestedType(context);
+        const type = getRequestedType(runtime, context);
         if (!type) {
           return toTextResponse(404, 'Not found');
         }
@@ -188,7 +239,7 @@ export const createAdminContentRouter = (runtime) => {
       method: 'GET',
       path: '/admin/content/:type/new',
       handler: (context) => withAdminMiddleware(runtime, context, async () => {
-        const type = getRequestedType(context);
+        const type = getRequestedType(runtime, context);
         if (!type) {
           return toTextResponse(404, 'Not found');
         }
@@ -198,7 +249,7 @@ export const createAdminContentRouter = (runtime) => {
           title: `Create ${type} · ${runtime?.admin?.title ?? 'Nimb Admin'}`,
           runtime,
           activeNav: 'content',
-          content: renderContentForm({ type, schema, entry: null, mode: 'new' })
+          content: renderGeneratedContentForm({ type, schema, entry: null, mode: 'new' })
         }));
       })
     },
@@ -206,7 +257,7 @@ export const createAdminContentRouter = (runtime) => {
       method: 'GET',
       path: '/admin/content/:type/:id/edit',
       handler: (context) => withAdminMiddleware(runtime, context, async () => {
-        const type = getRequestedType(context);
+        const type = getRequestedType(runtime, context);
         if (!type) {
           return toTextResponse(404, 'Not found');
         }
@@ -221,7 +272,7 @@ export const createAdminContentRouter = (runtime) => {
           title: `Edit ${type} · ${runtime?.admin?.title ?? 'Nimb Admin'}`,
           runtime,
           activeNav: 'content',
-          content: renderContentForm({ type, schema, entry, mode: 'edit' })
+          content: renderGeneratedContentForm({ type, schema, entry, mode: 'edit' })
         }));
       })
     },
@@ -229,7 +280,7 @@ export const createAdminContentRouter = (runtime) => {
       method: 'POST',
       path: '/admin/content/:type',
       handler: (context) => withAdminMiddleware(runtime, context, async () => {
-        const type = getRequestedType(context);
+        const type = getRequestedType(runtime, context);
         if (!type) {
           return toTextResponse(404, 'Not found');
         }
@@ -239,15 +290,21 @@ export const createAdminContentRouter = (runtime) => {
         const existingEntries = service.listEntries(type);
         const entryData = buildEntryData(schema, formData, existingEntries);
 
-        await service.createEntry(type, entryData);
+        assertFieldTypes(runtime, schema, entryData);
+
+        runtime.storage.create(type, entryData);
+        runtime.content?.invalidateRenderCache?.();
         return toRedirectResponse(`/admin/content/${encodeURIComponent(type)}`);
+      }).catch((error) => {
+        const message = error instanceof Error ? error.message : 'Invalid form submission';
+        return toTextResponse(400, message);
       })
     },
     {
       method: 'POST',
-      path: '/admin/content/:type/:id/update',
+      path: '/admin/content/:type/:id/edit',
       handler: (context) => withAdminMiddleware(runtime, context, async () => {
-        const type = getRequestedType(context);
+        const type = getRequestedType(runtime, context);
         if (!type) {
           return toTextResponse(404, 'Not found');
         }
@@ -258,15 +315,46 @@ export const createAdminContentRouter = (runtime) => {
         const existingEntries = service.listEntries(type);
         const entryData = buildEntryData(schema, formData, existingEntries, id);
 
-        await service.updateEntry(type, id, entryData);
+        assertFieldTypes(runtime, schema, entryData);
+
+        runtime.storage.update(type, id, entryData);
+        runtime.content?.invalidateRenderCache?.();
         return toRedirectResponse(`/admin/content/${encodeURIComponent(type)}`);
+      }).catch((error) => {
+        const message = error instanceof Error ? error.message : 'Invalid form submission';
+        return toTextResponse(400, message);
+      })
+    },
+    {
+      method: 'POST',
+      path: '/admin/content/:type/:id/update',
+      handler: (context) => withAdminMiddleware(runtime, context, async () => {
+        const type = getRequestedType(runtime, context);
+        if (!type) {
+          return toTextResponse(404, 'Not found');
+        }
+
+        const id = `${context.params?.id ?? ''}`;
+        const schema = runtime.content.getTypeSchema(type);
+        const formData = await parseFormBody(context.request);
+        const existingEntries = service.listEntries(type);
+        const entryData = buildEntryData(schema, formData, existingEntries, id);
+
+        assertFieldTypes(runtime, schema, entryData);
+
+        runtime.storage.update(type, id, entryData);
+        runtime.content?.invalidateRenderCache?.();
+        return toRedirectResponse(`/admin/content/${encodeURIComponent(type)}`);
+      }).catch((error) => {
+        const message = error instanceof Error ? error.message : 'Invalid form submission';
+        return toTextResponse(400, message);
       })
     },
     {
       method: 'POST',
       path: '/admin/content/:type/:id/delete',
       handler: (context) => withAdminMiddleware(runtime, context, async () => {
-        const type = getRequestedType(context);
+        const type = getRequestedType(runtime, context);
         if (!type) {
           return toTextResponse(404, 'Not found');
         }
