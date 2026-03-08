@@ -25,6 +25,12 @@ type StoredEntry = {
   updatedAt: string;
 };
 
+type QueryOptions = {
+  limit?: number;
+  offset?: number;
+  sort?: string;
+};
+
 const readJson = <T>(filePath: string, fallback: T): T => {
   if (!fs.existsSync(filePath)) {
     return fallback;
@@ -166,6 +172,46 @@ export const createContentStorage = (runtime: Runtime) => {
     };
   };
 
+  const normalizeSort = (sort?: string): { field: string; direction: 'asc' | 'desc' } => {
+    if (!sort) {
+      return { field: 'id', direction: 'asc' };
+    }
+
+    const [rawField, rawDirection] = sort.split(':');
+    const field = rawField?.trim() || 'id';
+    const direction = rawDirection?.trim().toLowerCase() === 'desc' ? 'desc' : 'asc';
+
+    return { field, direction };
+  };
+
+  const compareValues = (left: unknown, right: unknown): number => {
+    if (left === right) {
+      return 0;
+    }
+
+    if (left === undefined) {
+      return -1;
+    }
+
+    if (right === undefined) {
+      return 1;
+    }
+
+    if (typeof left === 'number' && typeof right === 'number') {
+      return left - right;
+    }
+
+    return String(left).localeCompare(String(right));
+  };
+
+  const entrySortValue = (entry: StoredEntry, field: string): unknown => {
+    if (field in entry) {
+      return entry[field as keyof StoredEntry];
+    }
+
+    return entry.data[field];
+  };
+
   return Object.freeze({
     create: (type: string, data: Record<string, unknown>) => {
       assertTypeRegistered(runtime, type);
@@ -241,6 +287,37 @@ export const createContentStorage = (runtime: Runtime) => {
           data: deserializeFields(type, entry.data)
         }))
         .sort((left, right) => Number(left.id) - Number(right.id));
+    },
+    query: (type: string, options: QueryOptions = {}) => {
+      assertTypeRegistered(runtime, type);
+      ensureTypeDir(type);
+
+      const files = fs.readdirSync(typeDir(type))
+        .filter((fileName) => fileName.endsWith('.json') && fileName !== 'index.json');
+
+      const { field, direction } = normalizeSort(options.sort);
+      const offset = Number.isInteger(options.offset) && (options.offset as number) > 0 ? (options.offset as number) : 0;
+      const hasLimit = Number.isInteger(options.limit) && (options.limit as number) >= 0;
+      const limit = hasLimit ? (options.limit as number) : undefined;
+
+      const entries = files
+        .map((fileName) => readEntry(type, fileName.slice(0, -'.json'.length)))
+        .filter((entry): entry is StoredEntry => Boolean(entry))
+        .sort((left, right) => {
+          const compared = compareValues(entrySortValue(left, field), entrySortValue(right, field));
+          if (compared !== 0) {
+            return direction === 'desc' ? -compared : compared;
+          }
+
+          return Number(left.id) - Number(right.id);
+        })
+        .slice(offset, limit === undefined ? undefined : offset + limit)
+        .map((entry) => ({
+          ...entry,
+          data: deserializeFields(type, entry.data)
+        }));
+
+      return entries;
     }
   });
 };
