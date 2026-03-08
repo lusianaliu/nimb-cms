@@ -15,7 +15,7 @@ const hasOwn = (value: Record<string, unknown>, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(value, key);
 
 const isValidFieldType = (field: ContentFieldDefinition, value: unknown): boolean => {
-  if (value === null || value === undefined) {
+  if (value === undefined) {
     return false;
   }
 
@@ -27,8 +27,11 @@ const isValidFieldType = (field: ContentFieldDefinition, value: unknown): boolea
       return typeof value === 'number' && Number.isFinite(value);
     case 'boolean':
       return typeof value === 'boolean';
+    case 'date':
     case 'datetime':
       return value instanceof Date && !Number.isNaN(value.getTime());
+    case 'json':
+      return true;
     default:
       return false;
   }
