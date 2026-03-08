@@ -12,6 +12,7 @@ import { CommandDispatcher, createAdminController } from '../admin/index.ts';
 import { registerAdminPage, getAdminPages } from '../admin/admin-registry.ts';
 import { registerAdminTheme, getAdminTheme, getDefaultAdminTheme } from '../admin/admin-theme-registry.ts';
 import { createAdminNavRegistry } from '../admin/admin-nav-registry.ts';
+import { createAdminMenuRegistry } from '../admin/admin-menu.ts';
 import { createAdminMiddlewareRegistry } from '../admin/admin-middleware.ts';
 import type { Middleware, MiddlewareContext } from '../http/middleware.ts';
 import { createDefaultAdminTheme } from '../admin/themes/default-theme.ts';
@@ -222,6 +223,7 @@ export const createBootstrap = async ({
   runtime.adminBasePath = resolveAdminBasePath(runtime);
   const navRegistry = createAdminNavRegistry();
   const middlewareRegistry = createAdminMiddlewareRegistry();
+  const adminMenuRegistry = createAdminMenuRegistry();
   const adminContextMiddleware: Middleware = async (ctx: MiddlewareContext, next) => {
     ctx.state.admin = true;
     await next();
@@ -239,6 +241,7 @@ export const createBootstrap = async ({
     navRegistry,
     middleware: middlewareRegistry
   });
+  runtime.adminMenu = adminMenuRegistry;
   navRegistry.register({
     id: 'content',
     label: 'Content',
@@ -401,7 +404,7 @@ export const createBootstrap = async ({
 
   await runtime.hooks.run('content-type.register', Object.freeze({ runtime, contentTypes: runtime.contentTypes }));
   await runtime.hooks.run('routes.register', runtime.pluginRouter);
-  await runtime.hooks.run('admin.menu', Object.freeze({ runtime, navRegistry: runtime.admin.navRegistry }));
+  await runtime.hooks.run('admin.menu', runtime.adminMenu);
   await runtime.hooks.run('editor.extend', Object.freeze({ runtime }));
   await runtime.hooks.run('system.start', runtime);
 
