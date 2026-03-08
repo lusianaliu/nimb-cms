@@ -15,7 +15,7 @@ const hasCapability = (runtime, capability: string) => {
 };
 
 export function renderAdminNav(runtime, active?: string): string {
-  const items = (runtime?.admin?.navRegistry?.list?.() ?? []).filter((item) => {
+  const navItems = (runtime?.admin?.navRegistry?.list?.() ?? []).filter((item) => {
     const capability = `${item?.capability ?? ''}`.trim();
     if (!capability) {
       return true;
@@ -29,5 +29,9 @@ export function renderAdminNav(runtime, active?: string): string {
     return `<li><a href="${escapeHtml(item.path)}"${activeAttr}>${escapeHtml(item.label)}</a></li>`;
   }).join('');
 
-  return `<nav class="admin-nav" aria-label="Admin Navigation"><ul>${items}</ul></nav>`;
+  const pluginItems = (runtime?.adminMenu?.list?.() ?? []).map((item) => {
+    return `<li><a href="${escapeHtml(item.path)}"><span aria-hidden="true">${escapeHtml(item.icon)}</span> ${escapeHtml(item.title)}</a></li>`;
+  }).join('');
+
+  return `<nav class="admin-nav" aria-label="Admin Navigation"><ul>${navItems}${pluginItems}</ul></nav>`;
 }
