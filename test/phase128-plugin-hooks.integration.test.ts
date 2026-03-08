@@ -55,6 +55,7 @@ test('phase 128: plugin registers system.start hook and executes on runtime boot
     'system.start',
     'routes.register',
     'admin.menu',
+    'admin.page',
     'editor.extend',
     'content-type.register'
   ]);

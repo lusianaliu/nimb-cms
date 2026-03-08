@@ -205,6 +205,27 @@ export const createRequestHandler = (runtime, {
         }
       }
 
+      if (context.path.startsWith('/admin')) {
+        const page = runtime?.adminPages?.get?.(context.path);
+
+        if (page) {
+          const html = await Promise.resolve(page.render(routeContext.request, response, runtime));
+          const body = Buffer.from(`${html ?? ''}`, 'utf8');
+          response.writeHead(200, {
+            'content-length': body.byteLength,
+            'content-type': 'text/html; charset=utf-8'
+          });
+          response.end(body);
+          return;
+        }
+
+        if (context.path === '/admin' || context.path.startsWith('/admin/')) {
+          notFoundResponse({ path: context.path, timestamp: context.timestamp }).send(response);
+          return;
+        }
+      }
+
+
       if (adminAuthRouter) {
         const adminAuthHandler = adminAuthRouter.dispatch(routeContext);
         if (adminAuthHandler) {
