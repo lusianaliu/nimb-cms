@@ -18,7 +18,7 @@ import { createAdminPageRegistry } from '../admin/admin-pages.ts';
 import { registerCoreAdminPages } from '../admin/core-admin-pages.ts';
 import type { Middleware, MiddlewareContext } from '../http/middleware.ts';
 import { createDefaultAdminTheme } from '../admin/themes/default-theme.ts';
-import { ContentRegistry, ContentStore, ContentQueryService, ContentCommandService, EntryRegistry, ContentTypeRegistry, registerDefaultContentTypes, type ContentEvents } from '../content/index.ts';
+import { ContentRegistry, ContentStore, ContentQueryService, ContentCommandService, EntryRegistry, createContentTypeRegistry, registerDefaultContentTypes, type ContentEvents } from '../content/index.ts';
 import { createProjectModel, createProjectPaths } from '../project/index.ts';
 import { resolveRuntimeMode } from '../runtime/resolve-runtime-mode.ts';
 import { version } from '../runtime/version.ts';
@@ -211,7 +211,7 @@ export const createBootstrap = async ({
   const runtime = createRuntime(config, resolvedPaths, { runtimeMode });
   runtime.dispose = () => disposeRuntime(runtime);
   runtime.mode = selectedMode;
-  runtime.contentTypes = new ContentTypeRegistry();
+  runtime.contentTypes = createContentTypeRegistry();
   registerDefaultContentTypes(runtime.contentTypes);
   runtime.projectPaths = resolvedPaths;
   runtime.project = resolvedPaths;
@@ -406,6 +406,7 @@ export const createBootstrap = async ({
     await loadPlugins(runtime, { pluginsDirectory: resolvedPaths.pluginsDir });
   }
 
+  await runtime.hooks.run('content.type', runtime.contentTypes);
   await runtime.hooks.run('content-type.register', Object.freeze({ runtime, contentTypes: runtime.contentTypes }));
   await runtime.hooks.run('routes.register', runtime.pluginRouter);
   await runtime.hooks.run('admin.page', runtime.adminPages);
