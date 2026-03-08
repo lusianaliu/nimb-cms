@@ -18,7 +18,7 @@ import { createAdminPageRegistry } from '../admin/admin-pages.ts';
 import { registerCoreAdminPages } from '../admin/core-admin-pages.ts';
 import type { Middleware, MiddlewareContext } from '../http/middleware.ts';
 import { createDefaultAdminTheme } from '../admin/themes/default-theme.ts';
-import { ContentRegistry, ContentStore, ContentQueryService, ContentCommandService, EntryRegistry, createContentTypeRegistry, registerDefaultContentTypes, createFieldTypeRegistry, registerDefaultFieldTypes, type ContentEvents } from '../content/index.ts';
+import { ContentRegistry, ContentStore, ContentQueryService, ContentCommandService, EntryRegistry, createContentTypeRegistry, registerDefaultContentTypes, createFieldTypeRegistry, registerDefaultFieldTypes, createContentStorage, type ContentEvents } from '../content/index.ts';
 import { createProjectModel, createProjectPaths } from '../project/index.ts';
 import { resolveRuntimeMode } from '../runtime/resolve-runtime-mode.ts';
 import { version } from '../runtime/version.ts';
@@ -216,6 +216,7 @@ export const createBootstrap = async ({
   runtime.fieldTypes = createFieldTypeRegistry();
   registerDefaultFieldTypes(runtime.fieldTypes);
   runtime.projectPaths = resolvedPaths;
+  runtime.storage = createContentStorage(runtime);
   runtime.project = resolvedPaths;
   runtime.version = version;
   runtime.system = Object.freeze({
