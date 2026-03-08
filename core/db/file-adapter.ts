@@ -166,7 +166,9 @@ export const createFileAdapter = (runtime: Runtime): DatabaseAdapter => {
       return { field: 'id', direction: 'asc' };
     }
 
-    const [rawField, rawDirection] = sort.split(':');
+    const normalized = `${sort}`.trim();
+    const delimiter = normalized.includes(':') ? ':' : ' ';
+    const [rawField, rawDirection] = normalized.split(delimiter);
     const field = rawField?.trim() || 'id';
     const direction = rawDirection?.trim().toLowerCase() === 'desc' ? 'desc' : 'asc';
 
