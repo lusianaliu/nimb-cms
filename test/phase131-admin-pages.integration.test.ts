@@ -32,6 +32,15 @@ const writePlugin = (cwd: string) => {
   }, null, 2)}\n`);
   fs.writeFileSync(path.join(pluginDirectory, 'index.ts'), `
     export function activate(runtime) {
+      runtime.hooks.registerHook('admin.menu', (menu) => {
+        menu.register({
+          id: 'plugin-tools',
+          title: 'Plugin Tools',
+          path: '/admin/plugin-tools',
+          icon: 'tool'
+        });
+      });
+
       runtime.hooks.registerHook('admin.page', (pages) => {
         pages.register({
           id: 'plugin-tools',
@@ -58,7 +67,10 @@ test('phase 131: plugin registers admin page and request handler renders it', as
     assert.equal(response.status, 200);
 
     const html = await response.text();
-    assert.equal(html.includes('Plugin Tools'), true);
+    assert.equal(html.includes('<div class="layout">'), true);
+    assert.equal(html.includes('Nimb CMS'), true);
+    assert.equal(html.includes('<a href="/admin/plugin-tools">'), true);
+    assert.equal(html.includes('<h1>Plugin Tools</h1><p>Hello from plugin.</p>'), true);
   } finally {
     await started.server.stop();
   }

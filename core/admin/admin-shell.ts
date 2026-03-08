@@ -1,4 +1,3 @@
-import { renderAdminLayout } from './admin-layout.ts';
 import { renderAdminNav } from './admin-nav.ts';
 
 export type AdminShellContext = {
@@ -50,7 +49,10 @@ export function renderAdminShell(ctx: AdminShellContext): string {
   </style>
 </head>
 <body>
-  ${renderAdminLayout(renderAdminNav(ctx.runtime, ctx.activeNav), ctx.content)}
+  <div class="admin">
+    <aside class="admin-sidebar">${renderAdminNav(ctx.runtime, ctx.activeNav)}</aside>
+    <main class="admin-main">${ctx.content}</main>
+  </div>
 </body>
 </html>`;
 }
