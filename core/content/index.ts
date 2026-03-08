@@ -16,3 +16,4 @@ export { createContentEntry, type ContentEntry } from './content-entry.ts';
 export { createContentTypeRegistry, CORE_POST_CONTENT_TYPE, registerDefaultContentTypes, type ContentTypeSchema, type ContentTypeRegistry, type ContentTypeFieldSchema } from './content-types.ts';
 
 export { createFieldTypeRegistry, registerDefaultFieldTypes, type FieldTypeDefinition, type FieldTypeRegistry } from './field-types.ts';
+export { createContentStorage } from './storage.ts';
