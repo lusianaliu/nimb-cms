@@ -140,6 +140,7 @@ export const createRequestHandler = (runtime, {
   const adminAuthRouter = createAdminAuthRouter(runtime);
   const adminContentRouter = createAdminContentRouter(runtime);
   const mediaController = createMediaController({ rootDirectory });
+  const pluginRouter = runtime?.pluginRouter;
   const router = runtimeRouter;
   const apiRouter = createApiRouter({ runtime, authService, authMiddleware, adminController, contentRegistry, persistContentTypes, entryRegistry, persistEntries });
   const guardRequest = installGuardMiddleware(runtime);
@@ -246,6 +247,29 @@ export const createRequestHandler = (runtime, {
           const mediaResponse = await Promise.resolve(mediaHandler(routeContext));
           mediaResponse.send(response);
           return;
+        }
+      }
+
+      if (pluginRouter) {
+        const pluginHandler = pluginRouter.dispatch(routeContext);
+        if (pluginHandler) {
+          try {
+            const pluginResponse = await Promise.resolve(pluginHandler(routeContext));
+            if (pluginResponse && typeof pluginResponse.send === 'function') {
+              pluginResponse.send(response);
+            } else if (!response.writableEnded) {
+              response.writeHead(204, { 'content-length': '0' });
+              response.end();
+            }
+            return;
+          } catch (error) {
+            errorResponse({
+              code: 'PLUGIN_ROUTE_FAILURE',
+              message: error?.message ?? 'Plugin route execution failed',
+              timestamp: context.timestamp
+            }).send(response);
+            return;
+          }
         }
       }
 

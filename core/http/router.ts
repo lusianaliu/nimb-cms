@@ -1,4 +1,7 @@
 const routeKey = (method, path) => `${method} ${path}`;
+const SUPPORTED_PLUGIN_METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE']);
+
+const normalizeMethod = (method) => String(method ?? '').trim().toUpperCase();
 
 const toPathMatcher = (path) => {
   if (!path.includes(':')) {
@@ -47,12 +50,35 @@ export const createRouter = (routes = []) => {
     }
   };
 
+  const registerRoute = (method, path, handler) => {
+    const normalizedMethod = normalizeMethod(method);
+
+    if (!SUPPORTED_PLUGIN_METHODS.has(normalizedMethod)) {
+      throw new Error(`unsupported route method "${method}"`);
+    }
+
+    if (typeof path !== 'string' || path.trim().length === 0) {
+      throw new Error('route path must be a non-empty string');
+    }
+
+    if (typeof handler !== 'function') {
+      throw new Error('route handler must be a function');
+    }
+
+    register({
+      method: normalizedMethod,
+      path,
+      handler: (context) => handler(context.request, context.response)
+    });
+  };
+
   for (const route of routes) {
     register(route);
   }
 
   return Object.freeze({
     register,
+    registerRoute,
     dispatch(context) {
       const exact = table.get(routeKey(context.method, context.path));
       if (exact) {
