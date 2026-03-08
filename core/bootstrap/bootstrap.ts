@@ -18,7 +18,7 @@ import { createAdminPageRegistry } from '../admin/admin-pages.ts';
 import { registerCoreAdminPages } from '../admin/core-admin-pages.ts';
 import type { Middleware, MiddlewareContext } from '../http/middleware.ts';
 import { createDefaultAdminTheme } from '../admin/themes/default-theme.ts';
-import { ContentRegistry, ContentStore, ContentQueryService, ContentCommandService, EntryRegistry, createContentTypeRegistry, registerDefaultContentTypes, createFieldTypeRegistry, registerDefaultFieldTypes, createContentStorage, type ContentEvents } from '../content/index.ts';
+import { ContentRegistry, ContentStore, ContentQueryService, ContentCommandService, EntryRegistry, createContentTypeRegistry, registerDefaultContentTypes, createFieldTypeRegistry, registerDefaultFieldTypes, type ContentEvents } from '../content/index.ts';
 import { createProjectModel, createProjectPaths } from '../project/index.ts';
 import { resolveRuntimeMode } from '../runtime/resolve-runtime-mode.ts';
 import { version } from '../runtime/version.ts';
@@ -40,6 +40,7 @@ import type { ScopedRuntime } from '../plugin/plugin-api.ts';
 import { getInstallState } from '../system/system-config.ts';
 import { hasInstallLock } from '../installer/install-lock.ts';
 import { createRouter } from '../http/router.ts';
+import { createDatabase, createStorageProxy } from '../db/index.ts';
 
 
 const CONTENT_TYPES_STORAGE_KEY = 'content-types';
@@ -216,7 +217,9 @@ export const createBootstrap = async ({
   runtime.fieldTypes = createFieldTypeRegistry();
   registerDefaultFieldTypes(runtime.fieldTypes);
   runtime.projectPaths = resolvedPaths;
-  runtime.storage = createContentStorage(runtime);
+  runtime.setConfig?.(config);
+  runtime.db = createDatabase(runtime);
+  runtime.storage = createStorageProxy(runtime.db);
   runtime.project = resolvedPaths;
   runtime.version = version;
   runtime.system = Object.freeze({
@@ -224,7 +227,6 @@ export const createBootstrap = async ({
     installed: isInstalled
   });
   runtime.setRuntimeMode?.(runtimeMode);
-  runtime.setConfig?.(config);
   runtime.adminBasePath = resolveAdminBasePath(runtime);
   const navRegistry = createAdminNavRegistry();
   const middlewareRegistry = createAdminMiddlewareRegistry();
