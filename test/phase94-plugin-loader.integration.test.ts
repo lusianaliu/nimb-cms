@@ -92,7 +92,8 @@ test('phase 94: plugin manifest loader validates manifests, scopes runtime and p
     version: '1.0.0',
     apiVersion: '^1.0.0',
     capabilities: ['settings.read'],
-    entry: path.join(cwd, 'plugins', 'valid-plugin', 'index.ts')
+    entry: path.join(cwd, 'plugins', 'valid-plugin', 'index.ts'),
+    main: 'index.ts'
   });
   assert.deepEqual(bootstrap.runtime.plugins.get('valid-plugin'), plugins[0]);
 });

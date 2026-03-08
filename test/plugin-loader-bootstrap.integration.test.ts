@@ -60,6 +60,7 @@ test('bootstrap loads manifest-driven plugins and registers metadata', async () 
     version: '1.0.0',
     apiVersion: '^1.0.0',
     capabilities: ['settings.read'],
-    entry: path.join(cwd, 'plugins', 'sample', 'index.ts')
+    entry: path.join(cwd, 'plugins', 'sample', 'index.ts'),
+    main: 'index.ts'
   }]);
 });

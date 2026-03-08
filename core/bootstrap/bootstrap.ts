@@ -90,6 +90,34 @@ const createScopedRuntime = (runtime, pluginId: string, capabilities: Capability
 
   return Object.freeze({
     capabilities: grantedCapabilities,
+    contentTypes: Object.freeze({
+      register: (definition: { name: string; slug: string; fields: Array<{ name: string; type: string; required?: boolean }> }) => runtime.contentTypes.register(definition),
+      get: (slug: string) => runtime.contentTypes.get(slug),
+      list: () => runtime.contentTypes.list()
+    }),
+    fieldTypes: Object.freeze({
+      register: (type: {
+        name: string;
+        validate: (value: unknown) => boolean;
+        serialize: (value: unknown) => unknown;
+        deserialize: (value: unknown) => unknown;
+        default?: unknown;
+      }) => runtime.fieldTypes.register(type),
+      get: (name: string) => runtime.fieldTypes.get(name),
+      list: () => runtime.fieldTypes.list()
+    }),
+    db: Object.freeze({
+      create: (type: string, data: Record<string, unknown>) => runtime.storage.create(type, data),
+      get: (type: string, id: string) => runtime.storage.get(type, id),
+      update: (type: string, id: string, data: Record<string, unknown>) => runtime.storage.update(type, id, data),
+      delete: (type: string, id: string) => runtime.storage.delete(type, id),
+      list: (type: string, options: Record<string, unknown> = {}) => runtime.storage.list(type, options),
+      query: (type: string, options: Record<string, unknown> = {}) => runtime.storage.query(type, options)
+    }),
+    http: Object.freeze({
+      registerRoute: (method: string, routePath: string, handler: (request: unknown, response: unknown) => unknown) => runtime.pluginRouter.registerRoute(method, routePath, handler),
+      register: (route: { method: string; path: string; handler: (context: unknown) => unknown }) => runtime.pluginRouter.register(route)
+    }),
     admin: Object.freeze({
       navRegistry: runtime.admin?.navRegistry,
       middleware: runtime.admin?.middleware
