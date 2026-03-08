@@ -36,6 +36,7 @@ import type { Capability } from '../runtime/capabilities.ts';
 import type { ScopedRuntime } from '../plugin/plugin-api.ts';
 import { getInstallState } from '../system/system-config.ts';
 import { hasInstallLock } from '../installer/install-lock.ts';
+import { createRouter } from '../http/router.ts';
 
 
 const CONTENT_TYPES_STORAGE_KEY = 'content-types';
@@ -303,6 +304,7 @@ export const createBootstrap = async ({
     seedSystem(runtime);
   });
   runtime.hooks = createHookSystem();
+  runtime.pluginRouter = createRouter();
   runtime.theme = createThemeManager(runtime);
   runtime.themeRenderer = createThemeRenderer(runtime);
 
@@ -398,7 +400,7 @@ export const createBootstrap = async ({
   }
 
   await runtime.hooks.run('content-type.register', Object.freeze({ runtime, contentTypes: runtime.contentTypes }));
-  await runtime.hooks.run('routes.register', Object.freeze({ runtime }));
+  await runtime.hooks.run('routes.register', runtime.pluginRouter);
   await runtime.hooks.run('admin.menu', Object.freeze({ runtime, navRegistry: runtime.admin.navRegistry }));
   await runtime.hooks.run('editor.extend', Object.freeze({ runtime }));
   await runtime.hooks.run('system.start', runtime);
