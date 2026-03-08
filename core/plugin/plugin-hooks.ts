@@ -4,6 +4,7 @@ const CORE_HOOKS = Object.freeze([
   'admin.menu',
   'admin.page',
   'editor.extend',
+  'content.field',
   'content.type',
   'content-type.register'
 ] as const);
