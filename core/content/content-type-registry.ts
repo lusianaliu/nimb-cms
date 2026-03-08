@@ -1,6 +1,6 @@
 export interface ContentFieldDefinition {
   name: string;
-  type: 'string' | 'text' | 'number' | 'boolean' | 'datetime';
+  type: 'string' | 'text' | 'number' | 'boolean' | 'date' | 'datetime' | 'json';
   required?: boolean;
 }
 
