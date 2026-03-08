@@ -6,6 +6,8 @@ const SYSTEM_CONFIG_RELATIVE_PATH = path.join('data', 'system', 'config.json');
 
 const resolveConfigPath = (projectRoot = process.cwd()) => path.join(projectRoot, SYSTEM_CONFIG_RELATIVE_PATH);
 
+export const hasSystemConfig = ({ projectRoot = process.cwd() }: { projectRoot?: string } = {}) => fs.existsSync(resolveConfigPath(projectRoot));
+
 const createDefaultConfig = (runtimeVersion = version) => Object.freeze({
   installed: false,
   version: runtimeVersion,
@@ -16,6 +18,7 @@ type SystemConfig = {
   installed: boolean
   version: string
   installedAt: string | null
+  siteTitle?: string
 };
 
 export const loadSystemConfig = ({ projectRoot = process.cwd(), runtimeVersion = version }: { projectRoot?: string, runtimeVersion?: string } = {}): SystemConfig => {
@@ -27,10 +30,15 @@ export const loadSystemConfig = ({ projectRoot = process.cwd(), runtimeVersion =
 
   try {
     const raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const installedAt = typeof raw?.installedAt === 'string' ? raw.installedAt : null;
+    const explicitInstalled = raw?.installed === true;
+    const inferredInstalled = explicitInstalled || installedAt !== null;
+
     return Object.freeze({
-      installed: raw?.installed === true,
+      installed: inferredInstalled,
       version: String(raw?.version ?? runtimeVersion),
-      installedAt: typeof raw?.installedAt === 'string' ? raw.installedAt : null
+      installedAt,
+      ...(typeof raw?.siteTitle === 'string' ? { siteTitle: raw.siteTitle } : {})
     });
   } catch {
     return createDefaultConfig(runtimeVersion);
@@ -42,7 +50,8 @@ export const saveSystemConfig = (config: Partial<SystemConfig>, { projectRoot = 
   const normalized: SystemConfig = Object.freeze({
     installed: config?.installed === true,
     version: String(config?.version ?? version),
-    installedAt: typeof config?.installedAt === 'string' ? config.installedAt : null
+    installedAt: typeof config?.installedAt === 'string' ? config.installedAt : null,
+    ...(typeof config?.siteTitle === 'string' ? { siteTitle: config.siteTitle } : {})
   });
 
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
@@ -58,4 +67,3 @@ export const getInstallState = ({ projectRoot = process.cwd(), runtimeVersion = 
     config
   });
 };
-

@@ -12,16 +12,16 @@ export const renderInstallPage = ({ error = '' }: { error?: string } = {}) => `<
       ${error ? `<p role="alert" style="color:#b00020;">${error}</p>` : ''}
       <form method="post" action="/install">
         <label>
-          Admin Email
-          <input type="email" name="adminEmail" required />
+          Site Title
+          <input type="text" name="siteTitle" required />
+        </label>
+        <label>
+          Admin User
+          <input type="text" name="adminUser" required />
         </label>
         <label>
           Admin Password
           <input type="password" name="adminPassword" minlength="8" required />
-        </label>
-        <label>
-          Site Name
-          <input type="text" name="siteName" required />
         </label>
         <button type="submit">Install</button>
       </form>
