@@ -18,6 +18,7 @@ import { createAdminContentRouter } from '../http/admin-content-router.ts';
 import { createAdminAuthRouter } from '../http/admin-auth-router.ts';
 import { createMediaController } from '../http/media-controller.ts';
 import { hasInstallLock } from '../installer/install-lock.ts';
+import { renderAdminLayout } from '../admin/admin-layout.ts';
 
 const resolvePublicRoot = ({ runtime, rootDirectory }) => {
   const projectRoot = runtime?.projectPaths?.projectRoot ?? runtime?.project?.projectRoot;
@@ -209,7 +210,13 @@ export const createRequestHandler = (runtime, {
         const page = runtime?.adminPages?.get?.(context.path);
 
         if (page) {
-          const html = await Promise.resolve(page.render(routeContext.request, response, runtime));
+          const content = await Promise.resolve(page.render(routeContext.request, response, runtime));
+          const menu = runtime?.adminMenu?.list?.() ?? [];
+          const html = renderAdminLayout({
+            title: page.title,
+            content: `${content ?? ''}`,
+            menu
+          });
           const body = Buffer.from(`${html ?? ''}`, 'utf8');
           response.writeHead(200, {
             'content-length': body.byteLength,
