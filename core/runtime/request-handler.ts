@@ -18,6 +18,7 @@ import { createAdminContentRouter } from '../http/admin-content-router.ts';
 import { createAdminAuthRouter } from '../http/admin-auth-router.ts';
 import { createMediaController } from '../http/media-controller.ts';
 import { hasInstallLock } from '../installer/install-lock.ts';
+import { hasSystemConfig } from '../system/system-config.ts';
 import { renderAdminLayout } from '../admin/admin-layout.ts';
 
 const resolvePublicRoot = ({ runtime, rootDirectory }) => {
@@ -162,8 +163,9 @@ export const createRequestHandler = (runtime, {
       if (context.path === '/install') {
         const projectRoot = runtime?.projectPaths?.projectRoot ?? runtime?.project?.projectRoot;
 
-        if (hasInstallLock({ projectRoot })) {
-          notFoundResponse({ path: context.path, timestamp: context.timestamp }).send(response);
+        if (hasSystemConfig({ projectRoot }) || hasInstallLock({ projectRoot })) {
+          response.writeHead(302, { location: '/', 'content-length': '0' });
+          response.end();
           return;
         }
 
@@ -180,13 +182,13 @@ export const createRequestHandler = (runtime, {
         if (context.method === 'POST') {
           const form = await readFormBody(routeContext.request);
           const installResult = await handleInstall(routeContext.request, runtime, {
-            adminEmail: `${form.adminEmail ?? ''}`,
-            adminPassword: `${form.adminPassword ?? ''}`,
-            siteName: `${form.siteName ?? ''}`
+            siteTitle: `${form.siteTitle ?? ''}`,
+            adminUser: `${form.adminUser ?? ''}`,
+            adminPassword: `${form.adminPassword ?? ''}`
           });
 
           if (installResult?.success === true) {
-            response.writeHead(302, { location: '/admin', 'content-length': '0' });
+            response.writeHead(302, { location: '/admin/login', 'content-length': '0' });
             response.end();
             return;
           }
