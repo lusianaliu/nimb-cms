@@ -28,9 +28,10 @@ test('phase 141: installer serves page and writes system config/admin records', 
     assert.equal(installPage.status, 200);
 
     const body = await installPage.text();
-    assert.match(body, /Site Title/);
-    assert.match(body, /Admin User/);
-    assert.match(body, /Admin Password/);
+    assert.match(body, /Set up your Nimb website/);
+    assert.match(body, /Website name/);
+    assert.match(body, /Admin username/);
+    assert.match(body, /Confirm admin password/);
 
     const submit = await fetch(`http://127.0.0.1:${listening.port}/install`, {
       method: 'POST',
@@ -38,13 +39,14 @@ test('phase 141: installer serves page and writes system config/admin records', 
       body: new URLSearchParams({
         siteTitle: 'Phase 141 Site',
         adminUser: 'nimb-admin',
-        adminPassword: 'super-secret-password'
+        adminPassword: 'super-secret-password1',
+        adminPasswordConfirm: 'super-secret-password1'
       }),
       redirect: 'manual'
     });
 
     assert.equal(submit.status, 302);
-    assert.equal(submit.headers.get('location'), '/admin/login');
+    assert.equal(submit.headers.get('location'), '/admin/login?welcome=1');
 
     const systemConfigPath = path.join(cwd, 'data', 'system', 'config.json');
     const adminPath = path.join(cwd, 'data', 'system', 'admin.json');
@@ -61,7 +63,37 @@ test('phase 141: installer serves page and writes system config/admin records', 
 
     const afterInstall = await fetch(`http://127.0.0.1:${listening.port}/install`, { redirect: 'manual' });
     assert.equal(afterInstall.status, 302);
-    assert.equal(afterInstall.headers.get('location'), '/');
+    assert.equal(afterInstall.headers.get('location'), '/admin/login?install=complete');
+  } finally {
+    await started.server.stop();
+  }
+});
+
+test('phase 145: installer returns clear validation errors and keeps entered values', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+
+  const started = await createTestServer({ cwd });
+  const listening = await started.server.start();
+
+  try {
+    const mismatch = await fetch(`http://127.0.0.1:${listening.port}/install`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        siteTitle: 'My Website',
+        adminUser: 'owner_1',
+        adminPassword: 'Password123',
+        adminPasswordConfirm: 'Password999'
+      }),
+      redirect: 'manual'
+    });
+
+    assert.equal(mismatch.status, 400);
+    const body = await mismatch.text();
+    assert.match(body, /Admin password confirmation does not match/);
+    assert.match(body, /value="My Website"/);
+    assert.match(body, /value="owner_1"/);
   } finally {
     await started.server.stop();
   }

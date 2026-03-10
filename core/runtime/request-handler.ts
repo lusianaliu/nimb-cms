@@ -163,7 +163,7 @@ export const createRequestHandler = (runtime, {
         const projectRoot = runtime?.projectPaths?.projectRoot ?? runtime?.project?.projectRoot;
 
         if (isSystemInstalled({ projectRoot })) {
-          response.writeHead(302, { location: '/', 'content-length': '0' });
+          response.writeHead(302, { location: '/admin/login?install=complete', 'content-length': '0' });
           response.end();
           return;
         }
@@ -183,18 +183,47 @@ export const createRequestHandler = (runtime, {
           const installResult = await handleInstall(routeContext.request, runtime, {
             siteTitle: `${form.siteTitle ?? ''}`,
             adminUser: `${form.adminUser ?? ''}`,
-            adminPassword: `${form.adminPassword ?? ''}`
+            adminPassword: `${form.adminPassword ?? ''}`,
+            adminPasswordConfirm: `${form.adminPasswordConfirm ?? ''}`
           });
 
           if (installResult?.success === true) {
-            response.writeHead(302, { location: '/admin/login', 'content-length': '0' });
+            response.writeHead(302, { location: '/admin/login?welcome=1', 'content-length': '0' });
             response.end();
             return;
           }
 
           if (installResult?.error?.code === 'INVALID_INSTALL_INPUT') {
-            const body = Buffer.from(renderInstallPage({ error: installResult.error.message }), 'utf8');
+            const body = Buffer.from(renderInstallPage({
+              error: installResult.error.message,
+              values: {
+                siteTitle: `${form.siteTitle ?? ''}`,
+                adminUser: `${form.adminUser ?? ''}`
+              }
+            }), 'utf8');
             response.writeHead(400, {
+              'content-length': body.byteLength,
+              'content-type': 'text/html; charset=utf-8'
+            });
+            response.end(body);
+            return;
+          }
+
+          if (installResult?.error?.code === 'ALREADY_INSTALLED') {
+            response.writeHead(302, { location: '/admin/login?install=complete', 'content-length': '0' });
+            response.end();
+            return;
+          }
+
+          if (installResult?.error?.code === 'INSTALL_PERSIST_FAILED' || installResult?.error?.code === 'INSTALL_PATH_UNAVAILABLE') {
+            const body = Buffer.from(renderInstallPage({
+              error: installResult.error.message,
+              values: {
+                siteTitle: `${form.siteTitle ?? ''}`,
+                adminUser: `${form.adminUser ?? ''}`
+              }
+            }), 'utf8');
+            response.writeHead(500, {
               'content-length': body.byteLength,
               'content-type': 'text/html; charset=utf-8'
             });
