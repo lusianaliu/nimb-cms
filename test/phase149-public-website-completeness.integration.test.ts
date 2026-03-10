@@ -31,6 +31,13 @@ test('phase 149: public website renders coherent homepage, pages, blog, and not-
     });
 
     runtime.db.create('page', {
+      title: 'Services',
+      slug: 'services',
+      content: 'Services content for visitors.',
+      status: 'published'
+    });
+
+    runtime.db.create('page', {
       title: 'Draft Contact',
       slug: 'contact',
       content: 'Should not be public.',
@@ -52,14 +59,28 @@ test('phase 149: public website renders coherent homepage, pages, blog, and not-
       status: 'draft'
     });
 
+    await runtime.settings.updateSettings({
+      siteName: 'Phase 149 Website',
+      tagline: 'Company profile and blog',
+      homepageIntro: 'Welcome to our company website.',
+      footerText: '© 2026 Phase 149 Company'
+    });
+
     const homeResponse = await fetch(`http://127.0.0.1:${port}/`);
     assert.equal(homeResponse.status, 200);
     const homeHtml = await homeResponse.text();
     assert.equal(homeHtml.includes('Welcome'), true);
+    assert.equal(homeHtml.includes('Phase 149 Website'), true);
+    assert.equal(homeHtml.includes('Company profile and blog'), true);
+    assert.equal(homeHtml.includes('Welcome to our company website.'), true);
+    assert.equal(homeHtml.includes('© 2026 Phase 149 Company'), true);
     assert.equal(homeHtml.includes('Published Update'), true);
     assert.equal(homeHtml.includes('Draft Update'), false);
     assert.equal(homeHtml.includes('href="/about"'), true);
+    assert.equal(homeHtml.includes('href="/services"'), true);
     assert.equal(homeHtml.includes('href="/contact"'), false);
+
+    assert.equal(homeHtml.indexOf('href="/about"') < homeHtml.indexOf('href="/services"'), true);
 
     const blogListResponse = await fetch(`http://127.0.0.1:${port}/blog`);
     assert.equal(blogListResponse.status, 200);

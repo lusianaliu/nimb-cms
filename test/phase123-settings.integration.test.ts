@@ -28,11 +28,16 @@ test('phase 123: settings load, update, and persist via admin settings API', asy
 
     const initial = await initialResponse.json();
     assert.equal(initial.siteName, 'My Nimb Site');
+    assert.equal(initial.tagline, 'Just another Nimb site');
+    assert.equal(typeof initial.homepageIntro, 'string');
+    assert.equal(initial.footerText, '');
     assert.equal(initial.theme, 'default');
 
     const updatePayload = {
       siteName: 'Phase 123 Site',
       tagline: 'Configurable runtime settings',
+      homepageIntro: 'Welcome to the Phase 123 company website.',
+      footerText: '© Phase 123 Company',
       timezone: 'America/New_York',
       theme: 'default'
     };
@@ -48,6 +53,8 @@ test('phase 123: settings load, update, and persist via admin settings API', asy
     const updated = await updateResponse.json();
     assert.equal(updated.siteName, 'Phase 123 Site');
     assert.equal(updated.tagline, 'Configurable runtime settings');
+    assert.equal(updated.homepageIntro, 'Welcome to the Phase 123 company website.');
+    assert.equal(updated.footerText, '© Phase 123 Company');
     assert.equal(updated.timezone, 'America/New_York');
 
     const persistedPath = path.join(cwd, 'data', 'settings.json');
@@ -56,6 +63,8 @@ test('phase 123: settings load, update, and persist via admin settings API', asy
     const persisted = JSON.parse(fs.readFileSync(persistedPath, 'utf8'));
     assert.equal(persisted.siteName, 'Phase 123 Site');
     assert.equal(persisted.tagline, 'Configurable runtime settings');
+    assert.equal(persisted.homepageIntro, 'Welcome to the Phase 123 company website.');
+    assert.equal(persisted.footerText, '© Phase 123 Company');
     assert.equal(persisted.timezone, 'America/New_York');
 
   } finally {
