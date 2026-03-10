@@ -1,6 +1,8 @@
 import { defaultThemeTemplates } from '../../themes/default/index.ts';
 
 const DEFAULT_SITE_NAME = 'My Nimb Site';
+const DEFAULT_TAGLINE = 'Just another Nimb site';
+const DEFAULT_HOMEPAGE_INTRO = 'This homepage is ready for a company profile website. Create and publish pages like About, Services, and Contact from admin.';
 
 const readSiteSettings = (runtime) => runtime?.settings?.getSettings?.() ?? {};
 
@@ -43,8 +45,13 @@ export const createThemeRenderer = (runtime) => Object.freeze({
     const resolvedTemplateName = mapLegacyTemplateName(templateName);
     const template = defaultThemeTemplates[resolvedTemplateName] ?? defaultThemeTemplates.page;
 
+    const settings = readSiteSettings(rendererRuntime);
+
     return template({
       siteName: readSiteName(rendererRuntime),
+      siteTagline: typeof settings.tagline === 'string' && settings.tagline.trim() ? settings.tagline : DEFAULT_TAGLINE,
+      homepageIntro: typeof settings.homepageIntro === 'string' && settings.homepageIntro.trim() ? settings.homepageIntro : DEFAULT_HOMEPAGE_INTRO,
+      footerText: typeof settings.footerText === 'string' ? settings.footerText : '',
       routePath: `${pageVariables.routePath ?? '/'}`,
       ...pageVariables
     });

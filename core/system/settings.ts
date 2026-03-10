@@ -7,6 +7,8 @@ const RUNTIME_SETTINGS_CACHE_KEY = '__nimbGlobalSettings';
 export const DEFAULT_SITE_SETTINGS = Object.freeze({
   siteName: 'My Nimb Site',
   tagline: 'Just another Nimb site',
+  homepageIntro: 'This homepage is ready for a company profile website. Create and publish pages like About, Services, and Contact from admin.',
+  footerText: '',
   timezone: 'UTC',
   theme: 'default'
 });
@@ -36,6 +38,8 @@ const KEY_TO_FIELD = Object.freeze<Record<ReservedSettingKey, keyof SiteSettings
 export type SiteSettings = {
   siteName: string,
   tagline: string,
+  homepageIntro: string,
+  footerText: string,
   timezone: string,
   theme: string,
   adminTheme?: string,
@@ -63,6 +67,8 @@ const normalizeSettings = (settings: Record<string, unknown> = {}): SiteSettings
   const normalized: SiteSettings = {
     siteName: normalizeText(settings.siteName, DEFAULT_SITE_SETTINGS.siteName),
     tagline: normalizeText(settings.tagline, DEFAULT_SITE_SETTINGS.tagline),
+    homepageIntro: normalizeText(settings.homepageIntro, DEFAULT_SITE_SETTINGS.homepageIntro),
+    footerText: normalizeText(settings.footerText, DEFAULT_SITE_SETTINGS.footerText),
     timezone: normalizeText(settings.timezone, DEFAULT_SITE_SETTINGS.timezone),
     theme: normalizeText(settings.theme, DEFAULT_SITE_SETTINGS.theme)
   };

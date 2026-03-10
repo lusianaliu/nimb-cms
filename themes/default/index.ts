@@ -15,6 +15,9 @@ type ThemeEntry = {
 
 type ThemeContext = {
   siteName: string;
+  siteTagline?: string;
+  homepageIntro?: string;
+  footerText?: string;
   routePath: string;
   posts?: ThemeEntry[];
   post?: ThemeEntry;
@@ -67,6 +70,7 @@ const baseStyles = `
 const renderNavigation = (routePath: string, pages: ThemeEntry[] = []): string => {
   const pageLinks = pages
     .filter((page) => `${page.slug ?? ''}`.trim() !== '')
+    .sort((a, b) => `${a.title}`.localeCompare(`${b.title}`))
     .map((page) => {
       const href = `/${encodeURIComponent(page.slug)}`;
       const isCurrent = routePath === href;
@@ -81,7 +85,11 @@ const renderNavigation = (routePath: string, pages: ThemeEntry[] = []): string =
   </nav>`;
 };
 
-const renderLayout = ({ siteName, routePath, pages }: ThemeContext, body: string): string => `<!doctype html>
+const renderLayout = ({ siteName, siteTagline, footerText, routePath, pages }: ThemeContext, body: string): string => {
+  const resolvedTagline = `${siteTagline ?? ''}`.trim() || 'A simple website powered by Nimb CMS.';
+  const resolvedFooterText = `${footerText ?? ''}`.trim() || `© ${new Date().getFullYear()} ${siteName}.`;
+
+  return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
@@ -93,28 +101,31 @@ const renderLayout = ({ siteName, routePath, pages }: ThemeContext, body: string
     <header>
       <div class="site-shell site-header">
         <h1 class="site-title">${escapeHtml(siteName)}</h1>
-        <p class="site-tagline">A simple website powered by Nimb CMS.</p>
+        <p class="site-tagline">${escapeHtml(resolvedTagline)}</p>
         ${renderNavigation(routePath, pages)}
       </div>
     </header>
     <main class="site-shell">${body}</main>
     <footer>
       <div class="site-shell site-footer">
-        <small>© ${new Date().getFullYear()} ${escapeHtml(siteName)}.</small>
+        <small>${escapeHtml(resolvedFooterText)}</small>
       </div>
     </footer>
   </body>
 </html>`;
+};
 
 const renderHomepage = (context: ThemeContext): string => {
   const posts = Array.isArray(context.posts) ? context.posts : [];
+  const homepageIntro = `${context.homepageIntro ?? ''}`.trim() || 'This homepage is ready for a company profile website. Create and publish pages like About, Services, and Contact from admin.';
+
   const latestPostMarkup = posts.length > 0
     ? `<section class="panel"><h2>Latest from the blog</h2>${posts.slice(0, 3)
       .map((post) => `<article><h3><a href="/blog/${encodeURIComponent(post.slug)}">${escapeHtml(post.title)}</a></h3><p>${escapeHtml(toExcerpt(post.content))}</p></article>`)
       .join('')}</section>`
     : '<section class="panel"><h2>Latest from the blog</h2><p>No blog posts published yet. Add your first post in admin to start sharing updates.</p></section>';
 
-  return renderLayout(context, `<section class="panel"><h2>Welcome</h2><p>This homepage is ready for a company profile website. Create and publish pages like About, Services, and Contact from admin.</p></section>${latestPostMarkup}`);
+  return renderLayout(context, `<section class="panel"><h2>Welcome</h2><p>${escapeHtml(homepageIntro)}</p></section>${latestPostMarkup}`);
 };
 
 const renderPostList = (context: ThemeContext): string => {
