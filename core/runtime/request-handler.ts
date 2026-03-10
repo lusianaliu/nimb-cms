@@ -261,7 +261,8 @@ export const createRequestHandler = (runtime, {
       }
 
       if (context.path.startsWith('/admin')) {
-        const page = runtime?.adminPages?.get?.(context.path);
+        const reservedAdminPaths = new Set(['/admin', '/admin/pages', '/admin/posts', '/admin/media', '/admin/settings']);
+        const page = reservedAdminPaths.has(context.path) ? null : runtime?.adminPages?.get?.(context.path);
 
         if (page) {
           const pageResponse = await withAdminMiddleware(runtime, routeContext, async () => {

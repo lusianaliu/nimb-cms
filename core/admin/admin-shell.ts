@@ -78,11 +78,18 @@ export function renderAdminShell(ctx: AdminShellContext): string {
     th { font-size: 0.92rem; color: #334155; background: #f8fafc; }
     form > div, form > p { margin-bottom: 12px; }
     label { display: inline-block; margin-bottom: 4px; font-weight: 600; }
-    input, textarea { width: 100%; max-width: 640px; padding: 9px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; }
+    input, textarea, select { width: 100%; max-width: 640px; padding: 9px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; }
     button, .button-link { display: inline-block; background: #0f172a; color: #fff; border: 0; padding: 8px 12px; border-radius: 6px; cursor: pointer; text-decoration: none; font-size: 0.95rem; }
     .button-link--muted { background: #e2e8f0; color: #0f172a; }
     .inline-form { display: inline; margin-left: 8px; }
     .muted { color: #64748b; }
+    .field-help { margin: 4px 0 0; color: #64748b; font-size: 0.92rem; }
+    .form-grid { display: grid; gap: 12px; }
+    .field-error { margin: 4px 0 0; color: #b91c1c; font-size: 0.92rem; }
+    .status-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.78rem; font-weight: 600; }
+    .status-pill--draft { background: #fff7ed; color: #9a3412; }
+    .status-pill--published { background: #ecfdf5; color: #166534; }
+    .table-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     @media (max-width: 900px) {
       .admin { flex-direction: column; }
       .admin-sidebar { width: 100%; border-right: 0; border-bottom: 1px solid #e2e8f0; }
