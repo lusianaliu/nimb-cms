@@ -67,3 +67,7 @@ export const getInstallState = ({ projectRoot = process.cwd(), runtimeVersion = 
     config
   });
 };
+
+// Canonical install-state check for active bootstrap/runtime/HTTP guard paths.
+// Phase 144 lock-in: `data/system/config.json` is the source of truth.
+export const isSystemInstalled = ({ projectRoot = process.cwd(), runtimeVersion = version }: { projectRoot?: string, runtimeVersion?: string } = {}) => getInstallState({ projectRoot, runtimeVersion }).installed;

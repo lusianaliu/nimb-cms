@@ -5,6 +5,7 @@ type RuntimeLike = {
   version: string
   projectPaths?: { projectRoot?: string }
   system?: { installed?: boolean, config?: unknown }
+  setRuntimeMode?: (mode: 'normal' | 'installer') => void
   auth?: {
     findUserByEmail?: (email: string) => Promise<Record<string, unknown> | null>
     createUser?: (input: unknown) => Promise<Record<string, unknown> | null>
@@ -27,6 +28,7 @@ export async function ensureInstalled(runtime: RuntimeLike) {
     ...(runtime.system ?? {}),
     installed: true
   };
+  runtime.setRuntimeMode?.('normal');
 
   const adminEmail = 'admin@nimb.local';
   const existingAdmin = await runtime?.auth?.findUserByEmail?.(adminEmail);

@@ -5,10 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { createBootstrap } from '../core/bootstrap/index.ts';
 import { createHttpServer } from '../core/http/index.ts';
-import { markInstalled } from '../core/setup/setup-state.ts';
 import { saveSystemConfig } from '../core/system/system-config.ts';
 
-const INSTALL_STATE_PATH = '/data/system/install.json';
 const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase105-'));
 
 const writeConfig = (cwd: string) => {
@@ -26,23 +24,6 @@ const writeProjectInstallState = (cwd: string) => {
   fs.writeFileSync(path.join(nimbDir, 'install.json'), `${JSON.stringify({ installed: true, version: '105.0.0', installedAt: '2026-01-01T00:00:00.000Z' }, null, 2)}\n`);
 };
 
-const withSystemInstallFiles = async (run: () => Promise<void> | void) => {
-  const previousInstall = fs.existsSync(INSTALL_STATE_PATH)
-    ? fs.readFileSync(INSTALL_STATE_PATH, 'utf8')
-    : null;
-
-  try {
-    await run();
-  } finally {
-    if (previousInstall === null) {
-      fs.rmSync(INSTALL_STATE_PATH, { force: true });
-    } else {
-      fs.mkdirSync(path.dirname(INSTALL_STATE_PATH), { recursive: true });
-      fs.writeFileSync(INSTALL_STATE_PATH, previousInstall, 'utf8');
-    }
-  }
-};
-
 const createServer = async (cwd: string) => {
   const bootstrap = await createBootstrap({ cwd, mode: 'runtime' });
   const server = createHttpServer({
@@ -58,10 +39,7 @@ const createServer = async (cwd: string) => {
 };
 
 test('phase 105: install-state guard blocks runtime routes until installed config is true', async () => {
-  await withSystemInstallFiles(async () => {
-    markInstalled({ version: '105.0.0' });
-
-    const cwd = mkdtemp();
+  const cwd = mkdtemp();
     writeConfig(cwd);
     writeProjectInstallState(cwd);
 
@@ -101,5 +79,4 @@ test('phase 105: install-state guard blocks runtime routes until installed confi
     } finally {
       await started.server.stop();
     }
-  });
 });
