@@ -46,7 +46,7 @@ test('phase 119: admin pages UI supports listing, creating, editing, and deletin
     assert.equal(emptyListResponse.status, 200);
     const emptyListHtml = await emptyListResponse.text();
     assert.equal(emptyListHtml.includes('<h1>Pages</h1>'), true);
-    assert.equal(emptyListHtml.includes('Create Page'), true);
+    assert.equal(emptyListHtml.includes('/admin/pages/new'), true);
 
     const createFormResponse = await fetch(`http://127.0.0.1:${port}/admin/pages/new`, {
       headers: { cookie: authCookie }
@@ -72,7 +72,7 @@ test('phase 119: admin pages UI supports listing, creating, editing, and deletin
     });
 
     assert.equal(createResponse.status, 302);
-    assert.equal(createResponse.headers.get('location'), '/admin/pages');
+    assert.equal(createResponse.headers.get('location'), '/admin/pages?notice=created');
 
     const listAfterCreateResponse = await fetch(`http://127.0.0.1:${port}/admin/pages`, {
       headers: { cookie: authCookie }
@@ -113,7 +113,7 @@ test('phase 119: admin pages UI supports listing, creating, editing, and deletin
     });
 
     assert.equal(updateResponse.status, 302);
-    assert.equal(updateResponse.headers.get('location'), '/admin/pages');
+    assert.equal(updateResponse.headers.get('location'), '/admin/pages?notice=updated');
 
     const listAfterUpdateResponse = await fetch(`http://127.0.0.1:${port}/admin/pages`, {
       headers: { cookie: authCookie }
@@ -130,7 +130,7 @@ test('phase 119: admin pages UI supports listing, creating, editing, and deletin
 
     assert.equal(updatedPageResponse.status, 200);
     const updatedPage = await updatedPageResponse.json();
-    assert.equal(updatedPage.data.body, 'Updated from admin pages UI');
+    assert.equal(updatedPage.data.content, 'Updated from admin pages UI');
 
     const deleteResponse = await fetch(`http://127.0.0.1:${port}/admin/pages/${encodeURIComponent(pageId)}/delete`, {
       method: 'POST',
@@ -142,7 +142,7 @@ test('phase 119: admin pages UI supports listing, creating, editing, and deletin
     });
 
     assert.equal(deleteResponse.status, 302);
-    assert.equal(deleteResponse.headers.get('location'), '/admin/pages');
+    assert.equal(deleteResponse.headers.get('location'), '/admin/pages?notice=deleted');
 
     const listAfterDeleteResponse = await fetch(`http://127.0.0.1:${port}/admin/pages`, {
       headers: { cookie: authCookie }

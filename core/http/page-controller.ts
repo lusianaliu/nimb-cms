@@ -4,7 +4,14 @@ import { jsonResponse, noContentResponse } from './response.ts';
 type PagePayload = {
   title?: unknown,
   slug?: unknown,
-  body?: unknown
+  body?: unknown,
+  status?: unknown
+};
+
+
+const hasField = (runtime, type: string, name: string) => {
+  const fields = runtime?.content?.getTypeSchema?.(type)?.fields ?? [];
+  return fields.some((field) => `${field?.name ?? ''}` === name);
 };
 
 const readJsonBody = async (request): Promise<Record<string, unknown>> => {
@@ -35,10 +42,11 @@ const readJsonBody = async (request): Promise<Record<string, unknown>> => {
   }
 };
 
-const normalizePageInput = (payload: PagePayload) => {
+const normalizePageInput = (runtime, payload: PagePayload) => {
   const title = `${payload?.title ?? ''}`.trim();
   const slug = `${payload?.slug ?? ''}`.trim();
   const body = payload?.body;
+  const status = `${payload?.status ?? ''}`.trim().toLowerCase() === 'draft' ? 'draft' : 'published';
 
   if (!title || !slug) {
     return {
@@ -57,7 +65,8 @@ const normalizePageInput = (payload: PagePayload) => {
     data: {
       title,
       slug,
-      ...(typeof body === 'undefined' ? {} : { body: `${body}` })
+      ...(typeof body === 'undefined' ? {} : (hasField(runtime, 'page', 'content') ? { content: `${body}` } : { body: `${body}` })),
+      ...(hasField(runtime, 'page', 'status') ? { status } : {})
     }
   };
 };
@@ -106,7 +115,7 @@ export const createPageController = (runtime) => {
           }, { statusCode: 400 });
         }
 
-        const normalized = normalizePageInput(payload);
+        const normalized = normalizePageInput(runtime, payload);
         if (!normalized.valid) {
           return normalized.error;
         }
@@ -137,7 +146,7 @@ export const createPageController = (runtime) => {
           }, { statusCode: 400 });
         }
 
-        const normalized = normalizePageInput(payload);
+        const normalized = normalizePageInput(runtime, payload);
         if (!normalized.valid) {
           return normalized.error;
         }

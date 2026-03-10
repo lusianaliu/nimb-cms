@@ -177,6 +177,39 @@ const parseFormBody = async (request) => {
   return Object.fromEntries(new URLSearchParams(Buffer.concat(chunks).toString('utf8')));
 };
 
+
+const slugify = (value: unknown) => `${value ?? ''}`
+  .trim()
+  .toLowerCase()
+  .replaceAll(/[^a-z0-9\s-]/g, '')
+  .replaceAll(/\s+/g, '-')
+  .replaceAll(/-+/g, '-')
+  .replaceAll(/^-|-$/g, '');
+
+const normalizeStatus = (value: unknown) => `${value ?? ''}`.trim().toLowerCase() === 'draft' ? 'draft' : 'published';
+
+const isSlugTaken = (entries, candidate: string, currentId = '') => entries.some((entry) => {
+  const entryId = `${entry?.id ?? ''}`;
+  const slug = `${entry?.data?.slug ?? ''}`.trim().toLowerCase();
+  return entryId !== currentId && slug === candidate.toLowerCase();
+});
+
+const formatApiError = (apiResponse, fallbackMessage: string) => {
+  const message = `${apiResponse?.body?.error?.message ?? ''}`.trim();
+  if (!message) {
+    return fallbackMessage;
+  }
+
+  if (message.includes('title') && message.includes('slug')) {
+    return 'Please enter both a title and a slug.';
+  }
+
+  if (message.includes('publishedAt')) {
+    return 'Please enter a valid publish date and time, or leave it empty.';
+  }
+
+  return message;
+};
 const createJsonRequest = (method: string, payload?: Record<string, unknown>) => {
   const body = typeof payload === 'undefined' ? '' : JSON.stringify(payload);
   const request = Readable.from(body ? [Buffer.from(body, 'utf8')] : []);
@@ -305,8 +338,17 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
             return toTextResponse(500, 'Failed to load pages.');
           }
 
+          const noticeKey = `${requestContext.query?.notice ?? ''}`;
+          const notice = noticeKey === 'created'
+            ? { tone: 'success' as const, title: 'Page created', message: 'Your page has been saved and is ready to manage.' }
+            : noticeKey === 'updated'
+              ? { tone: 'success' as const, title: 'Page updated', message: 'Your page changes were saved successfully.' }
+              : noticeKey === 'deleted'
+                ? { tone: 'success' as const, title: 'Page deleted', message: 'The page has been removed.' }
+                : null;
+
           const pages = runtime.content.list('page');
-          return toHtmlResponse(renderAdminPagesListPage({ pages, runtime }));
+          return toHtmlResponse(renderAdminPagesListPage({ pages, runtime, notice }));
         });
       }
 
@@ -317,12 +359,33 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
       if (context.path === '/admin/pages/new' && context.method === 'POST') {
         return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
           const formData = await parseFormBody(requestContext.request);
-          const payload = {
-            title: `${formData.title ?? ''}`,
-            slug: `${formData.slug ?? ''}`,
-            body: `${formData.body ?? ''}`
-          };
+          const title = `${formData.title ?? ''}`.trim();
+          const body = `${formData.body ?? ''}`;
+          const normalizedSlug = slugify(`${formData.slug ?? ''}`.trim() || title);
+          const status = normalizeStatus(formData.status);
+          const pages = runtime.content.list('page');
 
+          const errors: string[] = [];
+          if (!title) {
+            errors.push('Page title is required.');
+          }
+          if (!normalizedSlug) {
+            errors.push('Page URL slug is required.');
+          }
+          if (normalizedSlug && isSlugTaken(pages, normalizedSlug)) {
+            errors.push('This page URL slug is already used. Please choose another one.');
+          }
+
+          if (errors.length > 0) {
+            return toHtmlResponse(renderAdminPageFormPage({
+              mode: 'new',
+              runtime,
+              values: { title, slug: normalizedSlug, body, status },
+              errors
+            }));
+          }
+
+          const payload = { title, slug: normalizedSlug, body, status };
           const apiResponse = await invokePageApi(pageController, {
             method: 'POST',
             path: '/admin-api/pages',
@@ -331,10 +394,15 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
           });
 
           if (!apiResponse || apiResponse.statusCode >= 400) {
-            return toTextResponse(400, 'Failed to create page.');
+            return toHtmlResponse(renderAdminPageFormPage({
+              mode: 'new',
+              runtime,
+              values: { title, slug: normalizedSlug, body, status },
+              errors: [formatApiError(apiResponse, 'Failed to create page. Please review the form and try again.')]
+            }));
           }
 
-          return toRedirectResponse('/admin/pages');
+          return toRedirectResponse('/admin/pages?notice=created');
         });
       }
 
@@ -365,13 +433,40 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
       if (editMatch && context.method === 'POST') {
         return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
           const id = decodeURIComponent(editMatch[1]);
-          const formData = await parseFormBody(requestContext.request);
-          const payload = {
-            title: `${formData.title ?? ''}`,
-            slug: `${formData.slug ?? ''}`,
-            body: `${formData.body ?? ''}`
-          };
+          const page = runtime.content.get('page', id);
+          if (!page) {
+            return toTextResponse(404, 'Page not found.');
+          }
 
+          const formData = await parseFormBody(requestContext.request);
+          const title = `${formData.title ?? ''}`.trim();
+          const body = `${formData.body ?? ''}`;
+          const normalizedSlug = slugify(`${formData.slug ?? ''}`.trim() || title);
+          const status = normalizeStatus(formData.status);
+          const pages = runtime.content.list('page');
+
+          const errors: string[] = [];
+          if (!title) {
+            errors.push('Page title is required.');
+          }
+          if (!normalizedSlug) {
+            errors.push('Page URL slug is required.');
+          }
+          if (normalizedSlug && isSlugTaken(pages, normalizedSlug, id)) {
+            errors.push('This page URL slug is already used. Please choose another one.');
+          }
+
+          if (errors.length > 0) {
+            return toHtmlResponse(renderAdminPageFormPage({
+              mode: 'edit',
+              page,
+              runtime,
+              values: { title, slug: normalizedSlug, body, status },
+              errors
+            }));
+          }
+
+          const payload = { title, slug: normalizedSlug, body, status };
           const apiResponse = await invokePageApi(pageController, {
             method: 'PUT',
             path: `/admin-api/pages/${encodeURIComponent(id)}`,
@@ -380,10 +475,16 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
           });
 
           if (!apiResponse || apiResponse.statusCode >= 400) {
-            return toTextResponse(400, 'Failed to update page.');
+            return toHtmlResponse(renderAdminPageFormPage({
+              mode: 'edit',
+              page,
+              runtime,
+              values: { title, slug: normalizedSlug, body, status },
+              errors: [formatApiError(apiResponse, 'Failed to update page. Please review the form and try again.')]
+            }));
           }
 
-          return toRedirectResponse('/admin/pages');
+          return toRedirectResponse('/admin/pages?notice=updated');
         });
       }
 
@@ -402,14 +503,23 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
             return toTextResponse(404, 'Page not found.');
           }
 
-          return toRedirectResponse('/admin/pages');
+          return toRedirectResponse('/admin/pages?notice=deleted');
         });
       }
 
       if (context.path === '/admin/posts' && context.method === 'GET') {
         return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
+          const noticeKey = `${requestContext.query?.notice ?? ''}`;
+          const notice = noticeKey === 'created'
+            ? { tone: 'success' as const, title: 'Post created', message: 'Your post has been saved.' }
+            : noticeKey === 'updated'
+              ? { tone: 'success' as const, title: 'Post updated', message: 'Your post changes were saved successfully.' }
+              : noticeKey === 'deleted'
+                ? { tone: 'success' as const, title: 'Post deleted', message: 'The post has been removed.' }
+                : null;
+
           const posts = runtime.content.list('post');
-          return toHtmlResponse(renderAdminPostsListPage({ posts, runtime }));
+          return toHtmlResponse(renderAdminPostsListPage({ posts, runtime, notice }));
         });
       }
 
@@ -428,12 +538,41 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
       if (context.path === '/admin/posts/new' && context.method === 'POST') {
         return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
           const formData = await parseFormBody(requestContext.request);
+          const title = `${formData.title ?? ''}`.trim();
+          const body = `${formData.body ?? ''}`;
+          const normalizedSlug = slugify(`${formData.slug ?? ''}`.trim() || title);
+          const status = normalizeStatus(formData.status);
+          const publishedAtRaw = status === 'draft' ? '' : `${formData.publishedAt ?? ''}`.trim();
+          const posts = runtime.content.list('post');
+
+          const errors: string[] = [];
+          if (!title) {
+            errors.push('Post title is required.');
+          }
+          if (!normalizedSlug) {
+            errors.push('Post URL slug is required.');
+          }
+          if (normalizedSlug && isSlugTaken(posts, normalizedSlug)) {
+            errors.push('This post URL slug is already used. Please choose another one.');
+          }
+
           const payload = {
-            title: `${formData.title ?? ''}`,
-            slug: `${formData.slug ?? ''}`,
-            body: `${formData.body ?? ''}`,
-            publishedAt: `${formData.publishedAt ?? ''}`
+            title,
+            slug: normalizedSlug,
+            body,
+            publishedAt: publishedAtRaw,
+            status
           };
+
+          if (errors.length > 0) {
+            return toHtmlResponse(renderAdminPostFormPage({
+              mode: 'edit',
+              post,
+              runtime,
+              values: payload,
+              errors
+            }));
+          }
 
           const apiResponse = await invokePageApi(postController, {
             method: 'POST',
@@ -443,10 +582,15 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
           });
 
           if (!apiResponse || apiResponse.statusCode >= 400) {
-            return toTextResponse(400, 'Failed to create post.');
+            return toHtmlResponse(renderAdminPostFormPage({
+              mode: 'new',
+              runtime,
+              values: payload,
+              errors: [formatApiError(apiResponse, 'Failed to create post. Please review the form and try again.')]
+            }));
           }
 
-          return toRedirectResponse('/admin/posts');
+          return toRedirectResponse('/admin/posts?notice=created');
         });
       }
 
@@ -477,13 +621,47 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
       if (editPostMatch && context.method === 'POST') {
         return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
           const id = decodeURIComponent(editPostMatch[1]);
+          const post = runtime.content.get('post', id);
+          if (!post) {
+            return toTextResponse(404, 'Post not found.');
+          }
+
           const formData = await parseFormBody(requestContext.request);
+          const title = `${formData.title ?? ''}`.trim();
+          const body = `${formData.body ?? ''}`;
+          const normalizedSlug = slugify(`${formData.slug ?? ''}`.trim() || title);
+          const status = normalizeStatus(formData.status);
+          const publishedAtRaw = status === 'draft' ? '' : `${formData.publishedAt ?? ''}`.trim();
+          const posts = runtime.content.list('post');
+
+          const errors: string[] = [];
+          if (!title) {
+            errors.push('Post title is required.');
+          }
+          if (!normalizedSlug) {
+            errors.push('Post URL slug is required.');
+          }
+          if (normalizedSlug && isSlugTaken(posts, normalizedSlug, id)) {
+            errors.push('This post URL slug is already used. Please choose another one.');
+          }
+
           const payload = {
-            title: `${formData.title ?? ''}`,
-            slug: `${formData.slug ?? ''}`,
-            body: `${formData.body ?? ''}`,
-            publishedAt: `${formData.publishedAt ?? ''}`
+            title,
+            slug: normalizedSlug,
+            body,
+            publishedAt: publishedAtRaw,
+            status
           };
+
+          if (errors.length > 0) {
+            return toHtmlResponse(renderAdminPostFormPage({
+              mode: 'edit',
+              post,
+              runtime,
+              values: payload,
+              errors
+            }));
+          }
 
           const apiResponse = await invokePageApi(postController, {
             method: 'PUT',
@@ -493,10 +671,16 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
           });
 
           if (!apiResponse || apiResponse.statusCode >= 400) {
-            return toTextResponse(400, 'Failed to update post.');
+            return toHtmlResponse(renderAdminPostFormPage({
+              mode: 'edit',
+              post,
+              runtime,
+              values: payload,
+              errors: [formatApiError(apiResponse, 'Failed to update post. Please review the form and try again.')]
+            }));
           }
 
-          return toRedirectResponse('/admin/posts');
+          return toRedirectResponse('/admin/posts?notice=updated');
         });
       }
 
@@ -515,7 +699,7 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
             return toTextResponse(404, 'Post not found.');
           }
 
-          return toRedirectResponse('/admin/posts');
+          return toRedirectResponse('/admin/posts?notice=deleted');
         });
       }
 

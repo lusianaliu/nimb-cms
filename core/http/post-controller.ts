@@ -5,7 +5,14 @@ type PostPayload = {
   title?: unknown,
   slug?: unknown,
   body?: unknown,
-  publishedAt?: unknown
+  publishedAt?: unknown,
+  status?: unknown
+};
+
+
+const hasField = (runtime, type: string, name: string) => {
+  const fields = runtime?.content?.getTypeSchema?.(type)?.fields ?? [];
+  return fields.some((field) => `${field?.name ?? ''}` === name);
 };
 
 const readJsonBody = async (request): Promise<Record<string, unknown>> => {
@@ -36,11 +43,12 @@ const readJsonBody = async (request): Promise<Record<string, unknown>> => {
   }
 };
 
-const normalizePostInput = (payload: PostPayload) => {
+const normalizePostInput = (runtime, payload: PostPayload) => {
   const title = `${payload?.title ?? ''}`.trim();
   const slug = `${payload?.slug ?? ''}`.trim();
   const body = payload?.body;
   const publishedAt = `${payload?.publishedAt ?? ''}`.trim();
+  const status = `${payload?.status ?? ''}`.trim().toLowerCase() === 'draft' ? 'draft' : 'published';
 
   if (!title || !slug) {
     return {
@@ -74,8 +82,9 @@ const normalizePostInput = (payload: PostPayload) => {
     data: {
       title,
       slug,
-      ...(typeof body === 'undefined' ? {} : { body: `${body}` }),
-      ...(publishedAt ? { publishedAt: new Date(publishedAt) } : {})
+      ...(typeof body === 'undefined' ? {} : (hasField(runtime, 'post', 'content') ? { content: `${body}` } : { body: `${body}` })),
+      ...(publishedAt ? (hasField(runtime, 'post', 'publishedAt') ? { publishedAt: new Date(publishedAt) } : {}) : {}),
+      ...(hasField(runtime, 'post', 'status') ? { status } : {})
     }
   };
 };
@@ -124,7 +133,7 @@ export const createPostController = (runtime) => {
           }, { statusCode: 400 });
         }
 
-        const normalized = normalizePostInput(payload);
+        const normalized = normalizePostInput(runtime, payload);
         if (!normalized.valid) {
           return normalized.error;
         }
@@ -155,7 +164,7 @@ export const createPostController = (runtime) => {
           }, { statusCode: 400 });
         }
 
-        const normalized = normalizePostInput(payload);
+        const normalized = normalizePostInput(runtime, payload);
         if (!normalized.valid) {
           return normalized.error;
         }
