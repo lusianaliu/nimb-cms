@@ -1,3 +1,5 @@
+import { renderAdminShell } from './admin-shell.ts';
+
 const escapeHtml = (value: unknown) => `${value ?? ''}`
   .replaceAll('&', '&amp;')
   .replaceAll('<', '&lt;')
@@ -5,31 +7,21 @@ const escapeHtml = (value: unknown) => `${value ?? ''}`
   .replaceAll('"', '&quot;')
   .replaceAll("'", '&#39;');
 
-export const renderAdminMediaPage = () => `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Media · Nimb CMS Admin</title>
-    <style>
-      body { font-family: sans-serif; margin: 2rem; }
-      .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
-      .media-card { border: 1px solid #ddd; padding: 0.75rem; border-radius: 8px; }
-      .media-card img { width: 100%; height: 120px; object-fit: cover; background: #f4f4f4; border-radius: 4px; }
-      .media-url { font-size: 0.85rem; margin: 0.5rem 0; word-break: break-all; }
-    </style>
-  </head>
-  <body>
-    <h1>Media Library</h1>
-    <p><a href="/admin">Back to dashboard</a></p>
-
-    <form id="media-upload-form" enctype="multipart/form-data">
-      <label for="media-file">Upload image</label><br>
-      <input id="media-file" name="file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" required>
+export const renderAdminMediaPage = (runtime) => renderAdminShell({
+  title: 'Media · Nimb CMS Admin',
+  runtime,
+  activeNav: 'media',
+  pageTitle: 'Media',
+  pageDescription: 'Upload images and reuse links in your pages and posts.',
+  content: `<form id="media-upload-form" enctype="multipart/form-data">
+      <div>
+        <label for="media-file">Upload image</label>
+        <input id="media-file" name="file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" required>
+      </div>
       <button type="submit">Upload</button>
+      <p id="media-status" class="muted" aria-live="polite"></p>
     </form>
-
-    <div id="media-grid" class="media-grid"></div>
+    <div id="media-grid" class="admin-card-grid"></div>
 
     <script>
       function insertImage(url) {
@@ -53,11 +45,18 @@ export const renderAdminMediaPage = () => `<!doctype html>
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#39;');
 
+      const setStatus = (text) => {
+        const target = document.getElementById('media-status');
+        if (target) {
+          target.textContent = text;
+        }
+      };
+
       const renderMedia = (files) => {
         const grid = document.getElementById('media-grid');
 
         if (!Array.isArray(files) || files.length === 0) {
-          grid.innerHTML = '<p>No media uploaded yet.</p>';
+          grid.innerHTML = '<p class="muted">No media uploaded yet.</p>';
           return;
         }
 
@@ -65,9 +64,9 @@ export const renderAdminMediaPage = () => `<!doctype html>
           const url = item?.url ?? '';
           const safeUrl = escapeHtml(url);
 
-          return '<article class="media-card">'
-            + '<img src="' + safeUrl + '" alt="">'
-            + '<p class="media-url">' + safeUrl + '</p>'
+          return '<article class="admin-surface">'
+            + '<img src="' + safeUrl + '" alt="" style="width:100%;height:140px;object-fit:cover;background:#f1f5f9;border-radius:6px">'
+            + '<p><small>' + safeUrl + '</small></p>'
             + '<button type="button" data-url="' + safeUrl + '">Copy URL</button> '
             + '<button type="button" data-insert="' + safeUrl + '">Insert</button>'
             + '</article>';
@@ -77,6 +76,7 @@ export const renderAdminMediaPage = () => `<!doctype html>
           button.addEventListener('click', () => {
             const url = button.getAttribute('data-url') || '';
             navigator.clipboard?.writeText(url);
+            setStatus('Media URL copied.');
           });
         });
 
@@ -99,19 +99,20 @@ export const renderAdminMediaPage = () => `<!doctype html>
         const form = event.currentTarget;
         const body = new FormData(form);
 
+        setStatus('Uploading...');
         const response = await fetch('/admin-api/media/upload', { method: 'POST', body });
         if (!response.ok) {
-          alert('Upload failed');
+          setStatus('Upload failed. Please try again.');
           return;
         }
 
         await loadMedia();
         form.reset();
+        setStatus('Upload complete.');
       });
 
       void loadMedia();
-    </script>
-  </body>
-</html>`;
+    </script>`
+});
 
 export const adminMediaPageIntent = escapeHtml('Simple media library shell for local uploads and URL reuse.');

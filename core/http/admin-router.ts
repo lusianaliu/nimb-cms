@@ -306,12 +306,12 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
           }
 
           const pages = runtime.content.list('page');
-          return toHtmlResponse(renderAdminPagesListPage({ pages }));
+          return toHtmlResponse(renderAdminPagesListPage({ pages, runtime }));
         });
       }
 
       if (context.path === '/admin/pages/new' && context.method === 'GET') {
-        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(renderAdminPageFormPage({ mode: 'new' })));
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(renderAdminPageFormPage({ mode: 'new', runtime })));
       }
 
       if (context.path === '/admin/pages/new' && context.method === 'POST') {
@@ -358,7 +358,7 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
             return toTextResponse(404, 'Page not found.');
           }
 
-          return toHtmlResponse(renderAdminPageFormPage({ mode: 'edit', page }));
+          return toHtmlResponse(renderAdminPageFormPage({ mode: 'edit', page, runtime }));
         });
       }
 
@@ -409,20 +409,20 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
       if (context.path === '/admin/posts' && context.method === 'GET') {
         return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
           const posts = runtime.content.list('post');
-          return toHtmlResponse(renderAdminPostsListPage({ posts }));
+          return toHtmlResponse(renderAdminPostsListPage({ posts, runtime }));
         });
       }
 
       if (context.path === '/admin/media' && context.method === 'GET') {
-        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(renderAdminMediaPage()));
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(renderAdminMediaPage(runtime)));
       }
 
       if (context.path === '/admin/settings' && context.method === 'GET') {
-        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(renderAdminSettingsPage(runtime?.settings?.getSettings?.() ?? {})));
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(renderAdminSettingsPage(runtime?.settings?.getSettings?.() ?? {}, runtime)));
       }
 
       if (context.path === '/admin/posts/new' && context.method === 'GET') {
-        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(renderAdminPostFormPage({ mode: 'new' })));
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(renderAdminPostFormPage({ mode: 'new', runtime })));
       }
 
       if (context.path === '/admin/posts/new' && context.method === 'POST') {
@@ -470,7 +470,7 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
             return toTextResponse(404, 'Post not found.');
           }
 
-          return toHtmlResponse(renderAdminPostFormPage({ mode: 'edit', post }));
+          return toHtmlResponse(renderAdminPostFormPage({ mode: 'edit', post, runtime }));
         });
       }
 
@@ -524,7 +524,7 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
       }
 
       if (context.path === normalizedBasePath || context.path === `${normalizedBasePath}/`) {
-        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(renderAdminDashboardPage(runtime)));
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(renderAdminDashboardPage(runtime, { welcome: `${requestContext.query?.welcome ?? ''}` === '1' })));
       }
 
       if (context.path.startsWith(`${normalizedBasePath}/`)) {

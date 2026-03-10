@@ -29,9 +29,5 @@ export function renderAdminNav(runtime, active?: string): string {
     return `<li><a href="${escapeHtml(item.path)}"${activeAttr}>${escapeHtml(item.label)}</a></li>`;
   }).join('');
 
-  const pluginItems = (runtime?.adminMenu?.list?.() ?? []).map((item) => {
-    return `<li><a href="${escapeHtml(item.path)}"><span aria-hidden="true">${escapeHtml(item.icon)}</span> ${escapeHtml(item.title)}</a></li>`;
-  }).join('');
-
-  return `<nav class="admin-nav" aria-label="Admin Navigation"><ul>${navItems}${pluginItems}</ul></nav>`;
+  return `<nav class="admin-nav" aria-label="Admin Navigation"><ul>${navItems}</ul></nav>`;
 }

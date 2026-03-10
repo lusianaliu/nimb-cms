@@ -1,9 +1,4 @@
-const escapeHtml = (value: unknown) => `${value ?? ''}`
-  .replaceAll('&', '&amp;')
-  .replaceAll('<', '&lt;')
-  .replaceAll('>', '&gt;')
-  .replaceAll('"', '&quot;')
-  .replaceAll("'", '&#39;');
+import { renderAdminShell, escapeHtml } from './admin-shell.ts';
 
 const formatDate = (value: unknown) => {
   const input = `${value ?? ''}`.trim();
@@ -19,95 +14,74 @@ const formatDate = (value: unknown) => {
   return date.toISOString();
 };
 
-const renderLayout = ({ title, content }: { title: string, content: string }) => `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${escapeHtml(title)}</title>
-  </head>
-  <body>
-    <header>
-      <strong>Nimb CMS Admin</strong>
-    </header>
-    <aside>
-      <nav aria-label="Admin sidebar">
-        <ul>
-          <li><a href="/admin">Dashboard</a></li>
-          <li><a href="/admin/pages">Pages</a></li>
-          <li><a href="/admin/posts">Posts</a></li>
-        </ul>
-      </nav>
-    </aside>
-    <main>
-      ${content}
-    </main>
-  </body>
-</html>`;
-
-export const renderAdminPostsListPage = ({ posts }) => {
+export const renderAdminPostsListPage = ({ posts, runtime }) => {
   const rows = (Array.isArray(posts) ? posts : []).map((post) => `<tr>
       <td>${escapeHtml(post?.data?.title)}</td>
       <td>${escapeHtml(post?.data?.slug)}</td>
       <td>${escapeHtml(formatDate(post?.data?.publishedAt))}</td>
       <td>
         <a href="/admin/posts/${encodeURIComponent(`${post?.id ?? ''}`)}/edit">Edit</a>
-        <form method="post" action="/admin/posts/${encodeURIComponent(`${post?.id ?? ''}`)}/delete" style="display:inline;">
+        <form method="post" action="/admin/posts/${encodeURIComponent(`${post?.id ?? ''}`)}/delete" class="inline-form">
           <button type="submit">Delete</button>
         </form>
       </td>
     </tr>`).join('');
 
-  return renderLayout({
+  return renderAdminShell({
     title: 'Posts · Nimb CMS Admin',
-    content: `<h1>Posts</h1>
-      <p><a href="/admin/posts/new">Create Post</a></p>
+    runtime,
+    activeNav: 'posts',
+    pageTitle: 'Posts',
+    pageDescription: 'Manage blog posts and publishing dates.',
+    content: `<p><a class="button-link" href="/admin/posts/new">Create post</a></p>
       <table>
         <thead>
           <tr>
             <th>Title</th>
             <th>Slug</th>
-            <th>Published At</th>
+            <th>Published</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          ${rows || '<tr><td colspan="4">No posts found.</td></tr>'}
+          ${rows || '<tr><td colspan="4">No posts yet. Write your first post to begin.</td></tr>'}
         </tbody>
       </table>`
   });
 };
 
-export const renderAdminPostFormPage = ({ mode, post = null }) => {
+export const renderAdminPostFormPage = ({ mode, post = null, runtime }) => {
   const isEdit = mode === 'edit';
   const id = isEdit ? `${post?.id ?? ''}` : '';
   const action = isEdit
     ? `/admin/posts/${encodeURIComponent(id)}/edit`
     : '/admin/posts/new';
 
-  return renderLayout({
+  return renderAdminShell({
     title: `${isEdit ? 'Edit' : 'Create'} Post · Nimb CMS Admin`,
-    content: `<h1>${isEdit ? 'Edit' : 'Create'} Post</h1>
-      <form method="post" action="${action}">
-        <p>
-          <label for="title">Title</label><br>
+    runtime,
+    activeNav: 'posts',
+    pageTitle: `${isEdit ? 'Edit' : 'Create'} Post`,
+    content: `<form method="post" action="${action}">
+        <div>
+          <label for="title">Title</label>
           <input id="title" name="title" type="text" value="${escapeHtml(post?.data?.title)}" required>
-        </p>
-        <p>
-          <label for="slug">Slug</label><br>
+        </div>
+        <div>
+          <label for="slug">Slug</label>
           <input id="slug" name="slug" type="text" value="${escapeHtml(post?.data?.slug)}" required>
-        </p>
-        <p>
-          <label for="body">Body</label><br>
+        </div>
+        <div>
+          <label for="body">Body</label>
           <textarea id="body" name="body" rows="12">${escapeHtml(post?.data?.body)}</textarea>
-        </p>
-        <p>
-          <label for="publishedAt">Published At</label><br>
+        </div>
+        <div>
+          <label for="publishedAt">Publish date</label>
           <input id="publishedAt" name="publishedAt" type="datetime-local" value="${escapeHtml(post?.data?.publishedAt)}">
-        </p>
+        </div>
         <p>
-          <button type="submit">${isEdit ? 'Update' : 'Create'} Post</button>
-          <a href="/admin/posts">Cancel</a>
+          <button type="submit">${isEdit ? 'Update' : 'Create'} post</button>
+          <a class="button-link button-link--muted" href="/admin/posts">Cancel</a>
         </p>
       </form>
       <script src="/admin/editor/tinymce/tinymce.min.js"></script>

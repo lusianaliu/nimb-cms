@@ -279,22 +279,40 @@ export const createBootstrap = async ({
   });
   runtime.adminMenu = adminMenuRegistry;
   navRegistry.register({
-    id: 'content',
-    label: 'Content',
-    path: '/admin/content/page',
+    id: 'dashboard',
+    label: 'Dashboard',
+    path: '/admin',
     order: 10
+  });
+  navRegistry.register({
+    id: 'pages',
+    label: 'Pages',
+    path: '/admin/pages',
+    order: 20
+  });
+  navRegistry.register({
+    id: 'posts',
+    label: 'Posts',
+    path: '/admin/posts',
+    order: 30
   });
   navRegistry.register({
     id: 'media',
     label: 'Media',
     path: '/admin/media',
-    order: 20
+    order: 40
   });
   navRegistry.register({
     id: 'settings',
     label: 'Settings',
     path: '/admin/settings',
-    order: 30
+    order: 50
+  });
+  navRegistry.register({
+    id: 'content',
+    label: 'Content Model',
+    path: '/admin/content/page',
+    order: 60
   });
   runtime.adminApi = Object.freeze({
     basePath: '/admin-api'
