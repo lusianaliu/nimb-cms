@@ -12,8 +12,16 @@ export const validateAdminStaticDir = (config, rootDirectory) => {
     return;
   }
 
+  const staticDir = config?.admin?.staticDir;
   const adminDir = resolveAdminStaticDir(config, rootDirectory);
+
+  // Admin static assets are presentation-only and can be absent in runtime/test
+  // environments where the handler serves built-in fallbacks.
   if (!fs.existsSync(adminDir)) {
+    if (typeof staticDir !== 'string' || staticDir.trim() === '') {
+      return;
+    }
+
     throw new Error(`Startup invariant failed: admin staticDir does not exist: ${adminDir}`);
   }
 
