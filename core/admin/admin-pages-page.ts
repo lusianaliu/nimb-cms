@@ -1,9 +1,4 @@
-const escapeHtml = (value: unknown) => `${value ?? ''}`
-  .replaceAll('&', '&amp;')
-  .replaceAll('<', '&lt;')
-  .replaceAll('>', '&gt;')
-  .replaceAll('"', '&quot;')
-  .replaceAll("'", '&#39;');
+import { renderAdminShell, escapeHtml } from './admin-shell.ts';
 
 const formatDate = (value: unknown) => {
   const input = `${value ?? ''}`.trim();
@@ -19,90 +14,70 @@ const formatDate = (value: unknown) => {
   return date.toISOString();
 };
 
-const renderLayout = ({ title, content }: { title: string, content: string }) => `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${escapeHtml(title)}</title>
-  </head>
-  <body>
-    <header>
-      <strong>Nimb CMS Admin</strong>
-    </header>
-    <aside>
-      <nav aria-label="Admin sidebar">
-        <ul>
-          <li><a href="/admin">Dashboard</a></li>
-          <li><a href="/admin/pages">Pages</a></li>
-        </ul>
-      </nav>
-    </aside>
-    <main>
-      ${content}
-    </main>
-  </body>
-</html>`;
-
-export const renderAdminPagesListPage = ({ pages }) => {
+export const renderAdminPagesListPage = ({ pages, runtime }) => {
   const rows = (Array.isArray(pages) ? pages : []).map((page) => `<tr>
       <td>${escapeHtml(page?.data?.title)}</td>
       <td>${escapeHtml(page?.data?.slug)}</td>
       <td>${escapeHtml(formatDate(page?.createdAt))}</td>
       <td>
         <a href="/admin/pages/${encodeURIComponent(`${page?.id ?? ''}`)}/edit">Edit</a>
-        <form method="post" action="/admin/pages/${encodeURIComponent(`${page?.id ?? ''}`)}/delete" style="display:inline;">
+        <form method="post" action="/admin/pages/${encodeURIComponent(`${page?.id ?? ''}`)}/delete" class="inline-form">
           <button type="submit">Delete</button>
         </form>
       </td>
     </tr>`).join('');
 
-  return renderLayout({
+  return renderAdminShell({
     title: 'Pages · Nimb CMS Admin',
-    content: `<h1>Pages</h1>
-      <p><a href="/admin/pages/new">Create Page</a></p>
+    runtime,
+    activeNav: 'pages',
+    pageTitle: 'Pages',
+    pageDescription: 'Create and maintain your website pages.',
+    content: `<p><a class="button-link" href="/admin/pages/new">Create page</a></p>
       <table>
         <thead>
           <tr>
             <th>Title</th>
             <th>Slug</th>
-            <th>Created At</th>
+            <th>Created</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          ${rows || '<tr><td colspan="4">No pages found.</td></tr>'}
+          ${rows || '<tr><td colspan="4">No pages yet. Create your first page to get started.</td></tr>'}
         </tbody>
       </table>`
   });
 };
 
-export const renderAdminPageFormPage = ({ mode, page = null }) => {
+export const renderAdminPageFormPage = ({ mode, page = null, runtime }) => {
   const isEdit = mode === 'edit';
   const id = isEdit ? `${page?.id ?? ''}` : '';
   const action = isEdit
     ? `/admin/pages/${encodeURIComponent(id)}/edit`
     : '/admin/pages/new';
 
-  return renderLayout({
+  return renderAdminShell({
     title: `${isEdit ? 'Edit' : 'Create'} Page · Nimb CMS Admin`,
-    content: `<h1>${isEdit ? 'Edit' : 'Create'} Page</h1>
-      <form method="post" action="${action}">
-        <p>
-          <label for="title">Title</label><br>
+    runtime,
+    activeNav: 'pages',
+    pageTitle: `${isEdit ? 'Edit' : 'Create'} Page`,
+    content: `<form method="post" action="${action}">
+        <div>
+          <label for="title">Title</label>
           <input id="title" name="title" type="text" value="${escapeHtml(page?.data?.title)}" required>
-        </p>
-        <p>
-          <label for="slug">Slug</label><br>
+        </div>
+        <div>
+          <label for="slug">Slug</label>
           <input id="slug" name="slug" type="text" value="${escapeHtml(page?.data?.slug)}" required>
-        </p>
-        <p>
-          <label for="body">Body</label><br>
+        </div>
+        <div>
+          <label for="body">Body</label>
           <textarea id="body" name="body" rows="12">${escapeHtml(page?.data?.body)}</textarea>
-        </p>
+        </div>
         <p>
-          <button type="submit">${isEdit ? 'Update' : 'Create'} Page</button>
-          <a href="/admin/pages">Cancel</a>
+          <button type="submit">${isEdit ? 'Update' : 'Create'} page</button>
+          <a class="button-link button-link--muted" href="/admin/pages">Cancel</a>
         </p>
       </form>
       <script src="/admin/editor/tinymce/tinymce.min.js"></script>
