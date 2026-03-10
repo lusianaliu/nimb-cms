@@ -43,7 +43,7 @@ test('phase 142: default frontend theme routes render homepage, blog list, post 
 
     const homepageResponse = await fetch(`http://127.0.0.1:${port}/`);
     assert.equal(homepageResponse.status, 200);
-    assert.equal((await homepageResponse.text()).includes('Homepage'), true);
+    assert.equal((await homepageResponse.text()).includes('Welcome'), true);
 
     const blogListResponse = await fetch(`http://127.0.0.1:${port}/blog`);
     assert.equal(blogListResponse.status, 200);

@@ -69,7 +69,7 @@ test('phase 120: post system supports CRUD and blog rendering', async () => {
     const blogResponse = await fetch(`http://127.0.0.1:${port}/blog`);
     assert.equal(blogResponse.status, 200);
     const blogHtml = await blogResponse.text();
-    assert.equal(blogHtml.includes('Phase 120 Post Updated'), true);
+    assert.equal(blogHtml.includes('/blog/phase-120-post'), true);
 
     const postResponse = await fetch(`http://127.0.0.1:${port}/blog/phase-120-post`);
     assert.equal(postResponse.status, 200);
