@@ -45,6 +45,12 @@ const setupView = ({ error = '', siteName = 'My Nimb Site', email = 'admin@nimb.
   </body>
 </html>`;
 
+
+const resolveAdminNext = (value: unknown, fallback = '/admin') => {
+  const next = `${value ?? ''}`.trim();
+  return next.startsWith('/admin') ? next : fallback;
+};
+
 const readFormBody = async (request) => {
   const chunks: Buffer[] = [];
 
@@ -60,7 +66,7 @@ export const createAdminAuthRouter = (runtime) => {
     {
       method: 'GET',
       path: '/admin/login',
-      handler: (context) => {
+      handler: async (context) => {
         const welcome = `${context.query?.welcome ?? ''}` === '1';
         const installComplete = `${context.query?.install ?? ''}` === 'complete';
         const loggedOut = `${context.query?.logged_out ?? ''}` === '1';
@@ -71,6 +77,21 @@ export const createAdminAuthRouter = (runtime) => {
             : loggedOut
               ? 'You are signed out.'
               : '';
+        const sessionId = getCookie(context.request, ADMIN_SESSION_COOKIE);
+        if (sessionId) {
+          const session = await runtime?.sessions?.getSession?.(sessionId);
+          const user = session ? await runtime?.auth?.findUserById?.(session.userId) : null;
+          if (session && user) {
+            return {
+              statusCode: 302,
+              send(response) {
+                response.writeHead(302, { location: '/admin', 'content-length': '0' });
+                response.end();
+              }
+            };
+          }
+        }
+
         const next = welcome ? '/admin?welcome=1' : '';
         return toHtmlResponse(renderLoginView({ title: 'Login · Nimb Admin', notice, next }));
       }
@@ -82,7 +103,7 @@ export const createAdminAuthRouter = (runtime) => {
         const form = await readFormBody(context.request);
         const email = `${form.email ?? ''}`.trim().toLowerCase();
         const password = `${form.password ?? ''}`;
-        const next = `${form.next ?? ''}`.trim();
+        const next = resolveAdminNext(form.next);
 
         if (!email || !password) {
           return toHtmlResponse(renderLoginView({ title: 'Login · Nimb Admin', email, error: 'Email and password are required.' }), 400);
@@ -105,7 +126,7 @@ export const createAdminAuthRouter = (runtime) => {
           send(response) {
             setCookie(response, ADMIN_SESSION_COOKIE, session.id);
             response.writeHead(302, {
-              location: next.startsWith('/admin') ? next : '/admin',
+              location: next,
               'content-length': '0'
             });
             response.end();
@@ -130,7 +151,7 @@ export const createAdminAuthRouter = (runtime) => {
         const siteName = `${form.siteName ?? ''}`.trim();
         const email = `${form.email ?? ''}`.trim().toLowerCase();
         const password = `${form.password ?? ''}`;
-        const next = `${form.next ?? ''}`.trim();
+        const next = resolveAdminNext(form.next);
 
         if (!siteName || !email || password.length < 8) {
           return toHtmlResponse(setupView({
@@ -147,7 +168,7 @@ export const createAdminAuthRouter = (runtime) => {
           statusCode: 302,
           send(response) {
             response.writeHead(302, {
-              location: next.startsWith('/admin') ? next : '/admin',
+              location: next,
               'content-length': '0'
             });
             response.end();

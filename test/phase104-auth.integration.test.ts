@@ -121,7 +121,7 @@ test('phase 104: admin auth login, middleware guard, session persistence, and lo
         redirect: 'manual'
       });
       assert.equal(logout.status, 302);
-      assert.equal(logout.headers.get('location'), '/admin/login');
+      assert.equal(logout.headers.get('location'), '/admin/login?logged_out=1');
       assert.match(logout.headers.get('set-cookie') ?? '', /nimb_admin_session=;/);
 
       const sessionsAfterLogout = JSON.parse(fs.readFileSync(SESSIONS_PATH, 'utf8')) as Array<Record<string, unknown>>;

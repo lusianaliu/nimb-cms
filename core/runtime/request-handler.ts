@@ -19,6 +19,7 @@ import { createAdminAuthRouter } from '../http/admin-auth-router.ts';
 import { createMediaController } from '../http/media-controller.ts';
 import { isSystemInstalled } from '../system/system-config.ts';
 import { renderAdminLayout } from '../admin/admin-layout.ts';
+import { runMiddlewareStack } from '../http/run-middleware.ts';
 
 const resolvePublicRoot = ({ runtime, rootDirectory }) => {
   const projectRoot = runtime?.projectPaths?.projectRoot ?? runtime?.project?.projectRoot;
@@ -57,6 +58,29 @@ const trySendUploadsAsset = (response, requestPath, uploadsRoot) => {
   return true;
 };
 
+
+
+const withAdminMiddleware = async (runtime, context, handler) => {
+  const middlewareContext = {
+    req: context.request,
+    res: context.response,
+    runtime,
+    params: context.params,
+    state: {}
+  };
+
+  let output = null;
+
+  await runMiddlewareStack(
+    middlewareContext,
+    runtime?.admin?.middleware?.list?.() ?? [],
+    async () => {
+      output = await Promise.resolve(handler());
+    }
+  );
+
+  return output ?? middlewareContext.state.response ?? null;
+};
 
 const readFormBody = async (request) => {
   const chunks: Buffer[] = [];
@@ -240,25 +264,31 @@ export const createRequestHandler = (runtime, {
         const page = runtime?.adminPages?.get?.(context.path);
 
         if (page) {
-          const content = await Promise.resolve(page.render(routeContext.request, response, runtime));
-          const menu = runtime?.adminMenu?.list?.() ?? [];
-          const html = renderAdminLayout({
-            title: page.title,
-            content: `${content ?? ''}`,
-            menu
+          const pageResponse = await withAdminMiddleware(runtime, routeContext, async () => {
+            const content = await Promise.resolve(page.render(routeContext.request, response, runtime));
+            const menu = runtime?.adminMenu?.list?.() ?? [];
+            const html = renderAdminLayout({
+              title: page.title,
+              content: `${content ?? ''}`,
+              menu
+            });
+            const body = Buffer.from(`${html ?? ''}`, 'utf8');
+            return {
+              statusCode: 200,
+              send(targetResponse) {
+                targetResponse.writeHead(200, {
+                  'content-length': body.byteLength,
+                  'content-type': 'text/html; charset=utf-8'
+                });
+                targetResponse.end(body);
+              }
+            };
           });
-          const body = Buffer.from(`${html ?? ''}`, 'utf8');
-          response.writeHead(200, {
-            'content-length': body.byteLength,
-            'content-type': 'text/html; charset=utf-8'
-          });
-          response.end(body);
-          return;
-        }
 
-        if (context.path === '/admin' || context.path.startsWith('/admin/')) {
-          notFoundResponse({ path: context.path, timestamp: context.timestamp }).send(response);
-          return;
+          if (pageResponse && typeof pageResponse.send === 'function') {
+            pageResponse.send(response);
+            return;
+          }
         }
       }
 
@@ -297,6 +327,13 @@ export const createRequestHandler = (runtime, {
           adminApiResponse.send(response);
           return;
         }
+      }
+
+      // Active admin paths should fail consistently only after all admin owners
+      // (auth, content, pages, and API) have had a chance to dispatch.
+      if (context.path === '/admin' || context.path.startsWith('/admin/')) {
+        notFoundResponse({ path: context.path, timestamp: context.timestamp }).send(response);
+        return;
       }
 
       if (mediaController) {
