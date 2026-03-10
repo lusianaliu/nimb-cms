@@ -38,8 +38,7 @@ import { createSettingsModule } from '../system/settings.ts';
 import { createMediaService } from '../media/media-service.ts';
 import type { Capability } from '../runtime/capabilities.ts';
 import type { ScopedRuntime } from '../plugin/plugin-api.ts';
-import { getInstallState, hasSystemConfig } from '../system/system-config.ts';
-import { hasInstallLock } from '../installer/install-lock.ts';
+import { getInstallState } from '../system/system-config.ts';
 import { createRouter } from '../http/router.ts';
 import { createDatabase, createStorageProxy } from '../db/index.ts';
 
@@ -233,9 +232,7 @@ export const createBootstrap = async ({
   const resolvedProject = resolveBootstrapProject({ cwd, project });
   const resolvedPaths = createProjectPaths(resolvedProject.projectRoot ?? resolvedProject.root);
   const installState = getInstallState({ projectRoot: resolvedPaths.projectRoot, runtimeVersion: version });
-  const installLockPresent = hasInstallLock({ projectRoot: resolvedPaths.projectRoot });
-  const systemConfigPresent = hasSystemConfig({ projectRoot: resolvedPaths.projectRoot });
-  const isInstalled = (systemConfigPresent || installLockPresent) && installState.installed === true;
+  const isInstalled = installState.installed === true;
   const selectedMode = mode ?? (isInstalled ? 'runtime' : 'install');
   const config = loadConfig({ cwd: resolvedPaths.projectRoot });
   const runtimeMode = resolveRuntimeMode(resolvedPaths);

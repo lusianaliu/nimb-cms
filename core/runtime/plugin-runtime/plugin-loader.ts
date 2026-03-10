@@ -1,3 +1,6 @@
+// INTERNAL: runtime/plugin-runtime loader is for plugin-runtime internals only.
+// Phase 144 lock-in keeps CMS startup plugin loading in core/plugin/plugin-loader.ts.
+
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';

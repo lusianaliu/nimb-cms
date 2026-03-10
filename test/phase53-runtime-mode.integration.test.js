@@ -19,9 +19,9 @@ const writeConfig = (cwd, port) => {
 };
 
 const writeInstallState = (cwd, version = '1.0.0') => {
-  const nimbDir = path.join(cwd, '.nimb');
-  fs.mkdirSync(nimbDir, { recursive: true });
-  fs.writeFileSync(path.join(nimbDir, 'install.json'), `${JSON.stringify({ installed: true, version, installedAt: '2026-01-01T00:00:00.000Z' }, null, 2)}\n`);
+  const systemDir = path.join(cwd, 'data', 'system');
+  fs.mkdirSync(systemDir, { recursive: true });
+  fs.writeFileSync(path.join(systemDir, 'config.json'), `${JSON.stringify({ installed: true, version, installedAt: '2026-01-01T00:00:00.000Z' }, null, 2)}\n`);
 };
 
 const waitForReady = (child) => new Promise((resolve, reject) => {
@@ -67,7 +67,7 @@ const terminate = (child) => new Promise((resolve) => {
   child.kill('SIGTERM');
 });
 
-test('phase 53: missing install.json resolves installer mode', async () => {
+test('phase 53: missing system install config resolves installer mode', async () => {
   const projectRoot = mkdtemp();
   writeConfig(projectRoot, 3230);
 
@@ -88,7 +88,7 @@ test('phase 53: missing install.json resolves installer mode', async () => {
   }
 });
 
-test('phase 53: valid install.json resolves normal mode', async () => {
+test('phase 53: valid system install config resolves normal mode', async () => {
   const projectRoot = mkdtemp();
   writeConfig(projectRoot, 3231);
   writeInstallState(projectRoot, '2.0.0');
@@ -144,8 +144,7 @@ test('phase 53: standalone startup compatibility is preserved', async () => {
   try {
     await waitForReady(child);
     const response = await fetch('http://127.0.0.1:3234/health', { redirect: 'manual' });
-    assert.equal(response.status, 302);
-    assert.equal(response.headers.get('location'), '/install');
+    assert.equal(response.status, 404);
   } finally {
     if (child.exitCode === null) {
       await terminate(child);

@@ -15,11 +15,12 @@ export const createInstallRouter = (runtime) => createRouter([
     method: 'POST',
     path: '/install',
     handler: () => {
-      if (isInstalled()) {
+      const projectRoot = runtime?.projectPaths?.projectRoot ?? runtime?.project?.projectRoot;
+      if (isInstalled({ projectRoot })) {
         return jsonResponse({ error: 'Already installed' }, { statusCode: 409 });
       }
 
-      markInstalled({ version: '0.1.0' });
+      markInstalled({ version: '0.1.0', projectRoot });
       runtime?.events?.emit?.('system.installed', { version: '0.1.0' });
 
       return jsonResponse({

@@ -1,3 +1,6 @@
+// LEGACY: This loader is not part of the canonical CMS runtime path.
+// Phase 144 lock-in keeps active plugin loading in core/plugin/plugin-loader.ts.
+
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';

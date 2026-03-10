@@ -1,19 +1,22 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import { saveSystemConfig, getInstallState } from '../system/system-config.ts';
 
-const INSTALL_STATE_PATH = '/data/system/install.json';
+// Legacy setup-state shim retained for compatibility in tests and older modules.
+// Phase 144 lock-in: install state is canonical in data/system/config.json.
+const resolveProjectRoot = (projectRoot?: string) => projectRoot ?? process.cwd();
 
-export const isInstalled = (): boolean => fs.existsSync(INSTALL_STATE_PATH);
+export const isInstalled = ({ projectRoot = process.cwd() }: { projectRoot?: string } = {}): boolean => getInstallState({ projectRoot }).installed;
 
-export const markInstalled = (metadata: { version?: string } = {}) => {
-  const installStateDirectory = path.dirname(INSTALL_STATE_PATH);
-  fs.mkdirSync(installStateDirectory, { recursive: true });
-
-  const installState = {
+export const markInstalled = (metadata: { version?: string, projectRoot?: string } = {}) => {
+  const projectRoot = resolveProjectRoot(metadata.projectRoot);
+  const installState = saveSystemConfig({
+    installed: true,
     installedAt: new Date().toISOString(),
     version: String(metadata.version ?? '0.0.0')
-  };
+  }, { projectRoot });
 
-  fs.writeFileSync(INSTALL_STATE_PATH, `${JSON.stringify(installState, null, 2)}\n`, 'utf8');
-  return installState;
+  return Object.freeze({
+    installed: installState.installed === true,
+    installedAt: String(installState.installedAt ?? ''),
+    version: installState.version
+  });
 };
