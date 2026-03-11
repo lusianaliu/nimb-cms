@@ -13,6 +13,8 @@ type PluginLoaderLogger = {
 const PLUGIN_MANIFEST_FILE = 'manifest.json';
 const LEGACY_PLUGIN_MANIFEST_FILE = 'plugin.json';
 
+type ManifestSource = 'canonical-manifest' | 'legacy-manifest';
+
 type RuntimeWithPlugins = {
   createScopedRuntime: (pluginId: string, capabilities?: string[]) => ScopedRuntime;
   plugins?: {
@@ -22,12 +24,15 @@ type RuntimeWithPlugins = {
   };
 };
 
-const readManifest = async (pluginDirectory: string): Promise<PluginManifest> => {
+const readManifest = async (pluginDirectory: string): Promise<{ manifest: PluginManifest; source: ManifestSource }> => {
   const manifestPath = path.join(pluginDirectory, PLUGIN_MANIFEST_FILE);
 
   try {
     const content = await fs.readFile(manifestPath, 'utf8');
-    return validatePluginManifest(JSON.parse(content) as unknown);
+    return {
+      manifest: validatePluginManifest(JSON.parse(content) as unknown),
+      source: 'canonical-manifest'
+    };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
       throw error;
@@ -36,13 +41,17 @@ const readManifest = async (pluginDirectory: string): Promise<PluginManifest> =>
 
   const legacyManifestPath = path.join(pluginDirectory, LEGACY_PLUGIN_MANIFEST_FILE);
   const legacyContent = await fs.readFile(legacyManifestPath, 'utf8');
-  return validatePluginManifest(JSON.parse(legacyContent) as unknown);
+  return {
+    manifest: validatePluginManifest(JSON.parse(legacyContent) as unknown),
+    source: 'legacy-manifest'
+  };
 };
 
 const runPluginLifecycle = async (
   imported: Record<string, unknown>,
   runtime: RuntimeWithPlugins,
-  manifest: PluginManifest
+  manifest: PluginManifest,
+  logger: PluginLoaderLogger
 ) => {
   const pluginModule = imported.default;
 
@@ -56,6 +65,9 @@ const runPluginLifecycle = async (
   const activate = imported.activate;
 
   if (typeof activate === 'function') {
+    logger?.warn?.('plugin loader is using compatibility lifecycle export "activate(runtime)"; prefer "default register(api)" or "default { setup(runtime) }"', {
+      plugin: manifest.id
+    });
     await activate(runtime);
     return;
   }
@@ -106,7 +118,15 @@ export const loadPlugins = async (
     const pluginDirectory = path.join(pluginsDirectory, entry.name);
 
     try {
-      const manifest = await readManifest(pluginDirectory);
+      const resolvedManifest = await readManifest(pluginDirectory);
+      const { manifest } = resolvedManifest;
+
+      if (resolvedManifest.source === 'legacy-manifest') {
+        logger?.warn?.('plugin loader read compatibility manifest "plugin.json"; prefer canonical "manifest.json"', {
+          plugin: manifest.id,
+          pluginDirectory
+        });
+      }
 
       if (runtime.plugins?.get(manifest.id)) {
         logger?.warn?.('plugin loader skipped duplicate plugin id', { plugin: manifest.id });
@@ -114,9 +134,14 @@ export const loadPlugins = async (
       }
 
       const pluginEntryPath = path.resolve(pluginDirectory, manifest.entry);
+      const pluginEntryRelative = path.relative(pluginDirectory, pluginEntryPath);
+      if (pluginEntryRelative.startsWith('..') || path.isAbsolute(pluginEntryRelative)) {
+        throw new Error(`plugin entry "${manifest.entry}" must stay inside plugin directory`);
+      }
+
       const imported = await import(pathToFileURL(pluginEntryPath).href);
 
-      await runPluginLifecycle(imported as Record<string, unknown>, runtime, manifest);
+      await runPluginLifecycle(imported as Record<string, unknown>, runtime, manifest, logger);
 
       const metadata: Record<string, unknown> = {
         id: manifest.id,

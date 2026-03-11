@@ -42,6 +42,11 @@ export const createRouter = (routes = []) => {
 
   const register = (route) => {
     const key = routeKey(route.method, route.path);
+
+    if (table.has(key)) {
+      throw new Error(`Route already registered: ${key}`);
+    }
+
     table.set(key, route.handler);
 
     const matcher = toPathMatcher(route.path);

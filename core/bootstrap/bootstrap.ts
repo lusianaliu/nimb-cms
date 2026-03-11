@@ -90,7 +90,13 @@ const createScopedRuntime = (runtime, pluginId: string, capabilities: Capability
   return Object.freeze({
     capabilities: grantedCapabilities,
     contentTypes: Object.freeze({
-      register: (definition: { name: string; slug: string; fields: Array<{ name: string; type: string; required?: boolean }> }) => runtime.contentTypes.register(definition),
+      register: (definition: { name: string; slug: string; fields: Array<{ name: string; type: string; required?: boolean }> }) => {
+        try {
+          return runtime.contentTypes.register(definition);
+        } catch (error) {
+          throw new Error(`Plugin "${pluginId}" failed to register content type "${String(definition?.slug ?? '')}": ${error instanceof Error ? error.message : String(error)}`);
+        }
+      },
       get: (slug: string) => runtime.contentTypes.get(slug),
       list: () => runtime.contentTypes.list()
     }),
@@ -101,7 +107,13 @@ const createScopedRuntime = (runtime, pluginId: string, capabilities: Capability
         serialize: (value: unknown) => unknown;
         deserialize: (value: unknown) => unknown;
         default?: unknown;
-      }) => runtime.fieldTypes.register(type),
+      }) => {
+        try {
+          return runtime.fieldTypes.register(type);
+        } catch (error) {
+          throw new Error(`Plugin "${pluginId}" failed to register field type "${String(type?.name ?? '')}": ${error instanceof Error ? error.message : String(error)}`);
+        }
+      },
       get: (name: string) => runtime.fieldTypes.get(name),
       list: () => runtime.fieldTypes.list()
     }),
@@ -114,11 +126,32 @@ const createScopedRuntime = (runtime, pluginId: string, capabilities: Capability
       query: (type: string, options: Record<string, unknown> = {}) => runtime.storage.query(type, options)
     }),
     http: Object.freeze({
-      registerRoute: (method: string, routePath: string, handler: (request: unknown, response: unknown) => unknown) => runtime.pluginRouter.registerRoute(method, routePath, handler),
-      register: (route: { method: string; path: string; handler: (context: unknown) => unknown }) => runtime.pluginRouter.register(route)
+      registerRoute: (method: string, routePath: string, handler: (request: unknown, response: unknown) => unknown) => {
+        try {
+          return runtime.pluginRouter.registerRoute(method, routePath, handler);
+        } catch (error) {
+          throw new Error(`Plugin "${pluginId}" failed to register route "${String(method)} ${String(routePath)}": ${error instanceof Error ? error.message : String(error)}`);
+        }
+      },
+      register: (route: { method: string; path: string; handler: (context: unknown) => unknown }) => {
+        try {
+          return runtime.pluginRouter.register(route);
+        } catch (error) {
+          throw new Error(`Plugin "${pluginId}" failed to register route "${String(route?.method ?? '')} ${String(route?.path ?? '')}": ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
     }),
     admin: Object.freeze({
-      navRegistry: runtime.admin?.navRegistry,
+      navRegistry: Object.freeze({
+        register: (item: { id: string; label: string; path: string; order?: number; capability?: string }) => {
+          try {
+            return runtime.admin?.navRegistry?.register(item);
+          } catch (error) {
+            throw new Error(`Plugin "${pluginId}" failed to register admin nav item "${String(item?.id ?? '')}": ${error instanceof Error ? error.message : String(error)}`);
+          }
+        },
+        list: () => runtime.admin?.navRegistry?.list?.() ?? []
+      }),
       middleware: runtime.admin?.middleware
     }),
     settings: createSettingsModule(runtime, { requireCapability }),
