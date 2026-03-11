@@ -1,5 +1,7 @@
 const LEGACY_MANIFEST_FIELDS = new Set(['id', 'name', 'version', 'entry', 'apiVersion', 'capabilities']);
 const SDK_MANIFEST_FIELDS = new Set(['name', 'version', 'main']);
+
+const SEMVER_LIKE_PATTERN = /^(\^|~)?\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/;
 const PLUGIN_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export interface PluginManifest {
@@ -17,6 +19,27 @@ const asString = (value: unknown, field: string): string => {
   }
 
   return value;
+};
+
+
+const asVersion = (value: unknown, field: string): string => {
+  const version = asString(value, field);
+
+  if (!SEMVER_LIKE_PATTERN.test(version)) {
+    throw new Error(`plugin manifest field "${field}" must look like a semver value`);
+  }
+
+  return version;
+};
+
+const asPath = (value: unknown, field: string): string => {
+  const candidate = asString(value, field);
+
+  if (candidate.includes('\\') || candidate.startsWith('/') || candidate.startsWith('../') || candidate.includes('/../') || candidate === '..') {
+    throw new Error(`plugin manifest field "${field}" must be a relative file path inside the plugin directory`);
+  }
+
+  return candidate;
 };
 
 const normalizeCapabilities = (value: unknown): string[] | undefined => {
@@ -39,9 +62,9 @@ const validateLegacyManifest = (manifest: Record<string, unknown>): PluginManife
   }
 
   const id = asString(manifest.id, 'id');
-  const entry = asString(manifest.entry, 'entry');
-  const version = asString(manifest.version, 'version');
-  const apiVersion = asString(manifest.apiVersion, 'apiVersion');
+  const entry = asPath(manifest.entry, 'entry');
+  const version = asVersion(manifest.version, 'version');
+  const apiVersion = asVersion(manifest.apiVersion, 'apiVersion');
 
   if (!PLUGIN_ID_PATTERN.test(id)) {
     throw new Error('plugin manifest field "id" must be kebab-case');
@@ -73,8 +96,8 @@ const validateSdkManifest = (manifest: Record<string, unknown>): PluginManifest 
   return Object.freeze({
     id: name,
     name,
-    version: asString(manifest.version, 'version'),
-    entry: asString(manifest.main, 'main')
+    version: asVersion(manifest.version, 'version'),
+    entry: asPath(manifest.main, 'main')
   });
 };
 
