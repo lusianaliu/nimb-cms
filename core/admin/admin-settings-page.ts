@@ -5,7 +5,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
   runtime,
   activeNav: 'settings',
   pageTitle: 'Site Settings',
-  pageDescription: 'Update your website name, homepage intro, and other public identity text.',
+  pageDescription: 'Update your website identity text and basic public settings.',
   content: `<form id="settings-form" class="form-grid" novalidate>
       <section>
         <h2>Site identity</h2>
@@ -80,7 +80,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
               input.value = settings?.[key] ?? '';
             }
           });
-          setStatus('Loaded current settings.');
+          setStatus('Settings loaded.');
         })
         .catch(() => {
           setStatus('Could not load settings. Refresh and try again.');
@@ -98,10 +98,10 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         })
           .then((response) => response.ok ? response.json() : Promise.reject(new Error('failed')))
           .then(() => {
-            setStatus('Site settings saved. View your homepage to confirm changes.');
+            setStatus('Settings saved. View your website to confirm the update.');
           })
           .catch(() => {
-            setStatus('Could not save settings. Please try again.');
+            setStatus('Could not save settings. Please try again in a moment.');
           });
       });
 

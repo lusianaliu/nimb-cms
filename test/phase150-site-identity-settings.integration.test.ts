@@ -45,7 +45,7 @@ test('phase 150: admin settings page explains site identity fields for non-techn
     assert.equal(html.includes('Homepage introduction'), true);
     assert.equal(html.includes('Footer text'), true);
     assert.equal(html.includes('Save site settings'), true);
-    assert.equal(html.includes('View your homepage to confirm changes.'), true);
+    assert.equal(html.includes('Settings saved. View your website to confirm the update.'), true);
   } finally {
     await server.stop();
   }

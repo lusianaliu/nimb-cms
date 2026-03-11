@@ -33,10 +33,10 @@ test('phase 146: dashboard shell renders welcome guidance and core navigation', 
   const html = renderAdminDashboardPage(createRuntime(), { welcome: true });
 
   assert.equal(html.includes('Acme Admin'), true);
-  assert.equal(html.includes('Welcome to Nimb.'), true);
-  assert.equal(html.includes('Create your first page'), true);
-  assert.equal(html.includes('Write your first post'), true);
-  assert.equal(html.includes('Review your site settings'), true);
+  assert.equal(html.includes('Welcome to Nimb CMS.'), true);
+  assert.equal(html.includes('Create a new page'), true);
+  assert.equal(html.includes('Write a new post'), true);
+  assert.equal(html.includes('Update site settings'), true);
   assert.equal(html.includes('href="/admin" aria-current="page" class="is-active">Dashboard</a>'), true);
   assert.equal(html.includes('href="/admin/pages"'), true);
   assert.equal(html.includes('href="/admin/posts"'), true);
@@ -49,18 +49,18 @@ test('phase 146: pages list renders inside shared shell surface', () => {
   const html = renderAdminPagesListPage({ pages: [], runtime: createRuntime() });
 
   assert.equal(html.includes('<title>Pages · Nimb CMS Admin</title>'), true);
-  assert.equal(html.includes('No pages yet. Create your first page to get started.'), true);
+  assert.equal(html.includes('No pages yet. Create a new page to build your website navigation.'), true);
   assert.equal(html.includes('class="admin-surface"'), true);
 });
 
 test('phase 146: login view supports install welcome continuity', () => {
   const html = renderLoginView({
     title: 'Login · Nimb Admin',
-    notice: 'Installation complete. Sign in to open your admin dashboard.',
+    notice: 'Installation complete. Sign in to open your dashboard.',
     next: '/admin?welcome=1'
   });
 
-  assert.equal(html.includes('Installation complete. Sign in to open your admin dashboard.'), true);
+  assert.equal(html.includes('Installation complete. Sign in to open your dashboard.'), true);
   assert.equal(html.includes('name="next" value="/admin?welcome=1"'), true);
   assert.equal(html.includes('Sign in'), true);
 });

@@ -71,11 +71,11 @@ export const createAdminAuthRouter = (runtime) => {
         const installComplete = `${context.query?.install ?? ''}` === 'complete';
         const loggedOut = `${context.query?.logged_out ?? ''}` === '1';
         const notice = welcome
-          ? 'Installation complete. Sign in to open your admin dashboard.'
+          ? 'Installation complete. Sign in to open your dashboard.'
           : installComplete
-            ? 'Nimb is already installed. Sign in to continue.'
+            ? 'This site is already installed. Sign in to continue.'
             : loggedOut
-              ? 'You are signed out.'
+              ? 'You have signed out successfully.'
               : '';
         const sessionId = getCookie(context.request, ADMIN_SESSION_COOKIE);
         if (sessionId) {
@@ -106,17 +106,17 @@ export const createAdminAuthRouter = (runtime) => {
         const next = resolveAdminNext(form.next);
 
         if (!email || !password) {
-          return toHtmlResponse(renderLoginView({ title: 'Login · Nimb Admin', email, error: 'Email and password are required.' }), 400);
+          return toHtmlResponse(renderLoginView({ title: 'Login · Nimb Admin', email, error: 'Enter both email and password to continue.' }), 400);
         }
 
         const user = await runtime.auth.findUserByEmail(email);
         if (!user) {
-          return toHtmlResponse(renderLoginView({ title: 'Login · Nimb Admin', email, error: 'Invalid credentials.' }), 401);
+          return toHtmlResponse(renderLoginView({ title: 'Login · Nimb Admin', email, error: 'We could not sign you in. Check your email and password and try again.' }), 401);
         }
 
         const validPassword = await runtime.auth.verifyPassword(password, user.passwordHash);
         if (!validPassword) {
-          return toHtmlResponse(renderLoginView({ title: 'Login · Nimb Admin', email, error: 'Invalid credentials.' }), 401);
+          return toHtmlResponse(renderLoginView({ title: 'Login · Nimb Admin', email, error: 'We could not sign you in. Check your email and password and try again.' }), 401);
         }
 
         const session = await runtime.sessions.createSession(user.id);

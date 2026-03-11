@@ -46,19 +46,19 @@ export const renderAdminDashboardPage = (runtime, options: DashboardOptions = {}
     runtime,
     activeNav: 'dashboard',
     pageTitle: 'Dashboard',
-    pageDescription: 'Manage your website content and settings from one place.',
+    pageDescription: 'Manage your website content, blog, and settings from one place.',
     notice: options.welcome ? {
       tone: 'success',
-      title: 'Welcome to Nimb.',
-      message: 'Your site is ready. Start by creating a page, writing a post, or checking your settings.'
+      title: 'Welcome to Nimb CMS.',
+      message: 'Your site is ready. Create a page, write a post, or update your site settings.'
     } : null,
     content: `<div class="admin-card-grid">
       <article>
         <h2>Start here</h2>
         <ul>
-          <li><a href="/admin/pages/new">Create your first page</a></li>
-          <li><a href="/admin/posts/new">Write your first post</a></li>
-          <li><a href="/admin/settings">Review your site settings</a></li>
+          <li><a href="/admin/pages/new">Create a new page</a></li>
+          <li><a href="/admin/posts/new">Write a new post</a></li>
+          <li><a href="/admin/settings">Update site settings</a></li>
         </ul>
       </article>
       <article>
