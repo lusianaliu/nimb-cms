@@ -88,7 +88,7 @@ test('phase 148: content editing forms explain page/post purpose and preserve va
       headers: { cookie: authCookie }
     });
     const pageListHtml = await pageListResponse.text();
-    assert.equal(pageListHtml.includes('Page created'), true);
+    assert.equal(pageListHtml.includes('Page saved'), true);
     assert.equal(pageListHtml.includes('Draft'), true);
 
     const postFormResponse = await fetch(`http://127.0.0.1:${port}/admin/posts/new`, {

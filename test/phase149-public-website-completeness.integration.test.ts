@@ -95,7 +95,7 @@ test('phase 149: public website renders coherent homepage, pages, blog, and not-
 
     const draftPostResponse = await fetch(`http://127.0.0.1:${port}/blog/draft-update`);
     assert.equal(draftPostResponse.status, 404);
-    assert.equal((await draftPostResponse.text()).includes('404 — Page not found'), true);
+    assert.equal((await draftPostResponse.text()).includes('Page not found'), true);
 
     const pageResponse = await fetch(`http://127.0.0.1:${port}/about`);
     assert.equal(pageResponse.status, 200);
@@ -104,7 +104,7 @@ test('phase 149: public website renders coherent homepage, pages, blog, and not-
     const missingPageResponse = await fetch(`http://127.0.0.1:${port}/missing-page`);
     assert.equal(missingPageResponse.status, 404);
     const missingPageHtml = await missingPageResponse.text();
-    assert.equal(missingPageHtml.includes('404 — Page not found'), true);
+    assert.equal(missingPageHtml.includes('Page not found'), true);
     assert.equal(missingPageHtml.includes('/missing-page'), true);
   } finally {
     await server.stop();

@@ -47,7 +47,7 @@ export const renderAdminPagesListPage = ({ pages, runtime, notice = null }) => {
     pageTitle: 'Pages',
     pageDescription: 'Pages are for your main website sections like Home, About, Services, or Contact.',
     notice,
-    content: `<p><a class="button-link" href="/admin/pages/new">Create your first page</a></p>
+    content: `<p><a class="button-link" href="/admin/pages/new">Create a new page</a></p>
       <table>
         <thead>
           <tr>
@@ -59,7 +59,7 @@ export const renderAdminPagesListPage = ({ pages, runtime, notice = null }) => {
           </tr>
         </thead>
         <tbody>
-          ${rows || '<tr><td colspan="5">No pages yet. Create your first page to build your website navigation.</td></tr>'}
+          ${rows || '<tr><td colspan="5">No pages yet. Create a new page to build your website navigation.</td></tr>'}
         </tbody>
       </table>`
   });

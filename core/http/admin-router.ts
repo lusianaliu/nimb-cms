@@ -340,11 +340,11 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
 
           const noticeKey = `${requestContext.query?.notice ?? ''}`;
           const notice = noticeKey === 'created'
-            ? { tone: 'success' as const, title: 'Page created', message: 'Your page has been saved and is ready to manage.' }
+            ? { tone: 'success' as const, title: 'Page saved', message: 'Your page was saved successfully.' }
             : noticeKey === 'updated'
-              ? { tone: 'success' as const, title: 'Page updated', message: 'Your page changes were saved successfully.' }
+              ? { tone: 'success' as const, title: 'Page saved', message: 'Your page changes were saved successfully.' }
               : noticeKey === 'deleted'
-                ? { tone: 'success' as const, title: 'Page deleted', message: 'The page has been removed.' }
+                ? { tone: 'success' as const, title: 'Page deleted', message: 'The page was deleted.' }
                 : null;
 
           const pages = runtime.content.list('page');
@@ -511,11 +511,11 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
         return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
           const noticeKey = `${requestContext.query?.notice ?? ''}`;
           const notice = noticeKey === 'created'
-            ? { tone: 'success' as const, title: 'Post created', message: 'Your post has been saved.' }
+            ? { tone: 'success' as const, title: 'Post saved', message: 'Your post was saved successfully.' }
             : noticeKey === 'updated'
-              ? { tone: 'success' as const, title: 'Post updated', message: 'Your post changes were saved successfully.' }
+              ? { tone: 'success' as const, title: 'Post saved', message: 'Your post changes were saved successfully.' }
               : noticeKey === 'deleted'
-                ? { tone: 'success' as const, title: 'Post deleted', message: 'The post has been removed.' }
+                ? { tone: 'success' as const, title: 'Post deleted', message: 'The post was deleted.' }
                 : null;
 
           const posts = runtime.content.list('post');

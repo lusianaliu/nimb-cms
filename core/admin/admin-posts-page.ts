@@ -67,7 +67,7 @@ export const renderAdminPostsListPage = ({ posts, runtime, notice = null }) => {
     pageTitle: 'Posts',
     pageDescription: 'Posts are for blog updates, news, and time-based content.',
     notice,
-    content: `<p><a class="button-link" href="/admin/posts/new">Write your first post</a></p>
+    content: `<p><a class="button-link" href="/admin/posts/new">Write a new post</a></p>
       <table>
         <thead>
           <tr>
@@ -79,7 +79,7 @@ export const renderAdminPostsListPage = ({ posts, runtime, notice = null }) => {
           </tr>
         </thead>
         <tbody>
-          ${rows || '<tr><td colspan="5">No posts yet. Write your first post to start your blog.</td></tr>'}
+          ${rows || '<tr><td colspan="5">No posts yet. Write a new post to start your blog.</td></tr>'}
         </tbody>
       </table>`
   });

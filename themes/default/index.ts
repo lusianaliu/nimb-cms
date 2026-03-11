@@ -123,7 +123,7 @@ const renderHomepage = (context: ThemeContext): string => {
     ? `<section class="panel"><h2>Latest from the blog</h2>${posts.slice(0, 3)
       .map((post) => `<article><h3><a href="/blog/${encodeURIComponent(post.slug)}">${escapeHtml(post.title)}</a></h3><p>${escapeHtml(toExcerpt(post.content))}</p></article>`)
       .join('')}</section>`
-    : '<section class="panel"><h2>Latest from the blog</h2><p>No blog posts published yet. Add your first post in admin to start sharing updates.</p></section>';
+    : '<section class="panel"><h2>Latest from the blog</h2><p>No blog posts published yet. Write your first post in admin to start sharing updates.</p></section>';
 
   return renderLayout(context, `<section class="panel"><h2>Welcome</h2><p>${escapeHtml(homepageIntro)}</p></section>${latestPostMarkup}`);
 };
@@ -132,7 +132,7 @@ const renderPostList = (context: ThemeContext): string => {
   const posts = Array.isArray(context.posts) ? context.posts : [];
 
   if (posts.length < 1) {
-    return renderLayout(context, '<section class="panel"><h2>Blog</h2><p>No posts have been published yet.</p></section>');
+    return renderLayout(context, '<section class="panel"><h2>Blog</h2><p>No posts published yet. Check back soon.</p></section>');
   }
 
   const listMarkup = posts
@@ -146,7 +146,7 @@ const renderPostPage = (context: ThemeContext): string => {
   const post = context.post;
 
   if (!post) {
-    return renderLayout(context, '<section class="panel"><h2>Post not found</h2><p>The requested post could not be found.</p></section>');
+    return renderLayout(context, '<section class="panel"><h2>Post not found</h2><p>We could not find that post. Try the <a href="/blog">blog list</a>.</p></section>');
   }
 
   return renderLayout(context, `<article class="panel"><h2>${escapeHtml(post.title)}</h2><p class="meta">Updated ${escapeHtml(formatDate(post.updatedAt) || 'recently')}</p><div class="content">${escapeHtml(post.content)}</div></article>`);
@@ -156,7 +156,7 @@ const renderPage = (context: ThemeContext): string => {
   const page = context.page;
 
   if (!page) {
-    return renderLayout(context, '<section class="panel"><h2>Page not found</h2><p>The requested page could not be found.</p></section>');
+    return renderLayout(context, '<section class="panel"><h2>Page not found</h2><p>We could not find that page. Return to the <a href="/">homepage</a>.</p></section>');
   }
 
   return renderLayout(context, `<article class="panel"><h2>${escapeHtml(page.title)}</h2><div class="content">${escapeHtml(page.content)}</div></article>`);
@@ -164,7 +164,7 @@ const renderPage = (context: ThemeContext): string => {
 
 const renderNotFound = (context: ThemeContext): string => renderLayout(
   context,
-  `<section class="panel"><h2>404 — Page not found</h2><p>We couldn't find <code>${escapeHtml(context.routePath)}</code>.</p><p><a href="/">Go to homepage</a> or visit the <a href="/blog">blog</a>.</p></section>`
+  `<section class="panel"><h2>Page not found</h2><p>We couldn't find <code>${escapeHtml(context.routePath)}</code>.</p><p><a href="/">Go to homepage</a> or visit the <a href="/blog">blog</a>.</p></section>`
 );
 
 export const defaultThemeTemplates = Object.freeze({
