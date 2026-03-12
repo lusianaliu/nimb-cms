@@ -1,14 +1,46 @@
 import {
+  CANONICAL_THEME_TEMPLATE_NAMES,
   THEME_TEMPLATE_ALIASES,
   type CanonicalThemeTemplateName,
   type ThemeTemplateContext,
   type ThemeTemplateName
 } from './theme-contract.ts';
 import { defaultThemeTemplates } from '../../themes/default/index.ts';
+import { sunriseThemeTemplates } from '../../themes/sunrise/index.ts';
 
 const DEFAULT_SITE_NAME = 'My Nimb Site';
 const DEFAULT_TAGLINE = 'Just another Nimb site';
 const DEFAULT_HOMEPAGE_INTRO = 'This homepage is ready for a company profile website. Create and publish pages like About, Services, and Contact from admin.';
+const DEFAULT_PUBLIC_THEME_ID = 'default';
+
+export type ThemeTemplateRenderer = (context: ThemeTemplateContext) => string;
+export type PublicThemeTemplateModule = Partial<Record<CanonicalThemeTemplateName, ThemeTemplateRenderer>>;
+
+const BUILTIN_PUBLIC_THEMES: Record<string, PublicThemeTemplateModule> = Object.freeze({
+  default: defaultThemeTemplates,
+  sunrise: sunriseThemeTemplates
+});
+
+type ThemeRendererOptions = {
+  publicThemes?: Record<string, PublicThemeTemplateModule>
+};
+
+const warnedThemeIssues = new Set<string>();
+
+const warnThemeIssue = (runtime, issue: string) => {
+  if (warnedThemeIssues.has(issue)) {
+    return;
+  }
+
+  warnedThemeIssues.add(issue);
+
+  if (typeof runtime?.logger?.warn === 'function') {
+    runtime.logger.warn(issue);
+    return;
+  }
+
+  console.warn(`[theme-renderer] ${issue}`);
+};
 
 const readSiteSettings = (runtime) => runtime?.settings?.getSettings?.() ?? {};
 
@@ -31,7 +63,7 @@ const readSiteName = (runtime) => {
 };
 
 const isCanonicalTemplateName = (templateName: string): templateName is CanonicalThemeTemplateName =>
-  Object.hasOwn(defaultThemeTemplates, templateName);
+  CANONICAL_THEME_TEMPLATE_NAMES.includes(templateName as CanonicalThemeTemplateName);
 
 export const resolveCanonicalTemplateName = (templateName: ThemeTemplateName = 'homepage'): CanonicalThemeTemplateName => {
   const normalizedName = `${templateName}`.trim();
@@ -70,15 +102,57 @@ const toThemeTemplateContext = (runtime, pageVariables: Record<string, unknown> 
   };
 };
 
-export const createThemeRenderer = (runtime) => Object.freeze({
+const readActiveThemeId = (runtime) => {
+  const settingsTheme = `${readSiteSettings(runtime)?.theme ?? ''}`.trim();
+  return settingsTheme || DEFAULT_PUBLIC_THEME_ID;
+};
+
+const validateThemeTemplates = (runtime, themeId: string, templates: PublicThemeTemplateModule): Record<CanonicalThemeTemplateName, ThemeTemplateRenderer> => {
+  const normalizedTemplates = {} as Record<CanonicalThemeTemplateName, ThemeTemplateRenderer>;
+
+  for (const templateName of CANONICAL_THEME_TEMPLATE_NAMES) {
+    const templateRenderer = templates[templateName];
+
+    if (typeof templateRenderer === 'function') {
+      normalizedTemplates[templateName] = templateRenderer;
+      continue;
+    }
+
+    warnThemeIssue(runtime, `Theme "${themeId}" is missing template "${templateName}". Falling back to default theme template.`);
+    normalizedTemplates[templateName] = defaultThemeTemplates[templateName];
+  }
+
+  return normalizedTemplates;
+};
+
+const resolveActiveThemeTemplates = (runtime, publicThemes: Record<string, PublicThemeTemplateModule>): Record<CanonicalThemeTemplateName, ThemeTemplateRenderer> => {
+  const activeThemeId = readActiveThemeId(runtime);
+  const selectedTheme = publicThemes[activeThemeId];
+
+  if (!selectedTheme) {
+    warnThemeIssue(runtime, `Theme "${activeThemeId}" is not registered. Falling back to default theme.`);
+    return validateThemeTemplates(runtime, DEFAULT_PUBLIC_THEME_ID, defaultThemeTemplates);
+  }
+
+  return validateThemeTemplates(runtime, activeThemeId, selectedTheme);
+};
+
+export const listRegisteredPublicThemes = (): string[] => Object.keys(BUILTIN_PUBLIC_THEMES);
+
+export const createThemeRenderer = (runtime, options: ThemeRendererOptions = {}) => {
+  const publicThemes = options.publicThemes ?? BUILTIN_PUBLIC_THEMES;
+
+  return Object.freeze({
   renderTemplate(templateName: ThemeTemplateName = 'homepage', rendererRuntime = runtime, pageVariables: Record<string, unknown> = {}) {
     const resolvedTemplateName = resolveCanonicalTemplateName(templateName);
-    const template = defaultThemeTemplates[resolvedTemplateName] ?? defaultThemeTemplates.page;
+    const activeThemeTemplates = resolveActiveThemeTemplates(rendererRuntime, publicThemes);
+    const template = activeThemeTemplates[resolvedTemplateName] ?? defaultThemeTemplates.page;
     return template(toThemeTemplateContext(rendererRuntime, pageVariables));
   },
   renderThemePage(page: ThemeTemplateName = 'index', rendererRuntime = runtime, pageVariables: Record<string, unknown> = {}) {
     return this.renderTemplate(page, rendererRuntime, pageVariables);
   }
-});
+  });
+};
 
 export const renderThemePage = (page, runtime) => createThemeRenderer(runtime).renderThemePage(page, runtime);
