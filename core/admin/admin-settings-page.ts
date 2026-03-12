@@ -58,7 +58,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
           <select id="activeThemeId" name="activeThemeId">
             <option value="">Loading themes…</option>
           </select>
-          <p class="field-help" id="theme-selection-help">Select a theme and save to apply it on your public website.</p>
+          <p class="field-help" id="theme-selection-help">Choose a theme and save to update your public website.</p>
           <p class="field-help" id="theme-coverage-hint" aria-live="polite"></p>
         </div>
         <p id="theme-state" class="field-help" aria-live="polite"></p>
@@ -151,7 +151,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
 
       const describeThemeCoverageTag = (theme, defaultThemeId) => {
         if (!theme || typeof theme.id !== 'string') {
-          return 'Coverage unknown';
+          return 'Coverage details unavailable';
         }
 
         if (theme.id === defaultThemeId) {
@@ -166,7 +166,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
           return 'Incomplete';
         }
 
-        return 'Coverage unknown';
+        return 'Coverage details unavailable';
       };
 
       const buildThemeCoverageHint = (themeData, selectedThemeId) => {
@@ -178,32 +178,32 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         const selectedTheme = themes.find((theme) => theme?.id === selectedThemeId);
 
         if (!selectedTheme) {
-          return 'Coverage hint: choose a listed theme to see completeness guidance.';
+          return 'Coverage hint: Choose a listed theme to see what is covered.';
         }
 
         if (selectedTheme.id === defaultThemeId) {
-          return 'Coverage hint: default fallback theme — complete coverage for canonical pages.';
+          return 'Coverage hint: This is the default theme and covers all core pages.';
         }
 
         if (selectedTheme.supportsAllCanonicalTemplates === true) {
-          return 'Coverage hint: complete theme — canonical pages are covered.';
+          return 'Coverage hint: This theme covers all core pages.';
         }
 
         const missingCount = Array.isArray(selectedTheme.missingTemplates) ? selectedTheme.missingTemplates.length : 0;
 
         if (missingCount > 0) {
-          return 'Coverage hint: incomplete theme — ' + missingCount + ' canonical page template' + (missingCount === 1 ? '' : 's') + ' may use default fallback.';
+          return 'Coverage hint: ' + missingCount + ' core page template' + (missingCount === 1 ? '' : 's') + ' may use the default theme.';
         }
 
         if (selectedTheme.supportsAllCanonicalTemplates === false) {
-          return 'Coverage hint: incomplete theme — some canonical pages may use default fallback.';
+          return 'Coverage hint: Some core pages may use the default theme.';
         }
 
         if (fallbackApplied && selectedTheme.id === configuredThemeId && configuredThemeId !== resolvedThemeId) {
-          return 'Coverage hint: runtime is currently using the default fallback theme.';
+          return 'Coverage hint: Nimb is currently using the default theme.';
         }
 
-        return 'Coverage hint: completeness details are limited for this theme.';
+        return 'Coverage hint: Coverage details are not available right now.';
       };
 
       const buildThemeSelectionWarning = (themeData, selectedThemeId) => {
@@ -215,32 +215,32 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         const selectedTheme = themes.find((theme) => theme.id === selectedThemeId);
 
         if (!selectedTheme) {
-          return 'Choose a listed theme to review readiness before saving.';
+          return 'Choose a listed theme to review what will happen before you save.';
         }
 
         if (selectedTheme.id === configuredThemeId && selectedTheme.id === resolvedThemeId && !fallbackApplied) {
           if (selectedTheme.supportsAllCanonicalTemplates === false) {
             const missingCount = Array.isArray(selectedTheme.missingTemplates) ? selectedTheme.missingTemplates.length : 0;
-            return 'Already active. This theme is missing ' + missingCount + ' canonical template' + (missingCount === 1 ? '' : 's') + ', so some pages may use default fallback templates.';
+              return 'Already active. This theme is missing ' + missingCount + ' core page template' + (missingCount === 1 ? '' : 's') + ', so Nimb may use the default theme on some pages.';
           }
 
-          return 'Already active. No changes are needed unless you want a different look.';
+            return 'Already active. No changes needed unless you want a different look.';
         }
 
         if (selectedTheme.supportsAllCanonicalTemplates === false) {
           const missingTemplates = Array.isArray(selectedTheme.missingTemplates) ? selectedTheme.missingTemplates : [];
           if (missingTemplates.length > 0) {
-            return 'This theme can be saved, but it is missing ' + missingTemplates.length + ' of ' + canonicalTemplateCount + ' canonical templates (' + missingTemplates.join(', ') + '). Missing pages will use default fallback templates.';
+            return 'You can save this theme, but it is missing ' + missingTemplates.length + ' of ' + canonicalTemplateCount + ' core templates (' + missingTemplates.join(', ') + '). Nimb will use the default theme for those pages.';
           }
 
-          return 'This theme can be saved, but it may use default fallback templates on some pages.';
+          return 'You can save this theme, but Nimb may use the default theme on some pages.';
         }
 
         if (selectedTheme.id === defaultThemeId) {
-          return 'This is the default fallback theme. It supports all canonical templates and is safe for all pages.';
+          return 'This is the default theme. It is complete and safe for all pages.';
         }
 
-        return 'Ready to save. This theme supports all canonical templates.';
+        return 'Ready to save. This theme covers all core pages.';
       };
 
       const applyThemeDiagnostics = (themeData, selectedThemeId) => {
@@ -258,14 +258,14 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         diagnostics.push('Resolved by runtime: ' + describeTheme(resolvedTheme, defaultThemeId) + '.');
 
         if (fallbackApplied) {
-          diagnostics.push('Full-theme fallback is active because the configured theme could not be resolved at runtime.');
+          diagnostics.push('The saved theme could not be used fully right now, so Nimb is using the default theme.');
         } else {
-          diagnostics.push('Full-theme fallback is not active.');
+          diagnostics.push('The saved theme is being used normally.');
         }
 
         if (!selectedTheme) {
-          diagnostics.push('Select a listed theme to view completeness details.');
-          setThemeDiagnosticsSummary('Theme diagnostics: select a theme to view details');
+          diagnostics.push('Choose a listed theme to view coverage details.');
+          setThemeDiagnosticsSummary('Theme diagnostics: choose a theme to view details');
           setThemeDiagnosticsRows(diagnostics);
           return;
         }
@@ -273,17 +273,17 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         if (selectedTheme.supportsAllCanonicalTemplates === false) {
           const missingTemplates = Array.isArray(selectedTheme.missingTemplates) ? selectedTheme.missingTemplates : [];
           if (missingTemplates.length > 0) {
-            diagnostics.push('Selected theme completeness: missing canonical templates — ' + missingTemplates.join(', ') + '.');
-            diagnostics.push('Per-template fallback: missing pages are safely rendered with default theme templates.');
-            setThemeDiagnosticsSummary('Theme diagnostics: incomplete theme (per-template fallback may be used)');
+            diagnostics.push('Coverage for selected theme: missing core templates — ' + missingTemplates.join(', ') + '.');
+            diagnostics.push('Nimb will use default theme templates for those pages.');
+            setThemeDiagnosticsSummary('Theme diagnostics: selected theme is partial (default theme may be used per page)');
           } else {
-            diagnostics.push('Selected theme completeness: canonical template coverage is unavailable in detail.');
-            diagnostics.push('Per-template fallback may still be used for missing pages.');
-            setThemeDiagnosticsSummary('Theme diagnostics: incomplete theme');
+            diagnostics.push('Coverage for selected theme: detailed coverage is not available right now.');
+            diagnostics.push('Nimb may still use the default theme for some pages.');
+            setThemeDiagnosticsSummary('Theme diagnostics: selected theme is partial');
           }
         } else {
-          diagnostics.push('Selected theme completeness: all canonical templates are available.');
-          diagnostics.push('Per-template fallback is not expected for canonical pages.');
+          diagnostics.push('Coverage for selected theme: all core templates are available.');
+          diagnostics.push('Nimb is not expected to use default theme templates for core pages.');
           setThemeDiagnosticsSummary('Theme diagnostics: selected theme is complete');
         }
 
@@ -338,9 +338,9 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         renderThemeOptions(themes, configuredThemeId, defaultThemeId);
 
         if (fallbackApplied) {
-          setThemeState('Configured theme: ' + configuredThemeId + '. Active public theme: ' + describeTheme(resolvedTheme, defaultThemeId) + '. Default fallback is active.');
+          setThemeState('Saved theme: ' + (configuredThemeId || 'Not set') + '. Active theme: ' + describeTheme(resolvedTheme, defaultThemeId) + '. Nimb is currently using the default theme.');
         } else {
-          setThemeState('Configured theme: ' + describeTheme(configuredTheme, defaultThemeId) + '. This theme is currently active on the public website.');
+          setThemeState('Saved theme: ' + describeTheme(configuredTheme, defaultThemeId) + '. This theme is currently active on your public website.');
         }
 
         const selectedThemeId = themeSelect?.value ?? configuredThemeId;
@@ -353,19 +353,19 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         .then((response) => response.ok ? response.json() : Promise.reject(new Error('failed')))
         .then((themeData) => {
           applyThemeStatus(themeData);
-          setThemeStatus('Theme status loaded. Choose a theme to review what will happen before saving.');
+          setThemeStatus('Theme details are ready. Choose a theme to review what will happen before you save.');
           return themeData;
         })
         .catch(() => {
-          setThemeState('Could not load theme details. The website keeps using the last saved theme.');
-          setThemeCoverageHint('Coverage hint is unavailable right now because theme status could not be loaded.');
-          setThemeSelectionWarning('Theme readiness details are unavailable right now.');
-          setThemeDiagnosticsSummary('Theme diagnostics: unavailable right now');
+          setThemeState('Theme details are unavailable right now. Your website keeps using its current theme.');
+          setThemeCoverageHint('Coverage hint: Coverage details are not available right now.');
+          setThemeSelectionWarning('Theme details are temporarily unavailable. You can try again in a moment.');
+          setThemeDiagnosticsSummary('Theme diagnostics: temporarily unavailable');
           setThemeDiagnosticsRows([
-            'Theme diagnostics could not be loaded from /admin-api/system/themes.',
-            'Theme status may still be active, but detailed diagnostics are temporarily unavailable.'
+            'Theme diagnostics are not available right now.',
+            'Your website will keep using the current theme until details can be loaded again.'
           ]);
-          setThemeStatus('Theme settings are temporarily unavailable. Refresh and try again.');
+          setThemeStatus('Theme details are temporarily unavailable. Refresh and try again.');
         });
 
       const load = () => fetch('/admin-api/settings')
@@ -386,7 +386,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
       themeSelect?.addEventListener('change', () => {
         const selectedThemeId = themeSelect?.value ?? '';
         if (!currentThemeData) {
-          setThemeCoverageHint('Coverage hint: theme details are still loading.');
+          setThemeCoverageHint('Coverage hint: Theme details are still loading.');
           setThemeSelectionWarning('Theme details are still loading.');
           return;
         }
@@ -405,7 +405,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
 
         const configuredThemeId = currentThemeData?.configuredThemeId ?? '';
         if (themeId === configuredThemeId) {
-          setThemeStatus('This theme is already active. No save was needed.');
+          setThemeStatus('No changes were made. This theme is already active.');
           setThemeSelectionWarning(buildThemeSelectionWarning(currentThemeData, themeId));
           return;
         }
@@ -434,9 +434,9 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
             const selectedThemeIncomplete = selectedTheme?.supportsAllCanonicalTemplates === false;
 
             if (themeData?.fallbackApplied === true) {
-              setThemeStatus('Theme saved. The configured theme could not be fully applied, so the default fallback theme is active.');
+              setThemeStatus('Theme saved. Nimb is still using the default theme because the selected theme is not fully available right now.');
             } else if (selectedThemeIncomplete) {
-              setThemeStatus('Theme saved and active. Some pages may use default fallback templates because this theme is incomplete.');
+              setThemeStatus('Theme saved and active. Some pages may still use the default theme because this theme is partial.');
             } else {
               setThemeStatus('Theme saved and active. Your public website now uses the selected theme.');
             }

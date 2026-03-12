@@ -43,10 +43,10 @@ test('phase 160: admin settings includes lightweight read-only theme diagnostics
     assert.equal(html.includes('id="theme-diagnostics"'), true);
     assert.equal(html.includes('id="theme-diagnostics-summary"'), true);
     assert.equal(html.includes('id="theme-diagnostics-list"'), true);
-    assert.equal(html.includes('Theme diagnostics: incomplete theme (per-template fallback may be used)'), true);
-    assert.equal(html.includes('Selected theme completeness: missing canonical templates — '), true);
-    assert.equal(html.includes('Per-template fallback: missing pages are safely rendered with default theme templates.'), true);
-    assert.equal(html.includes('Full-theme fallback is active because the configured theme could not be resolved at runtime.'), true);
+    assert.equal(html.includes('Theme diagnostics: selected theme is partial (default theme may be used per page)'), true);
+    assert.equal(html.includes('Coverage for selected theme: missing core templates — '), true);
+    assert.equal(html.includes('Nimb will use default theme templates for those pages.'), true);
+    assert.equal(html.includes('The saved theme could not be used fully right now, so Nimb is using the default theme.'), true);
   } finally {
     await server.stop();
   }

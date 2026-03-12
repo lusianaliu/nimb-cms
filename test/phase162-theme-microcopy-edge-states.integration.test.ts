@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createInstalledServer } from './helpers/create-installed-server.ts';
 
-const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase161-'));
+const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase162-'));
 
 const writeConfig = (cwd: string) => {
   fs.writeFileSync(path.join(cwd, 'nimb.config.json'), `${JSON.stringify({
@@ -16,7 +16,7 @@ const writeConfig = (cwd: string) => {
   }, null, 2)}\n`);
 };
 
-test('phase 161: admin settings selector includes at-a-glance theme coverage hints', async () => {
+test('phase 162: admin settings theme copy uses calmer non-technical edge-state language', async () => {
   const cwd = mkdtemp();
   writeConfig(cwd);
 
@@ -40,15 +40,14 @@ test('phase 161: admin settings selector includes at-a-glance theme coverage hin
     assert.equal(response.status, 200);
     const html = await response.text();
 
-    assert.equal(html.includes('id="theme-coverage-hint"'), true);
-    assert.equal(html.includes('Coverage hint: This theme covers all core pages.'), true);
-    assert.equal(html.includes('Coverage hint: Some core pages may use the default theme.'), true);
-    assert.equal(html.includes('Coverage hint: This is the default theme and covers all core pages.'), true);
-    assert.equal(html.includes("' — ' + describeThemeCoverageTag(theme, defaultThemeId)"), true);
-    assert.equal(html.includes("return 'Complete';"), true);
-    assert.equal(html.includes("return 'Incomplete';"), true);
-    assert.equal(html.includes("return 'Default fallback';"), true);
-    assert.equal(html.includes("return 'Coverage details unavailable';"), true);
+    assert.equal(html.includes('Coverage details unavailable'), true);
+    assert.equal(html.includes('Coverage hint: Coverage details are not available right now.'), true);
+    assert.equal(html.includes('No changes were made. This theme is already active.'), true);
+    assert.equal(html.includes('Theme diagnostics: temporarily unavailable'), true);
+    assert.equal(html.includes('Theme diagnostics are not available right now.'), true);
+    assert.equal(html.includes('Nimb will use default theme templates for those pages.'), true);
+    assert.equal(html.includes('Ready to save. This theme covers all core pages.'), true);
+    assert.equal(html.includes('This is the default theme. It is complete and safe for all pages.'), true);
   } finally {
     await server.stop();
   }
