@@ -61,6 +61,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
           <p class="field-help" id="theme-selection-help">Select a theme and save to apply it on your public website.</p>
         </div>
         <p id="theme-state" class="field-help" aria-live="polite"></p>
+        <p id="theme-selection-warning" class="field-help" aria-live="polite"></p>
         <div>
           <button type="button" id="save-theme-button">Save theme</button>
         </div>
@@ -77,9 +78,12 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
       const status = document.getElementById('status');
       const themeStatus = document.getElementById('theme-status');
       const themeState = document.getElementById('theme-state');
+      const themeSelectionWarning = document.getElementById('theme-selection-warning');
       const themeSelect = document.getElementById('activeThemeId');
       const saveThemeButton = document.getElementById('save-theme-button');
       const fields = ['siteName', 'tagline', 'homepageIntro', 'footerText', 'timezone'];
+      const canonicalTemplateCount = 5;
+      let currentThemeData = null;
 
       const setStatus = (text) => {
         if (status) {
@@ -99,6 +103,12 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         }
       };
 
+      const setThemeSelectionWarning = (text) => {
+        if (themeSelectionWarning) {
+          themeSelectionWarning.textContent = text;
+        }
+      };
+
       const describeTheme = (theme, fallbackId) => {
         const title = typeof theme?.title === 'string' && theme.title.trim() ? theme.title.trim() : (theme?.id ?? 'Unnamed theme');
         const suffix = theme?.id ? ' (' + theme.id + ')' : '';
@@ -106,11 +116,49 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         return title + suffix + fallbackTag;
       };
 
+      const buildThemeSelectionWarning = (themeData, selectedThemeId) => {
+        const defaultThemeId = themeData?.defaultThemeId ?? 'default';
+        const fallbackApplied = themeData?.fallbackApplied === true;
+        const configuredThemeId = themeData?.configuredThemeId ?? '';
+        const resolvedThemeId = themeData?.resolvedThemeId ?? '';
+        const themes = Array.isArray(themeData?.themes) ? themeData.themes : [];
+        const selectedTheme = themes.find((theme) => theme.id === selectedThemeId);
+
+        if (!selectedTheme) {
+          return 'Choose a listed theme to review readiness before saving.';
+        }
+
+        if (selectedTheme.id === configuredThemeId && selectedTheme.id === resolvedThemeId && !fallbackApplied) {
+          if (selectedTheme.supportsAllCanonicalTemplates === false) {
+            const missingCount = Array.isArray(selectedTheme.missingTemplates) ? selectedTheme.missingTemplates.length : 0;
+            return 'Already active. This theme is missing ' + missingCount + ' canonical template' + (missingCount === 1 ? '' : 's') + ', so some pages may use default fallback templates.';
+          }
+
+          return 'Already active. No changes are needed unless you want a different look.';
+        }
+
+        if (selectedTheme.supportsAllCanonicalTemplates === false) {
+          const missingTemplates = Array.isArray(selectedTheme.missingTemplates) ? selectedTheme.missingTemplates : [];
+          if (missingTemplates.length > 0) {
+            return 'This theme can be saved, but it is missing ' + missingTemplates.length + ' of ' + canonicalTemplateCount + ' canonical templates (' + missingTemplates.join(', ') + '). Missing pages will use default fallback templates.';
+          }
+
+          return 'This theme can be saved, but it may use default fallback templates on some pages.';
+        }
+
+        if (selectedTheme.id === defaultThemeId) {
+          return 'This is the default fallback theme. It supports all canonical templates and is safe for all pages.';
+        }
+
+        return 'Ready to save. This theme supports all canonical templates.';
+      };
+
       const renderThemeOptions = (themes, configuredThemeId, defaultThemeId) => {
         if (!themeSelect) {
           return;
         }
 
+        const previousValue = themeSelect.value;
         themeSelect.innerHTML = '';
         if (!Array.isArray(themes) || themes.length === 0) {
           const option = document.createElement('option');
@@ -133,9 +181,15 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
           option.selected = theme.id === configuredThemeId;
           themeSelect.appendChild(option);
         });
+
+        const hasPreviousValue = previousValue && themes.some((theme) => theme?.id === previousValue);
+        if (hasPreviousValue) {
+          themeSelect.value = previousValue;
+        }
       };
 
       const applyThemeStatus = (themeData) => {
+        currentThemeData = themeData ?? null;
         const configuredThemeId = themeData?.configuredThemeId ?? '';
         const resolvedThemeId = themeData?.resolvedThemeId ?? '';
         const defaultThemeId = themeData?.defaultThemeId ?? 'default';
@@ -151,17 +205,20 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         } else {
           setThemeState('Configured theme: ' + describeTheme(configuredTheme, defaultThemeId) + '. This theme is currently active on the public website.');
         }
+
+        setThemeSelectionWarning(buildThemeSelectionWarning(themeData, themeSelect?.value ?? configuredThemeId));
       };
 
       const loadThemeStatus = () => fetch('/admin-api/system/themes')
         .then((response) => response.ok ? response.json() : Promise.reject(new Error('failed')))
         .then((themeData) => {
           applyThemeStatus(themeData);
-          setThemeStatus('Theme status loaded.');
+          setThemeStatus('Theme status loaded. Choose a theme to review what will happen before saving.');
           return themeData;
         })
         .catch(() => {
           setThemeState('Could not load theme details. The website keeps using the last saved theme.');
+          setThemeSelectionWarning('Theme readiness details are unavailable right now.');
           setThemeStatus('Theme settings are temporarily unavailable. Refresh and try again.');
         });
 
@@ -180,10 +237,27 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
           setStatus('Could not load settings. Refresh and try again.');
         });
 
+      themeSelect?.addEventListener('change', () => {
+        const selectedThemeId = themeSelect?.value ?? '';
+        if (!currentThemeData) {
+          setThemeSelectionWarning('Theme details are still loading.');
+          return;
+        }
+
+        setThemeSelectionWarning(buildThemeSelectionWarning(currentThemeData, selectedThemeId));
+      });
+
       saveThemeButton?.addEventListener('click', () => {
         const themeId = themeSelect?.value ?? '';
         if (!themeId) {
           setThemeStatus('Choose a theme before saving.');
+          return;
+        }
+
+        const configuredThemeId = currentThemeData?.configuredThemeId ?? '';
+        if (themeId === configuredThemeId) {
+          setThemeStatus('This theme is already active. No save was needed.');
+          setThemeSelectionWarning(buildThemeSelectionWarning(currentThemeData, themeId));
           return;
         }
 
@@ -204,7 +278,19 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
           })
           .then((themeData) => {
             applyThemeStatus(themeData);
-            setThemeStatus('Theme saved. Your public website now uses the selected theme.');
+
+            const selectedTheme = Array.isArray(themeData?.themes)
+              ? themeData.themes.find((theme) => theme?.id === themeData?.configuredThemeId)
+              : null;
+            const selectedThemeIncomplete = selectedTheme?.supportsAllCanonicalTemplates === false;
+
+            if (themeData?.fallbackApplied === true) {
+              setThemeStatus('Theme saved. The configured theme could not be fully applied, so the default fallback theme is active.');
+            } else if (selectedThemeIncomplete) {
+              setThemeStatus('Theme saved and active. Some pages may use default fallback templates because this theme is incomplete.');
+            } else {
+              setThemeStatus('Theme saved and active. Your public website now uses the selected theme.');
+            }
           })
           .catch((error) => {
             const message = error instanceof Error && error.message ? error.message : 'Could not save theme. Please try again.';
