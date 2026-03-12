@@ -26,6 +26,13 @@ const readJsonBody = async (request): Promise<Record<string, unknown>> => {
   }
 };
 
+const jsonErrorResponse = (statusCode: number, code: string, message: string) => jsonResponse({
+  error: {
+    code,
+    message
+  }
+}, { statusCode });
+
 const resolveSettings = (runtime) => runtime?.settings?.getSettings?.() ?? {};
 
 const getSetting = (runtime, key, fallback) => {
@@ -80,6 +87,44 @@ export const createAdminApiRouter = (runtime) => Object.freeze({
       };
     }
 
+    if (context.path === `${ADMIN_API_BASE_PATH}/system/themes`) {
+      if (context.method === 'PUT') {
+        return async (requestContext) => {
+          const payload = await readJsonBody(requestContext.request);
+          const themeId = payload?.themeId;
+
+          try {
+            const status = runtime?.themes?.setConfiguredThemeId?.(themeId);
+            return jsonResponse(status ?? runtime?.themes?.getStatus?.() ?? {
+              configuredThemeId: 'default',
+              resolvedThemeId: 'default',
+              defaultThemeId: 'default',
+              fallbackApplied: false,
+              themes: []
+            });
+          } catch (error) {
+            if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
+              return jsonErrorResponse(400, `${error.code}`, `${error.message}`);
+            }
+
+            return jsonErrorResponse(500, 'THEME_UPDATE_FAILED', 'Failed to update active theme.');
+          }
+        };
+      }
+
+      if (context.method !== 'GET') {
+        return null;
+      }
+
+      return () => jsonResponse(runtime?.themes?.getStatus?.() ?? {
+        configuredThemeId: 'default',
+        resolvedThemeId: 'default',
+        defaultThemeId: 'default',
+        fallbackApplied: false,
+        themes: []
+      });
+    }
+
     if (context.method !== 'GET') {
       return null;
     }
@@ -99,17 +144,6 @@ export const createAdminApiRouter = (runtime) => Object.freeze({
         adminBranding: resolveAdminBranding(runtime)
       });
     }
-
-    if (context.path === `${ADMIN_API_BASE_PATH}/system/themes`) {
-      return () => jsonResponse(runtime?.themes?.getStatus?.() ?? {
-        configuredThemeId: 'default',
-        resolvedThemeId: 'default',
-        defaultThemeId: 'default',
-        fallbackApplied: false,
-        themes: []
-      });
-    }
-
     if (context.path === `${ADMIN_API_BASE_PATH}/system/info`) {
       const siteName = getSetting(runtime, 'site.name', () => 'My Nimb Site');
       const version = getSetting(runtime, 'site.version', () => runtime?.version ?? '0.0.0');

@@ -57,3 +57,10 @@ It returns `runtime.themes.getStatus()` data for admin/status consumers.
 - No settings redesign beyond preserving `settings.theme` as source-of-truth
 
 This keeps the phase low-risk while preparing canonical theme selection UX work in later phases.
+
+
+## Follow-up
+
+Theme selection write behavior is introduced in Phase 157:
+
+- `docs/phase-157-minimal-theme-selection-write-path.md`
