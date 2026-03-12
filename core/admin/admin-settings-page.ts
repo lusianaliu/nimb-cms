@@ -48,11 +48,23 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
           <input id="timezone" name="timezone" value="${escapeHtml(settings.timezone ?? '')}" />
           <p class="field-help">Used for date/time display in future features. Keep this set to your local timezone.</p>
         </div>
+      </section>
+
+      <section>
+        <h2>Public theme</h2>
+        <p class="field-help">Choose how your public website looks. Theme changes are saved separately from other settings.</p>
         <div>
-          <label for="theme">Theme</label>
-          <input id="theme" name="theme" value="${escapeHtml(settings.theme ?? '')}" />
-          <p class="field-help">Current active public theme identifier.</p>
+          <label for="activeThemeId">Active public theme</label>
+          <select id="activeThemeId" name="activeThemeId">
+            <option value="">Loading themes…</option>
+          </select>
+          <p class="field-help" id="theme-selection-help">Select a theme and save to apply it on your public website.</p>
         </div>
+        <p id="theme-state" class="field-help" aria-live="polite"></p>
+        <div>
+          <button type="button" id="save-theme-button">Save theme</button>
+        </div>
+        <p id="theme-status" aria-live="polite" class="muted"></p>
       </section>
 
       <div>
@@ -63,13 +75,95 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
     <script>
       const form = document.getElementById('settings-form');
       const status = document.getElementById('status');
-      const fields = ['siteName', 'tagline', 'homepageIntro', 'footerText', 'timezone', 'theme'];
+      const themeStatus = document.getElementById('theme-status');
+      const themeState = document.getElementById('theme-state');
+      const themeSelect = document.getElementById('activeThemeId');
+      const saveThemeButton = document.getElementById('save-theme-button');
+      const fields = ['siteName', 'tagline', 'homepageIntro', 'footerText', 'timezone'];
 
       const setStatus = (text) => {
         if (status) {
           status.textContent = text;
         }
       };
+
+      const setThemeStatus = (text) => {
+        if (themeStatus) {
+          themeStatus.textContent = text;
+        }
+      };
+
+      const setThemeState = (text) => {
+        if (themeState) {
+          themeState.textContent = text;
+        }
+      };
+
+      const describeTheme = (theme, fallbackId) => {
+        const title = typeof theme?.title === 'string' && theme.title.trim() ? theme.title.trim() : (theme?.id ?? 'Unnamed theme');
+        const suffix = theme?.id ? ' (' + theme.id + ')' : '';
+        const fallbackTag = fallbackId && theme?.id === fallbackId ? ' — default fallback' : '';
+        return title + suffix + fallbackTag;
+      };
+
+      const renderThemeOptions = (themes, configuredThemeId, defaultThemeId) => {
+        if (!themeSelect) {
+          return;
+        }
+
+        themeSelect.innerHTML = '';
+        if (!Array.isArray(themes) || themes.length === 0) {
+          const option = document.createElement('option');
+          option.value = '';
+          option.textContent = 'No themes available';
+          themeSelect.appendChild(option);
+          themeSelect.disabled = true;
+          return;
+        }
+
+        themeSelect.disabled = false;
+        themes.forEach((theme) => {
+          if (!theme || typeof theme.id !== 'string') {
+            return;
+          }
+
+          const option = document.createElement('option');
+          option.value = theme.id;
+          option.textContent = describeTheme(theme, defaultThemeId);
+          option.selected = theme.id === configuredThemeId;
+          themeSelect.appendChild(option);
+        });
+      };
+
+      const applyThemeStatus = (themeData) => {
+        const configuredThemeId = themeData?.configuredThemeId ?? '';
+        const resolvedThemeId = themeData?.resolvedThemeId ?? '';
+        const defaultThemeId = themeData?.defaultThemeId ?? 'default';
+        const fallbackApplied = themeData?.fallbackApplied === true;
+        const themes = Array.isArray(themeData?.themes) ? themeData.themes : [];
+        const configuredTheme = themes.find((theme) => theme.id === configuredThemeId);
+        const resolvedTheme = themes.find((theme) => theme.id === resolvedThemeId);
+
+        renderThemeOptions(themes, configuredThemeId, defaultThemeId);
+
+        if (fallbackApplied) {
+          setThemeState('Configured theme: ' + configuredThemeId + '. Active public theme: ' + describeTheme(resolvedTheme, defaultThemeId) + '. Default fallback is active.');
+        } else {
+          setThemeState('Configured theme: ' + describeTheme(configuredTheme, defaultThemeId) + '. This theme is currently active on the public website.');
+        }
+      };
+
+      const loadThemeStatus = () => fetch('/admin-api/system/themes')
+        .then((response) => response.ok ? response.json() : Promise.reject(new Error('failed')))
+        .then((themeData) => {
+          applyThemeStatus(themeData);
+          setThemeStatus('Theme status loaded.');
+          return themeData;
+        })
+        .catch(() => {
+          setThemeState('Could not load theme details. The website keeps using the last saved theme.');
+          setThemeStatus('Theme settings are temporarily unavailable. Refresh and try again.');
+        });
 
       const load = () => fetch('/admin-api/settings')
         .then((response) => response.ok ? response.json() : Promise.reject(new Error('failed')))
@@ -85,6 +179,38 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         .catch(() => {
           setStatus('Could not load settings. Refresh and try again.');
         });
+
+      saveThemeButton?.addEventListener('click', () => {
+        const themeId = themeSelect?.value ?? '';
+        if (!themeId) {
+          setThemeStatus('Choose a theme before saving.');
+          return;
+        }
+
+        setThemeStatus('Saving theme...');
+
+        void fetch('/admin-api/system/themes', {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ themeId })
+        })
+          .then(async (response) => {
+            if (response.ok) {
+              return response.json();
+            }
+
+            const payload = await response.json().catch(() => ({}));
+            return Promise.reject(new Error(payload?.error?.message || 'Theme update failed.'));
+          })
+          .then((themeData) => {
+            applyThemeStatus(themeData);
+            setThemeStatus('Theme saved. Your public website now uses the selected theme.');
+          })
+          .catch((error) => {
+            const message = error instanceof Error && error.message ? error.message : 'Could not save theme. Please try again.';
+            setThemeStatus('Could not save theme: ' + message);
+          });
+      });
 
       form?.addEventListener('submit', (event) => {
         event.preventDefault();
@@ -106,5 +232,6 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
       });
 
       void load();
+      void loadThemeStatus();
     </script>`
 });
