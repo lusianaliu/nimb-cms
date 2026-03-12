@@ -62,6 +62,10 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         </div>
         <p id="theme-state" class="field-help" aria-live="polite"></p>
         <p id="theme-selection-warning" class="field-help" aria-live="polite"></p>
+        <details id="theme-diagnostics" class="field-help">
+          <summary id="theme-diagnostics-summary">Theme diagnostics: loading…</summary>
+          <ul id="theme-diagnostics-list"></ul>
+        </details>
         <div>
           <button type="button" id="save-theme-button">Save theme</button>
         </div>
@@ -79,6 +83,8 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
       const themeStatus = document.getElementById('theme-status');
       const themeState = document.getElementById('theme-state');
       const themeSelectionWarning = document.getElementById('theme-selection-warning');
+      const themeDiagnosticsSummary = document.getElementById('theme-diagnostics-summary');
+      const themeDiagnosticsList = document.getElementById('theme-diagnostics-list');
       const themeSelect = document.getElementById('activeThemeId');
       const saveThemeButton = document.getElementById('save-theme-button');
       const fields = ['siteName', 'tagline', 'homepageIntro', 'footerText', 'timezone'];
@@ -107,6 +113,25 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         if (themeSelectionWarning) {
           themeSelectionWarning.textContent = text;
         }
+      };
+
+      const setThemeDiagnosticsSummary = (text) => {
+        if (themeDiagnosticsSummary) {
+          themeDiagnosticsSummary.textContent = text;
+        }
+      };
+
+      const setThemeDiagnosticsRows = (rows) => {
+        if (!themeDiagnosticsList) {
+          return;
+        }
+
+        themeDiagnosticsList.innerHTML = '';
+        rows.forEach((row) => {
+          const item = document.createElement('li');
+          item.textContent = row;
+          themeDiagnosticsList.appendChild(item);
+        });
       };
 
       const describeTheme = (theme, fallbackId) => {
@@ -151,6 +176,53 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         }
 
         return 'Ready to save. This theme supports all canonical templates.';
+      };
+
+      const applyThemeDiagnostics = (themeData, selectedThemeId) => {
+        const configuredThemeId = themeData?.configuredThemeId ?? '';
+        const resolvedThemeId = themeData?.resolvedThemeId ?? '';
+        const defaultThemeId = themeData?.defaultThemeId ?? 'default';
+        const fallbackApplied = themeData?.fallbackApplied === true;
+        const themes = Array.isArray(themeData?.themes) ? themeData.themes : [];
+        const selectedTheme = themes.find((theme) => theme?.id === selectedThemeId);
+        const configuredTheme = themes.find((theme) => theme?.id === configuredThemeId);
+        const resolvedTheme = themes.find((theme) => theme?.id === resolvedThemeId);
+        const diagnostics = [];
+
+        diagnostics.push('Selected in settings: ' + describeTheme(configuredTheme, defaultThemeId) + '.');
+        diagnostics.push('Resolved by runtime: ' + describeTheme(resolvedTheme, defaultThemeId) + '.');
+
+        if (fallbackApplied) {
+          diagnostics.push('Full-theme fallback is active because the configured theme could not be resolved at runtime.');
+        } else {
+          diagnostics.push('Full-theme fallback is not active.');
+        }
+
+        if (!selectedTheme) {
+          diagnostics.push('Select a listed theme to view completeness details.');
+          setThemeDiagnosticsSummary('Theme diagnostics: select a theme to view details');
+          setThemeDiagnosticsRows(diagnostics);
+          return;
+        }
+
+        if (selectedTheme.supportsAllCanonicalTemplates === false) {
+          const missingTemplates = Array.isArray(selectedTheme.missingTemplates) ? selectedTheme.missingTemplates : [];
+          if (missingTemplates.length > 0) {
+            diagnostics.push('Selected theme completeness: missing canonical templates — ' + missingTemplates.join(', ') + '.');
+            diagnostics.push('Per-template fallback: missing pages are safely rendered with default theme templates.');
+            setThemeDiagnosticsSummary('Theme diagnostics: incomplete theme (per-template fallback may be used)');
+          } else {
+            diagnostics.push('Selected theme completeness: canonical template coverage is unavailable in detail.');
+            diagnostics.push('Per-template fallback may still be used for missing pages.');
+            setThemeDiagnosticsSummary('Theme diagnostics: incomplete theme');
+          }
+        } else {
+          diagnostics.push('Selected theme completeness: all canonical templates are available.');
+          diagnostics.push('Per-template fallback is not expected for canonical pages.');
+          setThemeDiagnosticsSummary('Theme diagnostics: selected theme is complete');
+        }
+
+        setThemeDiagnosticsRows(diagnostics);
       };
 
       const renderThemeOptions = (themes, configuredThemeId, defaultThemeId) => {
@@ -206,7 +278,9 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
           setThemeState('Configured theme: ' + describeTheme(configuredTheme, defaultThemeId) + '. This theme is currently active on the public website.');
         }
 
-        setThemeSelectionWarning(buildThemeSelectionWarning(themeData, themeSelect?.value ?? configuredThemeId));
+        const selectedThemeId = themeSelect?.value ?? configuredThemeId;
+        setThemeSelectionWarning(buildThemeSelectionWarning(themeData, selectedThemeId));
+        applyThemeDiagnostics(themeData, selectedThemeId);
       };
 
       const loadThemeStatus = () => fetch('/admin-api/system/themes')
@@ -219,6 +293,11 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         .catch(() => {
           setThemeState('Could not load theme details. The website keeps using the last saved theme.');
           setThemeSelectionWarning('Theme readiness details are unavailable right now.');
+          setThemeDiagnosticsSummary('Theme diagnostics: unavailable right now');
+          setThemeDiagnosticsRows([
+            'Theme diagnostics could not be loaded from /admin-api/system/themes.',
+            'Theme status may still be active, but detailed diagnostics are temporarily unavailable.'
+          ]);
           setThemeStatus('Theme settings are temporarily unavailable. Refresh and try again.');
         });
 
@@ -245,6 +324,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         }
 
         setThemeSelectionWarning(buildThemeSelectionWarning(currentThemeData, selectedThemeId));
+        applyThemeDiagnostics(currentThemeData, selectedThemeId);
       });
 
       saveThemeButton?.addEventListener('click', () => {
