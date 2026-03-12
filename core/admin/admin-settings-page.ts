@@ -59,6 +59,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
             <option value="">Loading themes…</option>
           </select>
           <p class="field-help" id="theme-selection-help">Select a theme and save to apply it on your public website.</p>
+          <p class="field-help" id="theme-coverage-hint" aria-live="polite"></p>
         </div>
         <p id="theme-state" class="field-help" aria-live="polite"></p>
         <p id="theme-selection-warning" class="field-help" aria-live="polite"></p>
@@ -83,6 +84,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
       const themeStatus = document.getElementById('theme-status');
       const themeState = document.getElementById('theme-state');
       const themeSelectionWarning = document.getElementById('theme-selection-warning');
+      const themeCoverageHint = document.getElementById('theme-coverage-hint');
       const themeDiagnosticsSummary = document.getElementById('theme-diagnostics-summary');
       const themeDiagnosticsList = document.getElementById('theme-diagnostics-list');
       const themeSelect = document.getElementById('activeThemeId');
@@ -115,6 +117,12 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         }
       };
 
+      const setThemeCoverageHint = (text) => {
+        if (themeCoverageHint) {
+          themeCoverageHint.textContent = text;
+        }
+      };
+
       const setThemeDiagnosticsSummary = (text) => {
         if (themeDiagnosticsSummary) {
           themeDiagnosticsSummary.textContent = text;
@@ -139,6 +147,63 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         const suffix = theme?.id ? ' (' + theme.id + ')' : '';
         const fallbackTag = fallbackId && theme?.id === fallbackId ? ' — default fallback' : '';
         return title + suffix + fallbackTag;
+      };
+
+      const describeThemeCoverageTag = (theme, defaultThemeId) => {
+        if (!theme || typeof theme.id !== 'string') {
+          return 'Coverage unknown';
+        }
+
+        if (theme.id === defaultThemeId) {
+          return 'Default fallback';
+        }
+
+        if (theme.supportsAllCanonicalTemplates === true) {
+          return 'Complete';
+        }
+
+        if (theme.supportsAllCanonicalTemplates === false) {
+          return 'Incomplete';
+        }
+
+        return 'Coverage unknown';
+      };
+
+      const buildThemeCoverageHint = (themeData, selectedThemeId) => {
+        const defaultThemeId = themeData?.defaultThemeId ?? 'default';
+        const fallbackApplied = themeData?.fallbackApplied === true;
+        const configuredThemeId = themeData?.configuredThemeId ?? '';
+        const resolvedThemeId = themeData?.resolvedThemeId ?? '';
+        const themes = Array.isArray(themeData?.themes) ? themeData.themes : [];
+        const selectedTheme = themes.find((theme) => theme?.id === selectedThemeId);
+
+        if (!selectedTheme) {
+          return 'Coverage hint: choose a listed theme to see completeness guidance.';
+        }
+
+        if (selectedTheme.id === defaultThemeId) {
+          return 'Coverage hint: default fallback theme — complete coverage for canonical pages.';
+        }
+
+        if (selectedTheme.supportsAllCanonicalTemplates === true) {
+          return 'Coverage hint: complete theme — canonical pages are covered.';
+        }
+
+        const missingCount = Array.isArray(selectedTheme.missingTemplates) ? selectedTheme.missingTemplates.length : 0;
+
+        if (missingCount > 0) {
+          return 'Coverage hint: incomplete theme — ' + missingCount + ' canonical page template' + (missingCount === 1 ? '' : 's') + ' may use default fallback.';
+        }
+
+        if (selectedTheme.supportsAllCanonicalTemplates === false) {
+          return 'Coverage hint: incomplete theme — some canonical pages may use default fallback.';
+        }
+
+        if (fallbackApplied && selectedTheme.id === configuredThemeId && configuredThemeId !== resolvedThemeId) {
+          return 'Coverage hint: runtime is currently using the default fallback theme.';
+        }
+
+        return 'Coverage hint: completeness details are limited for this theme.';
       };
 
       const buildThemeSelectionWarning = (themeData, selectedThemeId) => {
@@ -249,7 +314,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
 
           const option = document.createElement('option');
           option.value = theme.id;
-          option.textContent = describeTheme(theme, defaultThemeId);
+          option.textContent = describeTheme(theme, defaultThemeId) + ' — ' + describeThemeCoverageTag(theme, defaultThemeId);
           option.selected = theme.id === configuredThemeId;
           themeSelect.appendChild(option);
         });
@@ -279,6 +344,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         }
 
         const selectedThemeId = themeSelect?.value ?? configuredThemeId;
+        setThemeCoverageHint(buildThemeCoverageHint(themeData, selectedThemeId));
         setThemeSelectionWarning(buildThemeSelectionWarning(themeData, selectedThemeId));
         applyThemeDiagnostics(themeData, selectedThemeId);
       };
@@ -292,6 +358,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         })
         .catch(() => {
           setThemeState('Could not load theme details. The website keeps using the last saved theme.');
+          setThemeCoverageHint('Coverage hint is unavailable right now because theme status could not be loaded.');
           setThemeSelectionWarning('Theme readiness details are unavailable right now.');
           setThemeDiagnosticsSummary('Theme diagnostics: unavailable right now');
           setThemeDiagnosticsRows([
@@ -319,10 +386,12 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
       themeSelect?.addEventListener('change', () => {
         const selectedThemeId = themeSelect?.value ?? '';
         if (!currentThemeData) {
+          setThemeCoverageHint('Coverage hint: theme details are still loading.');
           setThemeSelectionWarning('Theme details are still loading.');
           return;
         }
 
+        setThemeCoverageHint(buildThemeCoverageHint(currentThemeData, selectedThemeId));
         setThemeSelectionWarning(buildThemeSelectionWarning(currentThemeData, selectedThemeId));
         applyThemeDiagnostics(currentThemeData, selectedThemeId);
       });
