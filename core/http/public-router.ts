@@ -71,10 +71,15 @@ const getNavigationPages = (runtime) => queryEntries(runtime, 'page', { sort: 'u
   .slice(0, 5)
   .map(toRenderableEntry);
 
-const renderNotFound = (runtime, routePath: string) => runtime?.themeRenderer?.renderTemplate?.('not-found', runtime, {
-  routePath,
+const createThemeVariables = (context, baseVariables: Record<string, unknown> = {}) => ({
+  routePath: context.path,
+  routeParams: context.params ?? {},
+  ...baseVariables
+});
+
+const renderNotFound = (runtime, context) => runtime?.themeRenderer?.renderTemplate?.('not-found', runtime, createThemeVariables(context, {
   pages: getNavigationPages(runtime)
-}) ?? 'Not Found';
+})) ?? 'Not Found';
 
 export const createPublicRouter = (runtime) => createRouter([
   {
@@ -88,11 +93,10 @@ export const createPublicRouter = (runtime) => createRouter([
         .filter(isPublishedEntry)
         .map(toRenderableEntry);
 
-      return toHtmlResponse(runtime?.themeRenderer?.renderTemplate?.('homepage', runtime, {
-        routePath: context.path,
+      return toHtmlResponse(runtime?.themeRenderer?.renderTemplate?.('homepage', runtime, createThemeVariables(context, {
         pages: getNavigationPages(runtime),
         posts
-      }) ?? '');
+      })) ?? '');
     }
   },
   {
@@ -106,11 +110,10 @@ export const createPublicRouter = (runtime) => createRouter([
         .filter(isPublishedEntry)
         .map(toRenderableEntry);
 
-      return toHtmlResponse(runtime?.themeRenderer?.renderTemplate?.('post-list', runtime, {
-        routePath: context.path,
+      return toHtmlResponse(runtime?.themeRenderer?.renderTemplate?.('post-list', runtime, createThemeVariables(context, {
         pages: getNavigationPages(runtime),
         posts
-      }) ?? '');
+      })) ?? '');
     }
   },
   {
@@ -119,14 +122,13 @@ export const createPublicRouter = (runtime) => createRouter([
     handler: (context) => {
       const post = getPostBySlug(runtime, `${context.params?.slug ?? ''}`);
       if (!post) {
-        return toHtmlResponse(renderNotFound(runtime, context.path), 404);
+        return toHtmlResponse(renderNotFound(runtime, context), 404);
       }
 
-      return toHtmlResponse(runtime?.themeRenderer?.renderTemplate?.('post-page', runtime, {
-        routePath: context.path,
+      return toHtmlResponse(runtime?.themeRenderer?.renderTemplate?.('post-page', runtime, createThemeVariables(context, {
         pages: getNavigationPages(runtime),
         post: toRenderableEntry(post)
-      }) ?? '');
+      })) ?? '');
     }
   },
   {
@@ -135,14 +137,13 @@ export const createPublicRouter = (runtime) => createRouter([
     handler: (context) => {
       const page = getPageBySlug(runtime, `${context.params?.pageSlug ?? ''}`);
       if (!page) {
-        return toHtmlResponse(renderNotFound(runtime, context.path), 404);
+        return toHtmlResponse(renderNotFound(runtime, context), 404);
       }
 
-      return toHtmlResponse(runtime?.themeRenderer?.renderTemplate?.('page', runtime, {
-        routePath: context.path,
+      return toHtmlResponse(runtime?.themeRenderer?.renderTemplate?.('page', runtime, createThemeVariables(context, {
         pages: getNavigationPages(runtime),
         page: toRenderableEntry(page)
-      }) ?? '');
+      })) ?? '');
     }
   }
 ]);

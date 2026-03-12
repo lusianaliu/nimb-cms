@@ -1,3 +1,9 @@
+/**
+ * Legacy public-theme manager retained for compatibility with older runtime wiring.
+ *
+ * Canonical public-site rendering path is `runtime.themeRenderer` from
+ * `core/theme/theme-renderer.ts` used by `core/http/public-router.ts`.
+ */
 import { createDefaultPublicTheme } from './default/index.ts';
 
 export interface ThemeRenderer {

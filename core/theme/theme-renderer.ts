@@ -1,3 +1,9 @@
+import {
+  THEME_TEMPLATE_ALIASES,
+  type CanonicalThemeTemplateName,
+  type ThemeTemplateContext,
+  type ThemeTemplateName
+} from './theme-contract.ts';
 import { defaultThemeTemplates } from '../../themes/default/index.ts';
 
 const DEFAULT_SITE_NAME = 'My Nimb Site';
@@ -24,39 +30,53 @@ const readSiteName = (runtime) => {
   return DEFAULT_SITE_NAME;
 };
 
-const mapLegacyTemplateName = (templateName: string): string => {
-  if (templateName === 'index' || templateName === 'home') {
-    return 'homepage';
-  }
+const isCanonicalTemplateName = (templateName: string): templateName is CanonicalThemeTemplateName =>
+  Object.hasOwn(defaultThemeTemplates, templateName);
 
-  if (templateName === 'blog' || templateName === 'blog-list') {
-    return 'post-list';
-  }
+export const resolveCanonicalTemplateName = (templateName: ThemeTemplateName = 'homepage'): CanonicalThemeTemplateName => {
+  const normalizedName = `${templateName}`.trim();
+  const aliasTarget = THEME_TEMPLATE_ALIASES[normalizedName as keyof typeof THEME_TEMPLATE_ALIASES];
+  const resolvedTemplateName = aliasTarget ?? normalizedName;
 
-  if (templateName === 'post' || templateName === 'blog-single') {
-    return 'post-page';
-  }
+  return isCanonicalTemplateName(resolvedTemplateName) ? resolvedTemplateName : 'page';
+};
 
-  return templateName;
+const normalizeEntries = (value: unknown): ThemeTemplateContext['posts'] => Array.isArray(value)
+  ? value
+    .filter((entry) => entry && typeof entry === 'object')
+    .map((entry) => entry as ThemeTemplateContext['posts'][number])
+  : [];
+
+const toThemeTemplateContext = (runtime, pageVariables: Record<string, unknown> = {}): ThemeTemplateContext => {
+  const settings = readSiteSettings(runtime);
+
+  return {
+    siteName: readSiteName(runtime),
+    siteTagline: typeof settings.tagline === 'string' && settings.tagline.trim() ? settings.tagline : DEFAULT_TAGLINE,
+    homepageIntro: typeof settings.homepageIntro === 'string' && settings.homepageIntro.trim() ? settings.homepageIntro : DEFAULT_HOMEPAGE_INTRO,
+    footerText: typeof settings.footerText === 'string' ? settings.footerText : '',
+    routePath: `${pageVariables.routePath ?? '/'}`,
+    routeParams: pageVariables.routeParams && typeof pageVariables.routeParams === 'object'
+      ? Object.fromEntries(Object.entries(pageVariables.routeParams as Record<string, unknown>).map(([key, value]) => [key, `${value}`]))
+      : {},
+    pages: normalizeEntries(pageVariables.pages),
+    posts: normalizeEntries(pageVariables.posts),
+    page: pageVariables.page && typeof pageVariables.page === 'object'
+      ? pageVariables.page as ThemeTemplateContext['page']
+      : undefined,
+    post: pageVariables.post && typeof pageVariables.post === 'object'
+      ? pageVariables.post as ThemeTemplateContext['post']
+      : undefined
+  };
 };
 
 export const createThemeRenderer = (runtime) => Object.freeze({
-  renderTemplate(templateName = 'homepage', rendererRuntime = runtime, pageVariables: Record<string, unknown> = {}) {
-    const resolvedTemplateName = mapLegacyTemplateName(templateName);
+  renderTemplate(templateName: ThemeTemplateName = 'homepage', rendererRuntime = runtime, pageVariables: Record<string, unknown> = {}) {
+    const resolvedTemplateName = resolveCanonicalTemplateName(templateName);
     const template = defaultThemeTemplates[resolvedTemplateName] ?? defaultThemeTemplates.page;
-
-    const settings = readSiteSettings(rendererRuntime);
-
-    return template({
-      siteName: readSiteName(rendererRuntime),
-      siteTagline: typeof settings.tagline === 'string' && settings.tagline.trim() ? settings.tagline : DEFAULT_TAGLINE,
-      homepageIntro: typeof settings.homepageIntro === 'string' && settings.homepageIntro.trim() ? settings.homepageIntro : DEFAULT_HOMEPAGE_INTRO,
-      footerText: typeof settings.footerText === 'string' ? settings.footerText : '',
-      routePath: `${pageVariables.routePath ?? '/'}`,
-      ...pageVariables
-    });
+    return template(toThemeTemplateContext(rendererRuntime, pageVariables));
   },
-  renderThemePage(page = 'index', rendererRuntime = runtime, pageVariables: Record<string, unknown> = {}) {
+  renderThemePage(page: ThemeTemplateName = 'index', rendererRuntime = runtime, pageVariables: Record<string, unknown> = {}) {
     return this.renderTemplate(page, rendererRuntime, pageVariables);
   }
 });

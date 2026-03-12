@@ -1,29 +1,11 @@
+import type { CanonicalThemeTemplateName, ThemeTemplateContext } from '../../core/theme/theme-contract.ts';
+
 const escapeHtml = (value: unknown): string => `${value ?? ''}`
   .replaceAll('&', '&amp;')
   .replaceAll('<', '&lt;')
   .replaceAll('>', '&gt;')
   .replaceAll('"', '&quot;')
   .replaceAll("'", '&#39;');
-
-type ThemeEntry = {
-  title: string;
-  slug: string;
-  content: string;
-  updatedAt: string;
-  excerpt?: string;
-};
-
-type ThemeContext = {
-  siteName: string;
-  siteTagline?: string;
-  homepageIntro?: string;
-  footerText?: string;
-  routePath: string;
-  posts?: ThemeEntry[];
-  post?: ThemeEntry;
-  page?: ThemeEntry;
-  pages?: ThemeEntry[];
-};
 
 const formatDate = (value: string): string => {
   if (!value) {
@@ -67,7 +49,7 @@ const baseStyles = `
   .site-footer { border-top: 1px solid #dbe4ee; padding: 1rem 0 2rem; color: #64748b; }
 `;
 
-const renderNavigation = (routePath: string, pages: ThemeEntry[] = []): string => {
+const renderNavigation = (routePath: string, pages: ThemeTemplateContext['pages'] = []): string => {
   const pageLinks = pages
     .filter((page) => `${page.slug ?? ''}`.trim() !== '')
     .sort((a, b) => `${a.title}`.localeCompare(`${b.title}`))
@@ -85,24 +67,24 @@ const renderNavigation = (routePath: string, pages: ThemeEntry[] = []): string =
   </nav>`;
 };
 
-const renderLayout = ({ siteName, siteTagline, footerText, routePath, pages }: ThemeContext, body: string): string => {
-  const resolvedTagline = `${siteTagline ?? ''}`.trim() || 'A simple website powered by Nimb CMS.';
-  const resolvedFooterText = `${footerText ?? ''}`.trim() || `© ${new Date().getFullYear()} ${siteName}.`;
+const renderLayout = (context: ThemeTemplateContext, body: string): string => {
+  const resolvedTagline = `${context.siteTagline ?? ''}`.trim() || 'A simple website powered by Nimb CMS.';
+  const resolvedFooterText = `${context.footerText ?? ''}`.trim() || `© ${new Date().getFullYear()} ${context.siteName}.`;
 
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${escapeHtml(siteName)}</title>
+    <title>${escapeHtml(context.siteName)}</title>
     <style>${baseStyles}</style>
   </head>
   <body>
     <header>
       <div class="site-shell site-header">
-        <h1 class="site-title">${escapeHtml(siteName)}</h1>
+        <h1 class="site-title">${escapeHtml(context.siteName)}</h1>
         <p class="site-tagline">${escapeHtml(resolvedTagline)}</p>
-        ${renderNavigation(routePath, pages)}
+        ${renderNavigation(context.routePath, context.pages)}
       </div>
     </header>
     <main class="site-shell">${body}</main>
@@ -115,12 +97,11 @@ const renderLayout = ({ siteName, siteTagline, footerText, routePath, pages }: T
 </html>`;
 };
 
-const renderHomepage = (context: ThemeContext): string => {
-  const posts = Array.isArray(context.posts) ? context.posts : [];
+const renderHomepage = (context: ThemeTemplateContext): string => {
   const homepageIntro = `${context.homepageIntro ?? ''}`.trim() || 'This homepage is ready for a company profile website. Create and publish pages like About, Services, and Contact from admin.';
 
-  const latestPostMarkup = posts.length > 0
-    ? `<section class="panel"><h2>Latest from the blog</h2>${posts.slice(0, 3)
+  const latestPostMarkup = context.posts.length > 0
+    ? `<section class="panel"><h2>Latest from the blog</h2>${context.posts.slice(0, 3)
       .map((post) => `<article><h3><a href="/blog/${encodeURIComponent(post.slug)}">${escapeHtml(post.title)}</a></h3><p>${escapeHtml(toExcerpt(post.content))}</p></article>`)
       .join('')}</section>`
     : '<section class="panel"><h2>Latest from the blog</h2><p>No blog posts published yet. Write your first post in admin to start sharing updates.</p></section>';
@@ -128,46 +109,40 @@ const renderHomepage = (context: ThemeContext): string => {
   return renderLayout(context, `<section class="panel"><h2>Welcome</h2><p>${escapeHtml(homepageIntro)}</p></section>${latestPostMarkup}`);
 };
 
-const renderPostList = (context: ThemeContext): string => {
-  const posts = Array.isArray(context.posts) ? context.posts : [];
-
-  if (posts.length < 1) {
+const renderPostList = (context: ThemeTemplateContext): string => {
+  if (context.posts.length < 1) {
     return renderLayout(context, '<section class="panel"><h2>Blog</h2><p>No posts published yet. Check back soon.</p></section>');
   }
 
-  const listMarkup = posts
+  const listMarkup = context.posts
     .map((post) => `<article class="panel"><h3><a href="/blog/${encodeURIComponent(post.slug)}">${escapeHtml(post.title)}</a></h3><p class="meta">Updated ${escapeHtml(formatDate(post.updatedAt) || 'recently')}</p><p>${escapeHtml(toExcerpt(post.content))}</p></article>`)
     .join('');
 
   return renderLayout(context, `<section><h2>Blog</h2><p class="meta">Latest published posts.</p>${listMarkup}</section>`);
 };
 
-const renderPostPage = (context: ThemeContext): string => {
-  const post = context.post;
-
-  if (!post) {
+const renderPostPage = (context: ThemeTemplateContext): string => {
+  if (!context.post) {
     return renderLayout(context, '<section class="panel"><h2>Post not found</h2><p>We could not find that post. Try the <a href="/blog">blog list</a>.</p></section>');
   }
 
-  return renderLayout(context, `<article class="panel"><h2>${escapeHtml(post.title)}</h2><p class="meta">Updated ${escapeHtml(formatDate(post.updatedAt) || 'recently')}</p><div class="content">${escapeHtml(post.content)}</div></article>`);
+  return renderLayout(context, `<article class="panel"><h2>${escapeHtml(context.post.title)}</h2><p class="meta">Updated ${escapeHtml(formatDate(context.post.updatedAt) || 'recently')}</p><div class="content">${escapeHtml(context.post.content)}</div></article>`);
 };
 
-const renderPage = (context: ThemeContext): string => {
-  const page = context.page;
-
-  if (!page) {
+const renderPage = (context: ThemeTemplateContext): string => {
+  if (!context.page) {
     return renderLayout(context, '<section class="panel"><h2>Page not found</h2><p>We could not find that page. Return to the <a href="/">homepage</a>.</p></section>');
   }
 
-  return renderLayout(context, `<article class="panel"><h2>${escapeHtml(page.title)}</h2><div class="content">${escapeHtml(page.content)}</div></article>`);
+  return renderLayout(context, `<article class="panel"><h2>${escapeHtml(context.page.title)}</h2><div class="content">${escapeHtml(context.page.content)}</div></article>`);
 };
 
-const renderNotFound = (context: ThemeContext): string => renderLayout(
+const renderNotFound = (context: ThemeTemplateContext): string => renderLayout(
   context,
   `<section class="panel"><h2>Page not found</h2><p>We couldn't find <code>${escapeHtml(context.routePath)}</code>.</p><p><a href="/">Go to homepage</a> or visit the <a href="/blog">blog</a>.</p></section>`
 );
 
-export const defaultThemeTemplates = Object.freeze({
+export const defaultThemeTemplates: Record<CanonicalThemeTemplateName, (context: ThemeTemplateContext) => string> = Object.freeze({
   homepage: renderHomepage,
   'post-list': renderPostList,
   'post-page': renderPostPage,
