@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createThemeRenderer, listRegisteredPublicThemes, resolveCanonicalTemplateName } from '../core/theme/theme-renderer.ts';
+import { createThemeRenderer, listRegisteredPublicThemeDetails, listRegisteredPublicThemes, resolveCanonicalTemplateName } from '../core/theme/theme-renderer.ts';
 
 test('resolveCanonicalTemplateName keeps canonical names and maps legacy aliases', () => {
   assert.equal(resolveCanonicalTemplateName('homepage'), 'homepage');
@@ -123,3 +123,13 @@ test('createThemeRenderer falls back to default template when selected theme is 
 test('listRegisteredPublicThemes includes default and sunrise', () => {
   assert.deepEqual(listRegisteredPublicThemes().sort(), ['default', 'sunrise']);
 });
+
+test('listRegisteredPublicThemeDetails returns builtin metadata for discovery', () => {
+  const themes = listRegisteredPublicThemeDetails();
+
+  assert.deepEqual(themes.map((theme) => theme.id), ['default', 'sunrise']);
+  assert.equal(themes[0].isDefault, true);
+  assert.equal(themes[0].source, 'builtin');
+  assert.equal(typeof themes[0].templates.homepage, 'function');
+});
+
