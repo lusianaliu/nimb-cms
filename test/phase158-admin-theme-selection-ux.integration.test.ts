@@ -44,9 +44,12 @@ test('phase 158: admin settings page exposes minimal theme selection UX bound to
     assert.equal(html.includes('id="activeThemeId"'), true);
     assert.equal(html.includes('id="save-theme-button"'), true);
     assert.equal(html.includes('id="theme-state"'), true);
+    assert.equal(html.includes('id="theme-selection-warning"'), true);
     assert.equal(html.includes('/admin-api/system/themes'), true);
     assert.equal(html.includes('Default fallback is active.'), true);
-    assert.equal(html.includes('Theme saved. Your public website now uses the selected theme.'), true);
+    assert.equal(html.includes('This theme is already active. No save was needed.'), true);
+    assert.equal(html.includes('Theme saved and active. Your public website now uses the selected theme.'), true);
+    assert.equal(html.includes('supports all canonical templates'), true);
   } finally {
     await server.stop();
   }
@@ -77,6 +80,7 @@ test('phase 158: canonical theme read/write API remains coherent after admin UX 
     assert.equal(updatedPayload.configuredThemeId, 'sunrise');
     assert.equal(updatedPayload.resolvedThemeId, 'sunrise');
     assert.equal(updatedPayload.fallbackApplied, false);
+    assert.equal(updatedPayload.themes[0].supportsAllCanonicalTemplates, true);
 
     const invalidResponse = await fetch(`http://127.0.0.1:${port}/admin-api/system/themes`, {
       method: 'PUT',

@@ -62,6 +62,8 @@ test('phase 156: admin read API exposes theme status with configured/resolved vi
     assert.equal(payload.fallbackApplied, true);
     assert.deepEqual(payload.themes.map((theme) => theme.id), ['default', 'sunrise']);
     assert.deepEqual(payload.themes[0].templates, ['homepage', 'page', 'post-list', 'post-page', 'not-found']);
+    assert.deepEqual(payload.themes[0].missingTemplates, []);
+    assert.equal(payload.themes[0].supportsAllCanonicalTemplates, true);
   } finally {
     await server.stop();
   }

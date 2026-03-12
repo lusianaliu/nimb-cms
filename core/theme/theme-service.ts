@@ -13,7 +13,9 @@ export type ThemeListItem = {
   title: string,
   source: RegisteredPublicTheme['source'],
   isDefault: boolean,
-  templates: CanonicalThemeTemplateName[]
+  templates: CanonicalThemeTemplateName[],
+  missingTemplates: CanonicalThemeTemplateName[],
+  supportsAllCanonicalTemplates: boolean
 };
 
 export type ThemeStatus = {
@@ -42,13 +44,23 @@ const readConfiguredThemeId = (runtime): string => {
 const listAvailableTemplates = (theme: RegisteredPublicTheme): CanonicalThemeTemplateName[] => CANONICAL_THEME_TEMPLATE_NAMES
   .filter((templateName) => typeof theme.templates?.[templateName] === 'function');
 
-const toThemeListItem = (theme: RegisteredPublicTheme): ThemeListItem => Object.freeze({
-  id: theme.id,
-  title: theme.title,
-  source: theme.source,
-  isDefault: theme.isDefault,
-  templates: Object.freeze(listAvailableTemplates(theme))
-});
+const listMissingTemplates = (availableTemplates: CanonicalThemeTemplateName[]): CanonicalThemeTemplateName[] => CANONICAL_THEME_TEMPLATE_NAMES
+  .filter((templateName) => !availableTemplates.includes(templateName));
+
+const toThemeListItem = (theme: RegisteredPublicTheme): ThemeListItem => {
+  const templates = listAvailableTemplates(theme);
+  const missingTemplates = listMissingTemplates(templates);
+
+  return Object.freeze({
+    id: theme.id,
+    title: theme.title,
+    source: theme.source,
+    isDefault: theme.isDefault,
+    templates: Object.freeze(templates),
+    missingTemplates: Object.freeze(missingTemplates),
+    supportsAllCanonicalTemplates: missingTemplates.length === 0
+  });
+};
 
 export const createThemeService = (runtime) => {
   const readThemes = () => listBuiltinPublicThemes().map((theme) => toThemeListItem(theme));
