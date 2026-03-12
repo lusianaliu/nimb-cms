@@ -3,6 +3,7 @@ import {
   getBuiltinPublicThemeRecord,
   resolvePublicThemeId,
   listBuiltinPublicThemes,
+  isRegisteredPublicThemeId,
   type RegisteredPublicTheme
 } from './theme-registry.ts';
 import { CANONICAL_THEME_TEMPLATE_NAMES, type CanonicalThemeTemplateName } from './theme-contract.ts';
@@ -22,6 +23,16 @@ export type ThemeStatus = {
   fallbackApplied: boolean,
   themes: ThemeListItem[]
 };
+
+export class ThemeSelectionError extends Error {
+  code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = 'ThemeSelectionError';
+    this.code = code;
+  }
+}
 
 const readConfiguredThemeId = (runtime): string => {
   const configuredThemeId = `${runtime?.settings?.getSettings?.()?.theme ?? ''}`.trim();
@@ -65,11 +76,35 @@ export const createThemeService = (runtime) => {
     });
   };
 
+  const setConfiguredThemeId = (input: unknown): ThemeStatus => {
+    if (typeof input !== 'string') {
+      throw new ThemeSelectionError('INVALID_THEME_ID', 'themeId must be a string.');
+    }
+
+    const themeId = input.trim();
+    if (!themeId) {
+      throw new ThemeSelectionError('THEME_ID_REQUIRED', 'themeId must not be blank.');
+    }
+
+    if (!isRegisteredPublicThemeId(themeId, getBuiltinPublicThemeRecord())) {
+      throw new ThemeSelectionError('UNKNOWN_THEME_ID', `themeId "${themeId}" is not registered.`);
+    }
+
+    const configuredThemeId = getConfiguredThemeId();
+    if (configuredThemeId === themeId) {
+      return getStatus();
+    }
+
+    runtime?.settings?.updateSettings?.({ theme: themeId });
+    return getStatus();
+  };
+
   return Object.freeze({
     list: readThemes,
     getConfiguredThemeId,
     getResolvedThemeId,
     getActive,
-    getStatus
+    getStatus,
+    setConfiguredThemeId
   });
 };
