@@ -96,6 +96,29 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
       const canonicalTemplateCount = 5;
       let currentThemeData = null;
 
+      const focusElement = (element) => {
+        if (!element || typeof element.focus !== 'function') {
+          return;
+        }
+
+        element.focus({ preventScroll: true });
+      };
+
+      const updateSaveThemeButtonState = () => {
+        if (!saveThemeButton) {
+          return;
+        }
+
+        const selectedThemeId = themeSelect?.value ?? '';
+        const configuredThemeId = currentThemeData?.configuredThemeId ?? '';
+        const themeLoading = publicThemeSection?.getAttribute('aria-busy') === 'true';
+        const noThemeSelected = !selectedThemeId;
+        const noPendingChange = !!selectedThemeId && selectedThemeId === configuredThemeId;
+        const disabled = themeLoading || noThemeSelected || noPendingChange;
+
+        saveThemeButton.disabled = disabled;
+      };
+
       const setStatus = (text) => {
         if (status) {
           status.textContent = text;
@@ -354,6 +377,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         setThemeCoverageHint(buildThemeCoverageHint(themeData, selectedThemeId));
         setThemeSelectionWarning(buildThemeSelectionWarning(themeData, selectedThemeId));
         applyThemeDiagnostics(themeData, selectedThemeId);
+        updateSaveThemeButtonState();
       };
 
       const loadThemeStatus = () => fetch('/admin-api/system/themes')
@@ -364,6 +388,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
           if (publicThemeSection) {
             publicThemeSection.setAttribute('aria-busy', 'false');
           }
+          updateSaveThemeButtonState();
           return themeData;
         })
         .catch(() => {
@@ -379,6 +404,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
           if (publicThemeSection) {
             publicThemeSection.setAttribute('aria-busy', 'false');
           }
+          updateSaveThemeButtonState();
         });
 
       const load = () => fetch('/admin-api/settings')
@@ -407,12 +433,21 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         setThemeCoverageHint(buildThemeCoverageHint(currentThemeData, selectedThemeId));
         setThemeSelectionWarning(buildThemeSelectionWarning(currentThemeData, selectedThemeId));
         applyThemeDiagnostics(currentThemeData, selectedThemeId);
+        updateSaveThemeButtonState();
+      });
+
+      themeSelect?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !saveThemeButton?.disabled) {
+          event.preventDefault();
+          saveThemeButton?.click();
+        }
       });
 
       saveThemeButton?.addEventListener('click', () => {
         const themeId = themeSelect?.value ?? '';
         if (!themeId) {
           setThemeStatus('Choose a theme before saving.', 'assertive');
+          focusElement(themeSelect);
           return;
         }
 
@@ -420,9 +455,12 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         if (themeId === configuredThemeId) {
           setThemeStatus('No changes were made. This theme is already active.');
           setThemeSelectionWarning(buildThemeSelectionWarning(currentThemeData, themeId));
+          focusElement(saveThemeButton);
+          updateSaveThemeButtonState();
           return;
         }
 
+        saveThemeButton.disabled = true;
         setThemeStatus('Saving theme...');
 
         void fetch('/admin-api/system/themes', {
@@ -453,10 +491,15 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
             } else {
               setThemeStatus('Theme saved and active. Your public website now uses the selected theme.');
             }
+
+            focusElement(saveThemeButton);
+            updateSaveThemeButtonState();
           })
           .catch((error) => {
             const message = error instanceof Error && error.message ? error.message : 'Could not save theme. Please try again.';
             setThemeStatus('Could not save theme: ' + message, 'assertive');
+            focusElement(themeSelect);
+            updateSaveThemeButtonState();
           });
       });
 
@@ -480,6 +523,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
       });
 
       void load();
+      updateSaveThemeButtonState();
       void loadThemeStatus();
     </script>`
 });
