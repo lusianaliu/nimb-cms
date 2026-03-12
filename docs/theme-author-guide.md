@@ -9,6 +9,7 @@ This guide describes the active Nimb CMS public theme contract used by the canon
 - Public router owner: `core/http/public-router.ts`
 - Active public renderer: `runtime.themeRenderer` from `core/theme/theme-renderer.ts`
 - Canonical registration/discovery boundary: `core/theme/theme-registry.ts`
+- Canonical runtime theme read surface: `runtime.themes` from `core/theme/theme-service.ts`
 - Built-in canonical themes: `themes/default/index.ts`, `themes/sunrise/index.ts`
 
 `core/theme/theme-manager.ts` and `core/render/public-renderer.ts` exist but are not the active public route rendering path for the current runtime.
@@ -32,6 +33,12 @@ Active public theme source-of-truth is:
 - default value: `default`
 
 This means Nimb now dynamically selects the active theme from one canonical setting key (`theme`) on the active renderer path.
+
+Configured vs resolved is now explicit on the runtime read surface:
+
+- `runtime.themes.getConfiguredThemeId()` returns the raw configured `settings.theme` value (normalized for empty input).
+- `runtime.themes.getResolvedThemeId()` returns the effective theme id after fallback to `default` if needed.
+- `runtime.themes.getActive()` / `runtime.themes.getStatus()` expose both values plus `fallbackApplied`.
 
 ## Canonical template names
 
@@ -127,11 +134,29 @@ Themes should not own business rules like publish/draft filtering or core conten
 - Contract is stabilized for current public routes (`/`, `/blog`, `/blog/:slug`, `/:pageSlug`) and not yet expanded for additional content surfaces.
 - Keep compatibility aliases only as migration support; do not introduce new aliases.
 
+## Read-only admin/API consumption path
+
+A minimal read-only admin path is now available for future non-technical UX wiring:
+
+- `GET /admin-api/system/themes`
+
+Response shape is aligned with `runtime.themes.getStatus()` and includes:
+
+- `configuredThemeId`
+- `resolvedThemeId`
+- `defaultThemeId`
+- `fallbackApplied`
+- `themes[]` (`id`, `title`, `source`, `isDefault`, `templates`)
+
+This phase intentionally does not add theme-write flows (picker UI, install, marketplace, etc.).
+
 ## Theme discovery/listing readiness
 
-The canonical renderer module now exposes lightweight listing helpers for future admin/UI work:
+Canonical theme discovery for runtime/admin read consumers now goes through `runtime.themes` (`core/theme/theme-service.ts`):
 
-- `listRegisteredPublicThemes()` returns registered ids.
-- `listRegisteredPublicThemeDetails()` returns basic discovery metadata (`id`, `title`, `source`, `isDefault`) plus template module handles.
+- `runtime.themes.list()` returns safe theme metadata (`id`, `title`, `source`, `isDefault`, `templates`) without exposing template functions.
+- `runtime.themes.getConfiguredThemeId()` returns configured selector value from settings.
+- `runtime.themes.getResolvedThemeId()` returns fallback-aware active id.
+- `runtime.themes.getStatus()` returns one read payload containing configured/resolved/default ids, `fallbackApplied`, and the theme list.
 
-This keeps today's runtime simple while giving later phases a stable theme introspection boundary.
+For compatibility/unit-level checks, renderer/registry helpers still exist (`listRegisteredPublicThemes`, `listRegisteredPublicThemeDetails`), but new read consumers should prefer `runtime.themes` as the canonical runtime path.

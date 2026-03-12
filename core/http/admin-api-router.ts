@@ -100,6 +100,16 @@ export const createAdminApiRouter = (runtime) => Object.freeze({
       });
     }
 
+    if (context.path === `${ADMIN_API_BASE_PATH}/system/themes`) {
+      return () => jsonResponse(runtime?.themes?.getStatus?.() ?? {
+        configuredThemeId: 'default',
+        resolvedThemeId: 'default',
+        defaultThemeId: 'default',
+        fallbackApplied: false,
+        themes: []
+      });
+    }
+
     if (context.path === `${ADMIN_API_BASE_PATH}/system/info`) {
       const siteName = getSetting(runtime, 'site.name', () => 'My Nimb Site');
       const version = getSetting(runtime, 'site.version', () => runtime?.version ?? '0.0.0');
