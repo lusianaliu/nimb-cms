@@ -50,19 +50,19 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         </div>
       </section>
 
-      <section>
-        <h2>Public theme</h2>
+      <section id="public-theme-section" aria-labelledby="public-theme-heading" aria-busy="true">
+        <h2 id="public-theme-heading">Public theme</h2>
         <p class="field-help">Choose how your public website looks. Theme changes are saved separately from other settings.</p>
         <div>
           <label for="activeThemeId">Active public theme</label>
-          <select id="activeThemeId" name="activeThemeId">
+          <select id="activeThemeId" name="activeThemeId" aria-describedby="theme-selection-help theme-coverage-hint theme-state theme-selection-warning">
             <option value="">Loading themes…</option>
           </select>
           <p class="field-help" id="theme-selection-help">Choose a theme and save to update your public website.</p>
-          <p class="field-help" id="theme-coverage-hint" aria-live="polite"></p>
+          <p class="field-help" id="theme-coverage-hint"></p>
         </div>
-        <p id="theme-state" class="field-help" aria-live="polite"></p>
-        <p id="theme-selection-warning" class="field-help" aria-live="polite"></p>
+        <p id="theme-state" class="field-help"></p>
+        <p id="theme-selection-warning" class="field-help"></p>
         <details id="theme-diagnostics" class="field-help">
           <summary id="theme-diagnostics-summary">Theme diagnostics: loading…</summary>
           <ul id="theme-diagnostics-list"></ul>
@@ -70,7 +70,8 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         <div>
           <button type="button" id="save-theme-button">Save theme</button>
         </div>
-        <p id="theme-status" aria-live="polite" class="muted"></p>
+        <p id="theme-status" role="status" aria-live="polite" aria-atomic="true" class="muted"></p>
+        <p id="theme-alert" role="alert" aria-live="assertive" aria-atomic="true" class="muted"></p>
       </section>
 
       <div>
@@ -82,6 +83,8 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
       const form = document.getElementById('settings-form');
       const status = document.getElementById('status');
       const themeStatus = document.getElementById('theme-status');
+      const themeAlert = document.getElementById('theme-alert');
+      const publicThemeSection = document.getElementById('public-theme-section');
       const themeState = document.getElementById('theme-state');
       const themeSelectionWarning = document.getElementById('theme-selection-warning');
       const themeCoverageHint = document.getElementById('theme-coverage-hint');
@@ -99,9 +102,13 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         }
       };
 
-      const setThemeStatus = (text) => {
+      const setThemeStatus = (text, tone = 'polite') => {
         if (themeStatus) {
-          themeStatus.textContent = text;
+          themeStatus.textContent = tone === 'polite' ? text : '';
+        }
+
+        if (themeAlert) {
+          themeAlert.textContent = tone === 'assertive' ? text : '';
         }
       };
 
@@ -354,6 +361,9 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
         .then((themeData) => {
           applyThemeStatus(themeData);
           setThemeStatus('Theme details are ready. Choose a theme to review what will happen before you save.');
+          if (publicThemeSection) {
+            publicThemeSection.setAttribute('aria-busy', 'false');
+          }
           return themeData;
         })
         .catch(() => {
@@ -365,7 +375,10 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
             'Theme diagnostics are not available right now.',
             'Your website will keep using the current theme until details can be loaded again.'
           ]);
-          setThemeStatus('Theme details are temporarily unavailable. Refresh and try again.');
+          setThemeStatus('Theme details are temporarily unavailable. Refresh and try again.', 'assertive');
+          if (publicThemeSection) {
+            publicThemeSection.setAttribute('aria-busy', 'false');
+          }
         });
 
       const load = () => fetch('/admin-api/settings')
@@ -399,7 +412,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
       saveThemeButton?.addEventListener('click', () => {
         const themeId = themeSelect?.value ?? '';
         if (!themeId) {
-          setThemeStatus('Choose a theme before saving.');
+          setThemeStatus('Choose a theme before saving.', 'assertive');
           return;
         }
 
@@ -443,7 +456,7 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
           })
           .catch((error) => {
             const message = error instanceof Error && error.message ? error.message : 'Could not save theme. Please try again.';
-            setThemeStatus('Could not save theme: ' + message);
+            setThemeStatus('Could not save theme: ' + message, 'assertive');
           });
       });
 

@@ -46,10 +46,10 @@ test('phase 158: admin settings page exposes minimal theme selection UX bound to
     assert.equal(html.includes('id="theme-state"'), true);
     assert.equal(html.includes('id="theme-selection-warning"'), true);
     assert.equal(html.includes('/admin-api/system/themes'), true);
-    assert.equal(html.includes('Default fallback is active.'), true);
-    assert.equal(html.includes('This theme is already active. No save was needed.'), true);
+    assert.equal(html.includes('default fallback'), true);
+    assert.equal(html.includes('No changes were made. This theme is already active.'), true);
     assert.equal(html.includes('Theme saved and active. Your public website now uses the selected theme.'), true);
-    assert.equal(html.includes('supports all canonical templates'), true);
+    assert.equal(html.includes('Ready to save. This theme covers all core pages.'), true);
   } finally {
     await server.stop();
   }
