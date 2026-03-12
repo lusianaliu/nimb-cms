@@ -8,6 +8,7 @@ This guide describes the active Nimb CMS public theme contract used by the canon
 - Bootstrap wiring: `core/bootstrap/createBootstrap` via `core/bootstrap/bootstrap.ts`
 - Public router owner: `core/http/public-router.ts`
 - Active public renderer: `runtime.themeRenderer` from `core/theme/theme-renderer.ts`
+- Canonical registration/discovery boundary: `core/theme/theme-registry.ts`
 - Built-in canonical themes: `themes/default/index.ts`, `themes/sunrise/index.ts`
 
 `core/theme/theme-manager.ts` and `core/render/public-renderer.ts` exist but are not the active public route rendering path for the current runtime.
@@ -17,6 +18,12 @@ This guide describes the active Nimb CMS public theme contract used by the canon
 At this phase, built-in public themes live under:
 
 - `themes/<theme-id>/index.ts`
+
+Built-in theme registration/discovery is centralized in:
+
+- `core/theme/theme-registry.ts`
+- `listBuiltinPublicThemes()` for discovery metadata
+- `getBuiltinPublicThemeRecord()` for renderer consumption
 
 Active public theme source-of-truth is:
 
@@ -50,7 +57,7 @@ A valid theme module should export renderers for all canonical template names as
 
 - `Record<CanonicalThemeTemplateName, (context: ThemeTemplateContext) => string>`
 
-Core fallback behavior in `core/theme/theme-renderer.ts`:
+Core fallback behavior in `core/theme/theme-renderer.ts` (using registry helpers from `core/theme/theme-registry.ts`):
 
 - If configured `settings.theme` is missing/unregistered, renderer logs a warning and falls back to `default` theme.
 - If selected theme exists but is missing one or more canonical templates, renderer logs warnings and falls back per missing template to the default theme template for that template name.
@@ -91,7 +98,8 @@ Stable fields:
 - Querying and filtering published content
 - Constructing render context (site settings + route metadata + page/post data)
 - Alias mapping and fallback template resolution
-- Active theme resolution from canonical settings (`settings.theme`)
+- Active theme resolution from canonical settings (`settings.theme`) against registered themes
+- Consuming the theme registry boundary, not ad hoc built-in theme maps
 
 ### Theme responsibilities
 
@@ -114,7 +122,16 @@ Themes should not own business rules like publish/draft filtering or core conten
 
 ## Current limitations (honest status)
 
-- Theme registration is still code-level (built-in map in `core/theme/theme-renderer.ts`), not yet a disk-scanning marketplace/installer flow.
+- Theme registration is still code-level (built-in definitions in `core/theme/theme-registry.ts`), not yet a disk-scanning marketplace/installer flow.
 - No dedicated non-technical admin theme switcher UI exists yet; active theme currently follows canonical settings value (`theme`).
 - Contract is stabilized for current public routes (`/`, `/blog`, `/blog/:slug`, `/:pageSlug`) and not yet expanded for additional content surfaces.
 - Keep compatibility aliases only as migration support; do not introduce new aliases.
+
+## Theme discovery/listing readiness
+
+The canonical renderer module now exposes lightweight listing helpers for future admin/UI work:
+
+- `listRegisteredPublicThemes()` returns registered ids.
+- `listRegisteredPublicThemeDetails()` returns basic discovery metadata (`id`, `title`, `source`, `isDefault`) plus template module handles.
+
+This keeps today's runtime simple while giving later phases a stable theme introspection boundary.
