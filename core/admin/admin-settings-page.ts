@@ -67,14 +67,14 @@ export const renderAdminSettingsPage = (settings = {}, runtime) => renderAdminSh
           <summary id="theme-diagnostics-summary">Theme diagnostics: loading…</summary>
           <ul id="theme-diagnostics-list"></ul>
         </details>
-        <div>
+        <div class="admin-form-actions">
           <button type="button" id="save-theme-button">Save theme</button>
         </div>
         <p id="theme-status" role="status" aria-live="polite" aria-atomic="true" class="muted"></p>
         <p id="theme-alert" role="alert" aria-live="assertive" aria-atomic="true" class="muted"></p>
       </section>
 
-      <div>
+      <div class="admin-form-actions">
         <button type="submit">Save site settings</button>
       </div>
       <p id="status" aria-live="polite" class="muted"></p>
