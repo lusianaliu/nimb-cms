@@ -39,6 +39,18 @@ export async function createThemeSelectorFlowHarness(phaseTag: string) {
 
   const authCookie = (loginResponse.headers.get('set-cookie') ?? '').split(';')[0];
 
+  const getAuthCookieParts = () => {
+    const separator = authCookie.indexOf('=');
+    if (separator < 0) {
+      return { name: '', value: '' };
+    }
+
+    return {
+      name: authCookie.slice(0, separator),
+      value: authCookie.slice(separator + 1)
+    };
+  };
+
   const request = (requestPath: string, init?: RequestInit) => fetch(`http://127.0.0.1:${port}${requestPath}`, {
     ...init,
     headers: {
@@ -77,6 +89,7 @@ export async function createThemeSelectorFlowHarness(phaseTag: string) {
     cwd,
     port,
     authCookie,
+    getAuthCookieParts,
     request,
     getThemeStatus,
     setTheme,
