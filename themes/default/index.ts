@@ -32,21 +32,86 @@ const toExcerpt = (content: string): string => {
 const baseStyles = `
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937; background: #f8fafc; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    line-height: 1.65;
+    color: #1f2937;
+    background: #f8fafc;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
   a { color: #0f4c81; text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  .site-shell { max-width: 940px; margin: 0 auto; padding: 0 1rem; }
-  .site-header { padding: 1.75rem 0 1.25rem; border-bottom: 1px solid #dbe4ee; }
-  .site-title { margin: 0; font-size: 1.75rem; }
+  a:hover, a:focus-visible { text-decoration: underline; }
+  .site-shell {
+    width: min(100% - 2rem, 940px);
+    margin: 0 auto;
+  }
+  .site-header {
+    padding: 1.5rem 0 1rem;
+    border-bottom: 1px solid #dbe4ee;
+  }
+  .site-title {
+    margin: 0;
+    font-size: clamp(1.5rem, 4vw, 1.95rem);
+    line-height: 1.2;
+  }
   .site-tagline { margin: 0.5rem 0 0; color: #4b5563; }
-  .site-nav { margin-top: 1rem; display: flex; gap: 0.85rem; flex-wrap: wrap; }
+  .site-nav {
+    margin-top: 1rem;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .site-nav a {
+    border: 1px solid #dbe4ee;
+    border-radius: 10px;
+    background: #ffffff;
+    padding: 0.42rem 0.7rem;
+  }
   .site-nav a[aria-current="page"] { font-weight: 700; text-decoration: underline; }
-  main.site-shell { padding-top: 2rem; padding-bottom: 2rem; min-height: 60vh; }
-  .panel { background: #ffffff; border: 1px solid #dbe4ee; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
-  h1, h2, h3 { line-height: 1.25; margin-top: 0; color: #0f172a; }
-  .meta { color: #64748b; font-size: 0.9rem; margin-top: -0.25rem; margin-bottom: 1rem; }
+  main.site-shell {
+    width: min(100% - 2rem, 760px);
+    padding-top: 1.35rem;
+    padding-bottom: 2rem;
+    min-height: 60vh;
+  }
+  .panel {
+    background: #ffffff;
+    border: 1px solid #dbe4ee;
+    border-radius: 12px;
+    padding: clamp(1rem, 3vw, 1.3rem);
+    margin-bottom: 1rem;
+  }
+  .post-stack {
+    display: grid;
+    gap: 0.85rem;
+  }
+  h1, h2, h3 {
+    line-height: 1.25;
+    margin-top: 0;
+    color: #0f172a;
+    overflow-wrap: anywhere;
+  }
+  .meta {
+    color: #64748b;
+    font-size: 0.9rem;
+    margin-top: -0.2rem;
+    margin-bottom: 0.85rem;
+  }
   .content { white-space: pre-wrap; }
+  code, pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    overflow-wrap: anywhere;
+  }
+  pre { overflow-x: auto; }
   .site-footer { border-top: 1px solid #dbe4ee; padding: 1rem 0 2rem; color: #64748b; }
+
+  @media (max-width: 768px) {
+    .site-shell { width: min(100% - 1.25rem, 940px); }
+    .site-header { padding-top: 1.1rem; }
+    main.site-shell { width: min(100% - 1.25rem, 760px); padding-top: 1rem; }
+  }
 `;
 
 const renderNavigation = (routePath: string, pages: ThemeTemplateContext['pages'] = []): string => {
@@ -60,7 +125,7 @@ const renderNavigation = (routePath: string, pages: ThemeTemplateContext['pages'
     })
     .join('');
 
-  return `<nav class="site-nav">
+  return `<nav class="site-nav" aria-label="Primary navigation">
     <a href="/"${routePath === '/' ? ' aria-current="page"' : ''}>Home</a>
     <a href="/blog"${routePath.startsWith('/blog') ? ' aria-current="page"' : ''}>Blog</a>
     ${pageLinks}
@@ -101,12 +166,12 @@ const renderHomepage = (context: ThemeTemplateContext): string => {
   const homepageIntro = `${context.homepageIntro ?? ''}`.trim() || 'This homepage is ready for a company profile website. Create and publish pages like About, Services, and Contact from admin.';
 
   const latestPostMarkup = context.posts.length > 0
-    ? `<section class="panel"><h2>Latest from the blog</h2>${context.posts.slice(0, 3)
-      .map((post) => `<article><h3><a href="/blog/${encodeURIComponent(post.slug)}">${escapeHtml(post.title)}</a></h3><p>${escapeHtml(toExcerpt(post.content))}</p></article>`)
-      .join('')}</section>`
+    ? `<section class="panel"><h2>Latest from the blog</h2><div class="post-stack">${context.posts.slice(0, 3)
+      .map((post) => `<article><h3><a href="/blog/${encodeURIComponent(post.slug)}">${escapeHtml(post.title)}</a></h3><p class="meta">Updated ${escapeHtml(formatDate(post.updatedAt) || 'recently')}</p><p>${escapeHtml(toExcerpt(post.content))}</p></article>`)
+      .join('')}</div></section>`
     : '<section class="panel"><h2>Latest from the blog</h2><p>No blog posts published yet. Write your first post in admin to start sharing updates.</p></section>';
 
-  return renderLayout(context, `<section class="panel"><h2>Welcome</h2><p>${escapeHtml(homepageIntro)}</p></section>${latestPostMarkup}`);
+  return renderLayout(context, `<section class="panel"><h2>Welcome to ${escapeHtml(context.siteName)}</h2><p>${escapeHtml(homepageIntro)}</p></section>${latestPostMarkup}`);
 };
 
 const renderPostList = (context: ThemeTemplateContext): string => {
@@ -126,7 +191,7 @@ const renderPostPage = (context: ThemeTemplateContext): string => {
     return renderLayout(context, '<section class="panel"><h2>Post not found</h2><p>We could not find that post. Try the <a href="/blog">blog list</a>.</p></section>');
   }
 
-  return renderLayout(context, `<article class="panel"><h2>${escapeHtml(context.post.title)}</h2><p class="meta">Updated ${escapeHtml(formatDate(context.post.updatedAt) || 'recently')}</p><div class="content">${escapeHtml(context.post.content)}</div></article>`);
+  return renderLayout(context, `<article class="panel"><h1>${escapeHtml(context.post.title)}</h1><p class="meta">Updated ${escapeHtml(formatDate(context.post.updatedAt) || 'recently')}</p><div class="content">${escapeHtml(context.post.content)}</div></article>`);
 };
 
 const renderPage = (context: ThemeTemplateContext): string => {
@@ -134,7 +199,7 @@ const renderPage = (context: ThemeTemplateContext): string => {
     return renderLayout(context, '<section class="panel"><h2>Page not found</h2><p>We could not find that page. Return to the <a href="/">homepage</a>.</p></section>');
   }
 
-  return renderLayout(context, `<article class="panel"><h2>${escapeHtml(context.page.title)}</h2><div class="content">${escapeHtml(context.page.content)}</div></article>`);
+  return renderLayout(context, `<article class="panel content"><h1>${escapeHtml(context.page.title)}</h1><div>${escapeHtml(context.page.content)}</div></article>`);
 };
 
 const renderNotFound = (context: ThemeTemplateContext): string => renderLayout(
