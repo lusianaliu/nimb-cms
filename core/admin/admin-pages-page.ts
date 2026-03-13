@@ -48,7 +48,7 @@ export const renderAdminPagesListPage = ({ pages, runtime, notice = null }) => {
     pageDescription: 'Pages are for your main website sections like Home, About, Services, or Contact.',
     notice,
     content: `<p><a class="button-link" href="/admin/pages/new">Create a new page</a></p>
-      <table>
+      <div class="table-wrap"><table>
         <thead>
           <tr>
             <th>Title</th>
@@ -61,7 +61,7 @@ export const renderAdminPagesListPage = ({ pages, runtime, notice = null }) => {
         <tbody>
           ${rows || '<tr><td colspan="5">No pages yet. Create a new page to build your website navigation.</td></tr>'}
         </tbody>
-      </table>`
+      </table></div>`
   });
 };
 
@@ -117,7 +117,7 @@ export const renderAdminPageFormPage = ({ mode, page = null, runtime, notice = n
             <textarea id="body" name="body" rows="12">${escapeHtml(mergedValues.body)}</textarea>
           </div>
         </div>
-        <p>
+        <p class="admin-form-actions">
           <button type="submit">${mergedValues.status === 'published' ? (isEdit ? 'Save changes' : 'Create and publish') : (isEdit ? 'Save draft changes' : 'Create draft')}</button>
           <a class="button-link button-link--muted" href="/admin/pages">Cancel</a>
         </p>

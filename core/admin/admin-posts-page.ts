@@ -68,7 +68,7 @@ export const renderAdminPostsListPage = ({ posts, runtime, notice = null }) => {
     pageDescription: 'Posts are for blog updates, news, and time-based content.',
     notice,
     content: `<p><a class="button-link" href="/admin/posts/new">Write a new post</a></p>
-      <table>
+      <div class="table-wrap"><table>
         <thead>
           <tr>
             <th>Title</th>
@@ -81,7 +81,7 @@ export const renderAdminPostsListPage = ({ posts, runtime, notice = null }) => {
         <tbody>
           ${rows || '<tr><td colspan="5">No posts yet. Write a new post to start your blog.</td></tr>'}
         </tbody>
-      </table>`
+      </table></div>`
   });
 };
 
@@ -145,7 +145,7 @@ export const renderAdminPostFormPage = ({ mode, post = null, runtime, notice = n
             <textarea id="body" name="body" rows="12">${escapeHtml(mergedValues.body)}</textarea>
           </div>
         </div>
-        <p>
+        <p class="admin-form-actions">
           <button type="submit">${mergedValues.status === 'published' ? (isEdit ? 'Update published post' : 'Publish post') : (isEdit ? 'Save draft changes' : 'Save draft')}</button>
           <a class="button-link button-link--muted" href="/admin/posts">Cancel</a>
         </p>
