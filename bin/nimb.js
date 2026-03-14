@@ -10,6 +10,7 @@ import { version, resolveRuntimeMode as resolveEnvironmentMode } from '../core/r
 import { resolveRuntimeMode } from '../core/runtime/resolve-runtime-mode.ts';
 import { runBuild } from '../core/cli/build.ts';
 import { runRelease } from '../core/cli/release.ts';
+import { runPreflightDiagnostics, formatPreflightReport } from '../core/cli/preflight.ts';
 import { resolveProjectRootFromArgs } from '../core/cli/project-root-resolver.ts';
 
 const invocationCwd = process.cwd();
@@ -328,6 +329,10 @@ if (args[0] === 'init') {
   }
 } else if (args[0] === 'bridge') {
   await startBridge();
+} else if (args[0] === 'preflight') {
+  const report = runPreflightDiagnostics({ projectRoot, runtimeRoot });
+  process.stdout.write(formatPreflightReport(report));
+  process.exitCode = report.exitCode;
 } else {
   await startServer();
 }
