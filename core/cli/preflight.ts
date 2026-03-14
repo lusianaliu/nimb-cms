@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import net from 'node:net';
 import { loadConfig, resolveConfigPath } from '../config/config-loader.ts';
 
 const LEGACY_CONFIG_FILENAME = 'nimb.config.json';
@@ -30,6 +31,45 @@ export type PreflightReport = {
 
 const addFinding = (findings: PreflightFinding[], finding: PreflightFinding) => {
   findings.push(Object.freeze(finding));
+};
+
+const parseStartupPort = (config: ReturnType<typeof loadConfig> | null, env = process.env) => {
+  const fromEnv = env.PORT;
+  if (fromEnv !== undefined && `${fromEnv}`.trim() !== '') {
+    const envPort = Number(fromEnv);
+    if (!Number.isInteger(envPort) || envPort < 0 || envPort > 65535) {
+      throw new Error(`Invalid PORT environment variable: ${fromEnv}`);
+    }
+
+    return envPort;
+  }
+
+  if (config?.server?.port !== undefined) {
+    return config.server.port;
+  }
+
+  return 3000;
+};
+
+const checkPortAvailable = async (port: number) => {
+  await new Promise((resolve, reject) => {
+    const server = net.createServer();
+    const done = (error?: Error | null) => {
+      server.removeAllListeners();
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve(undefined);
+    };
+
+    server.once('error', () => done(new Error(`Startup invariant failed: port is unavailable: ${port}`)));
+    server.once('listening', () => {
+      server.close((closeError) => done(closeError ? new Error(`Startup invariant failed: port check failed: ${port}`) : null));
+    });
+    server.listen(port, '127.0.0.1');
+  });
 };
 
 const isWritableDirectory = (directoryPath: string) => {
@@ -160,9 +200,10 @@ const evaluateExpectedDirectory = (findings: PreflightFinding[], directoryPath: 
   });
 };
 
-export const runPreflightDiagnostics = ({ projectRoot, runtimeRoot }: { projectRoot: string; runtimeRoot: string }): PreflightReport => {
+export const runPreflightDiagnostics = async ({ projectRoot, runtimeRoot, env = process.env }: { projectRoot: string; runtimeRoot: string; env?: NodeJS.ProcessEnv }): Promise<PreflightReport> => {
   const findings: PreflightFinding[] = [];
   const normalizedProjectRoot = path.resolve(projectRoot);
+  let loadedConfig: ReturnType<typeof loadConfig> | null = null;
 
   if (!fs.existsSync(normalizedProjectRoot)) {
     addFinding(findings, {
@@ -212,6 +253,7 @@ export const runPreflightDiagnostics = ({ projectRoot, runtimeRoot }: { projectR
     const activeConfigPath = configPathExists ? configPath : legacyConfigPath;
     try {
       const config = loadConfig({ cwd: normalizedProjectRoot });
+      loadedConfig = config;
       addFinding(findings, {
         severity: 'PASS',
         code: 'config-valid',
@@ -227,7 +269,14 @@ export const runPreflightDiagnostics = ({ projectRoot, runtimeRoot }: { projectR
         : path.resolve(runtimeRoot, adminStaticDir);
 
       if (config.admin?.enabled === true) {
-        if (fs.existsSync(resolvedAdminStaticDir) && fs.statSync(resolvedAdminStaticDir).isDirectory()) {
+        const staticDirExists = fs.existsSync(resolvedAdminStaticDir);
+        const staticDirIsDirectory = staticDirExists && fs.statSync(resolvedAdminStaticDir).isDirectory();
+        const configuredStaticDir = typeof config.admin?.staticDir === 'string' && config.admin.staticDir.trim() !== ''
+          ? config.admin.staticDir
+          : DEFAULT_ADMIN_STATIC_DIR;
+        const usingDefaultStaticDir = configuredStaticDir === DEFAULT_ADMIN_STATIC_DIR;
+
+        if (staticDirIsDirectory) {
           addFinding(findings, {
             severity: 'PASS',
             code: 'admin-static-dir',
@@ -236,7 +285,16 @@ export const runPreflightDiagnostics = ({ projectRoot, runtimeRoot }: { projectR
             why: 'This is the first-choice location for admin UI static assets.',
             next: 'No action needed.'
           });
-        } else {
+        } else if (staticDirExists) {
+          addFinding(findings, {
+            severity: 'FAIL',
+            code: 'admin-static-dir-shape',
+            check: 'Admin static directory',
+            detail: `Admin staticDir resolves to ${resolvedAdminStaticDir}, but this path is not a directory.`,
+            why: 'Startup invariant validation fails when admin staticDir resolves to a non-directory path.',
+            next: `Replace ${resolvedAdminStaticDir} with a directory, or update config.admin.staticDir.`
+          });
+        } else if (usingDefaultStaticDir) {
           addFinding(findings, {
             severity: 'WARN',
             code: 'admin-static-fallback',
@@ -244,6 +302,15 @@ export const runPreflightDiagnostics = ({ projectRoot, runtimeRoot }: { projectR
             detail: `Admin staticDir resolves to ${resolvedAdminStaticDir}, but this directory is missing.`,
             why: 'Nimb can fall back to built-in admin shell/assets, but this can hide packaging/layout issues.',
             next: 'If you expect custom admin assets, deploy them at the configured staticDir.'
+          });
+        } else {
+          addFinding(findings, {
+            severity: 'FAIL',
+            code: 'admin-static-configured-missing',
+            check: 'Admin static directory',
+            detail: `Admin staticDir resolves to ${resolvedAdminStaticDir}, but this directory is missing.`,
+            why: 'Startup invariant validation requires configured admin staticDir paths to exist.',
+            next: `Create ${resolvedAdminStaticDir}, or remove config.admin.staticDir to use the built-in fallback path.`
           });
         }
       }
@@ -310,6 +377,63 @@ export const runPreflightDiagnostics = ({ projectRoot, runtimeRoot }: { projectR
   evaluateRequiredDirectory(findings, path.join(normalizedProjectRoot, 'data', 'content'), 'data/content');
   evaluateRequiredDirectory(findings, path.join(normalizedProjectRoot, 'data', 'uploads'), 'data/uploads');
   evaluateRequiredDirectory(findings, path.join(normalizedProjectRoot, 'logs'), 'logs');
+
+  const persistenceRuntimePath = path.join(normalizedProjectRoot, 'data', 'system', 'runtime.json');
+  if (fs.existsSync(persistenceRuntimePath)) {
+    if (!fs.statSync(persistenceRuntimePath).isFile()) {
+      addFinding(findings, {
+        severity: 'FAIL',
+        code: 'persistence-runtime-shape',
+        check: 'Persistence runtime file',
+        detail: `${persistenceRuntimePath} exists but is not a file.`,
+        why: 'Startup invariant validation expects persistence runtime state at a JSON file path.',
+        next: `Replace ${persistenceRuntimePath} with a JSON file or remove it.`
+      });
+    } else {
+      try {
+        JSON.parse(fs.readFileSync(persistenceRuntimePath, 'utf8'));
+        addFinding(findings, {
+          severity: 'PASS',
+          code: 'persistence-runtime-valid',
+          check: 'Persistence runtime file',
+          detail: `${persistenceRuntimePath} exists and is valid JSON.`,
+          why: 'Startup invariant validation loads this file when present.',
+          next: 'No action needed.'
+        });
+      } catch {
+        addFinding(findings, {
+          severity: 'FAIL',
+          code: 'persistence-runtime-invalid-json',
+          check: 'Persistence runtime file',
+          detail: `${persistenceRuntimePath} exists but is not valid JSON.`,
+          why: 'Startup invariant validation fails on invalid persistence runtime JSON.',
+          next: `Fix JSON formatting in ${persistenceRuntimePath}, or remove the file.`
+        });
+      }
+    }
+  }
+
+  try {
+    const startupPort = parseStartupPort(loadedConfig, env);
+    await checkPortAvailable(startupPort);
+    addFinding(findings, {
+      severity: 'PASS',
+      code: 'startup-port-available',
+      check: 'Startup port availability',
+      detail: `Port ${startupPort} is available for binding on 127.0.0.1.`,
+      why: 'Canonical startup validates port availability before HTTP server boot.',
+      next: 'No action needed.'
+    });
+  } catch (error) {
+    addFinding(findings, {
+      severity: 'FAIL',
+      code: 'startup-port-invalid-or-unavailable',
+      check: 'Startup port availability',
+      detail: error instanceof Error ? error.message : String(error),
+      why: 'Canonical startup fails when the selected startup port is invalid or already in use.',
+      next: 'Set PORT (or config.server.port) to a valid, free port before startup.'
+    });
+  }
 
   const summary = findings.reduce(
     (accumulator, finding) => {

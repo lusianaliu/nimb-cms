@@ -330,7 +330,7 @@ if (args[0] === 'init') {
 } else if (args[0] === 'bridge') {
   await startBridge();
 } else if (args[0] === 'preflight') {
-  const report = runPreflightDiagnostics({ projectRoot, runtimeRoot });
+  const report = await runPreflightDiagnostics({ projectRoot, runtimeRoot });
   process.stdout.write(formatPreflightReport(report));
   process.exitCode = report.exitCode;
 } else {
