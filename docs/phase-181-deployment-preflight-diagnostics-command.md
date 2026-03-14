@@ -44,7 +44,12 @@ The command is grounded in the active canonical runtime assumptions and checks:
 
 6. **Admin static directory availability**
    - when admin is enabled, the resolved `admin.staticDir` path is checked
-   - missing static dir is reported as warning because fallback admin assets can still serve
+   - default static-dir absence is a warning because fallback admin assets can still serve
+   - explicitly configured static-dir absence/non-directory is a startup-aligned failure
+
+7. **Startup parity checks**
+   - selected startup port validity/availability is checked using startup port precedence (`PORT` then `config.server.port` then `3000`)
+   - optional `data/system/runtime.json` is validated as JSON when present
 
 ## PASS / WARN / FAIL meaning
 
@@ -55,6 +60,8 @@ The command is grounded in the active canonical runtime assumptions and checks:
 The command exits with code:
 - `0` when there are only PASS/WARN findings
 - `1` when at least one FAIL finding exists
+
+Phase 182 note: preflight now includes async checks (startup port probe) while preserving the same CLI output format and exit semantics.
 
 ## Safety and limits
 

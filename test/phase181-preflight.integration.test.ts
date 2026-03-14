@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import net from 'node:net';
 import { runPreflightDiagnostics } from '../core/cli/preflight.ts';
 
 const mkProjectRoot = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase181-'));
@@ -31,11 +32,11 @@ const seedBasicProject = (projectRoot: string) => {
   }, null, 2)}\n`);
 };
 
-test('phase 181: preflight returns success exit code when only pass/warn findings exist', () => {
+test('phase 181: preflight returns success exit code when only pass/warn findings exist', async () => {
   const projectRoot = mkProjectRoot();
   seedBasicProject(projectRoot);
 
-  const report = runPreflightDiagnostics({
+  const report = await runPreflightDiagnostics({
     projectRoot,
     runtimeRoot: '/workspace/nimb-cms'
   });
@@ -45,20 +46,80 @@ test('phase 181: preflight returns success exit code when only pass/warn finding
   assert.equal(report.findings.some((finding) => finding.severity === 'PASS'), true);
 });
 
-test('phase 181: preflight marks non-directory required path as failure', () => {
+test('phase 181: preflight marks non-directory required path as failure', async () => {
   const projectRoot = mkProjectRoot();
   seedBasicProject(projectRoot);
 
   fs.rmSync(path.join(projectRoot, 'data', 'content'), { recursive: true, force: true });
   fs.writeFileSync(path.join(projectRoot, 'data', 'content'), 'not a directory\n');
 
-  const report = runPreflightDiagnostics({
+  const report = await runPreflightDiagnostics({
     projectRoot,
     runtimeRoot: '/workspace/nimb-cms'
   });
 
   assert.equal(report.exitCode, 1);
   assert.equal(report.findings.some((finding) => finding.code === 'required-directory-shape' && finding.severity === 'FAIL'), true);
+});
+
+test('phase 182: preflight fails when configured admin staticDir is missing', async () => {
+  const projectRoot = mkProjectRoot();
+  seedBasicProject(projectRoot);
+
+  fs.writeFileSync(path.join(projectRoot, 'config', 'nimb.config.json'), `${JSON.stringify({
+    name: 'phase-182-site',
+    runtime: { mode: 'production' },
+    admin: { enabled: true, staticDir: './admin-custom' }
+  }, null, 2)}\n`);
+
+  const report = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: '/workspace/nimb-cms'
+  });
+
+  assert.equal(report.exitCode, 1);
+  assert.equal(report.findings.some((finding) => finding.code === 'admin-static-configured-missing' && finding.severity === 'FAIL'), true);
+});
+
+test('phase 182: preflight fails when persistence runtime JSON is invalid', async () => {
+  const projectRoot = mkProjectRoot();
+  seedBasicProject(projectRoot);
+
+  fs.writeFileSync(path.join(projectRoot, 'data', 'system', 'runtime.json'), '{broken json');
+
+  const report = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: '/workspace/nimb-cms'
+  });
+
+  assert.equal(report.exitCode, 1);
+  assert.equal(report.findings.some((finding) => finding.code === 'persistence-runtime-invalid-json' && finding.severity === 'FAIL'), true);
+});
+
+test('phase 182: preflight fails when startup port is unavailable', async () => {
+  const projectRoot = mkProjectRoot();
+  seedBasicProject(projectRoot);
+
+  const busyServer = net.createServer();
+  await new Promise<void>((resolve, reject) => {
+    busyServer.once('error', reject);
+    busyServer.listen(0, '127.0.0.1', () => resolve());
+  });
+
+  const address = busyServer.address();
+  assert.notEqual(address, null);
+  const port = typeof address === 'string' ? 0 : address.port;
+
+  const report = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: '/workspace/nimb-cms',
+    env: { ...process.env, PORT: String(port) }
+  });
+
+  busyServer.close();
+
+  assert.equal(report.exitCode, 1);
+  assert.equal(report.findings.some((finding) => finding.code === 'startup-port-invalid-or-unavailable' && finding.severity === 'FAIL'), true);
 });
 
 test('phase 181: canonical preflight CLI command prints summary and uses failure exit code', () => {
