@@ -81,7 +81,7 @@ test('phase 183: preflight uses shared invariant titles for aligned checks', asy
 
   const report = await runPreflightDiagnostics({
     projectRoot,
-    runtimeRoot: '/workspace/nimb-cms'
+    runtimeRoot: projectRoot
   });
 
   const adminCheck = report.findings.find((finding) => finding.code.startsWith('admin-static-') || finding.code === 'admin-static-dir');
@@ -104,7 +104,7 @@ test('phase 184: preflight uses shared invariant metadata for install-state and 
 
   const report = await runPreflightDiagnostics({
     projectRoot,
-    runtimeRoot: '/workspace/nimb-cms'
+    runtimeRoot: projectRoot
   });
 
   const installStateFinding = report.findings.find((finding) => finding.code === 'install-state-missing');
@@ -132,4 +132,41 @@ test('phase 184: startup data directory writability failure uses shared invarian
     }),
     /Startup invariant failed \[data-directory-writable\]/
   );
+});
+
+test('phase 185: preflight severity for shared admin/install-state checks follows registry intent', async () => {
+  const projectRoot = mkProjectRoot();
+  seedBasicProject(projectRoot);
+
+  const reportWithDefaultAdminFallback = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: projectRoot
+  });
+
+  const adminFallbackFinding = reportWithDefaultAdminFallback.findings.find((finding) => finding.code === 'admin-static-fallback');
+  assert.equal(adminFallbackFinding?.severity, SHARED_STARTUP_PREFLIGHT_INVARIANTS.adminStaticDir.severityIntent.preflight.warn);
+
+  fs.writeFileSync(path.join(projectRoot, 'config', 'nimb.config.json'), `${JSON.stringify({
+    name: 'phase-185-site',
+    runtime: { mode: 'production' },
+    admin: { enabled: true, staticDir: './ui/custom-admin' }
+  }, null, 2)}\n`);
+
+  const reportWithConfiguredAdminPath = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: projectRoot
+  });
+
+  const adminConfiguredMissingFinding = reportWithConfiguredAdminPath.findings.find((finding) => finding.code === 'admin-static-configured-missing');
+  assert.equal(adminConfiguredMissingFinding?.severity, SHARED_STARTUP_PREFLIGHT_INVARIANTS.adminStaticDir.severityIntent.preflight.fail);
+
+  fs.rmSync(path.join(projectRoot, 'data', 'system', 'config.json'), { force: true });
+
+  const reportMissingInstallState = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: projectRoot
+  });
+
+  const installStateMissingFinding = reportMissingInstallState.findings.find((finding) => finding.code === 'install-state-missing');
+  assert.equal(installStateMissingFinding?.severity, SHARED_STARTUP_PREFLIGHT_INVARIANTS.installStateConfigJson.severityIntent.preflight.warn);
 });

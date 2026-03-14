@@ -16,6 +16,9 @@ const DATA_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.da
 const PERSISTENCE_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceDirectoryWritable;
 const LOGS_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable;
 
+const invariantFailSeverity = (invariant: { severityIntent: { preflight: { fail: 'FAIL' } } }): PreflightSeverity => invariant.severityIntent.preflight.fail;
+const invariantWarnSeverity = (invariant: { severityIntent: { preflight: { warn?: 'WARN' } } }): PreflightSeverity => invariant.severityIntent.preflight.warn ?? 'WARN';
+
 export type PreflightSeverity = 'PASS' | 'WARN' | 'FAIL';
 
 export type PreflightFinding = {
@@ -73,9 +76,9 @@ const checkPortAvailable = async (port: number) => {
       resolve(undefined);
     };
 
-    server.once('error', () => done(new Error(`Startup invariant failed [startup-port]: port is unavailable: ${port}`)));
+    server.once('error', () => done(new Error(`Startup invariant failed [${STARTUP_PORT_INVARIANT.id}]: port is unavailable: ${port}`)));
     server.once('listening', () => {
-      server.close((closeError) => done(closeError ? new Error(`Startup invariant failed [startup-port]: port check failed: ${port}`) : null));
+      server.close((closeError) => done(closeError ? new Error(`Startup invariant failed [${STARTUP_PORT_INVARIANT.id}]: port check failed: ${port}`) : null));
     });
     server.listen(port, '127.0.0.1');
   });
@@ -301,7 +304,7 @@ export const runPreflightDiagnostics = async ({ projectRoot, runtimeRoot, env = 
           });
         } else if (staticDirExists) {
           addFinding(findings, {
-            severity: 'FAIL',
+            severity: invariantFailSeverity(ADMIN_STATIC_DIR_INVARIANT),
             code: 'admin-static-dir-shape',
             check: ADMIN_STATIC_DIR_INVARIANT.title,
             detail: `Admin staticDir resolves to ${resolvedAdminStaticDir}, but this path is not a directory.`,
@@ -310,7 +313,7 @@ export const runPreflightDiagnostics = async ({ projectRoot, runtimeRoot, env = 
           });
         } else if (usingDefaultStaticDir) {
           addFinding(findings, {
-            severity: 'WARN',
+            severity: invariantWarnSeverity(ADMIN_STATIC_DIR_INVARIANT),
             code: 'admin-static-fallback',
             check: ADMIN_STATIC_DIR_INVARIANT.title,
             detail: `Admin staticDir resolves to ${resolvedAdminStaticDir}, but this directory is missing.`,
@@ -319,7 +322,7 @@ export const runPreflightDiagnostics = async ({ projectRoot, runtimeRoot, env = 
           });
         } else {
           addFinding(findings, {
-            severity: 'FAIL',
+            severity: invariantFailSeverity(ADMIN_STATIC_DIR_INVARIANT),
             code: 'admin-static-configured-missing',
             check: ADMIN_STATIC_DIR_INVARIANT.title,
             detail: `Admin staticDir resolves to ${resolvedAdminStaticDir}, but this directory is missing.`,
@@ -343,7 +346,7 @@ export const runPreflightDiagnostics = async ({ projectRoot, runtimeRoot, env = 
   const installStatePath = path.join(normalizedProjectRoot, INSTALL_STATE_RELATIVE_PATH);
   if (!fs.existsSync(installStatePath)) {
     addFinding(findings, {
-      severity: 'WARN',
+      severity: invariantWarnSeverity(INSTALL_STATE_CONFIG_JSON_INVARIANT),
       code: 'install-state-missing',
       check: INSTALL_STATE_CONFIG_JSON_INVARIANT.title,
       detail: `Install-state file not found: ${installStatePath}`,
@@ -352,7 +355,7 @@ export const runPreflightDiagnostics = async ({ projectRoot, runtimeRoot, env = 
     });
   } else if (!fs.statSync(installStatePath).isFile()) {
     addFinding(findings, {
-      severity: 'FAIL',
+      severity: invariantFailSeverity(INSTALL_STATE_CONFIG_JSON_INVARIANT),
       code: 'install-state-shape',
       check: INSTALL_STATE_CONFIG_JSON_INVARIANT.title,
       detail: `${installStatePath} exists but is not a file.`,
@@ -372,7 +375,7 @@ export const runPreflightDiagnostics = async ({ projectRoot, runtimeRoot, env = 
       });
     } catch {
       addFinding(findings, {
-        severity: 'WARN',
+        severity: invariantWarnSeverity(INSTALL_STATE_CONFIG_JSON_INVARIANT),
         code: 'install-state-invalid-json',
         check: INSTALL_STATE_CONFIG_JSON_INVARIANT.title,
         detail: `Install-state file exists but is not valid JSON: ${installStatePath}`,
