@@ -2,10 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
 import { loadConfig, resolveConfigPath } from '../config/config-loader.ts';
+import { SHARED_STARTUP_PREFLIGHT_INVARIANTS } from '../invariants/startup-preflight-invariants.ts';
 
 const LEGACY_CONFIG_FILENAME = 'nimb.config.json';
 const DEFAULT_ADMIN_STATIC_DIR = './ui/admin';
 const INSTALL_STATE_RELATIVE_PATH = path.join('data', 'system', 'config.json');
+
+const ADMIN_STATIC_DIR_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.adminStaticDir;
+const PERSISTENCE_RUNTIME_JSON_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceRuntimeJson;
+const STARTUP_PORT_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.startupPort;
 
 export type PreflightSeverity = 'PASS' | 'WARN' | 'FAIL';
 
@@ -64,9 +69,9 @@ const checkPortAvailable = async (port: number) => {
       resolve(undefined);
     };
 
-    server.once('error', () => done(new Error(`Startup invariant failed: port is unavailable: ${port}`)));
+    server.once('error', () => done(new Error(`Startup invariant failed [startup-port]: port is unavailable: ${port}`)));
     server.once('listening', () => {
-      server.close((closeError) => done(closeError ? new Error(`Startup invariant failed: port check failed: ${port}`) : null));
+      server.close((closeError) => done(closeError ? new Error(`Startup invariant failed [startup-port]: port check failed: ${port}`) : null));
     });
     server.listen(port, '127.0.0.1');
   });
@@ -280,37 +285,37 @@ export const runPreflightDiagnostics = async ({ projectRoot, runtimeRoot, env = 
           addFinding(findings, {
             severity: 'PASS',
             code: 'admin-static-dir',
-            check: 'Admin static directory',
+            check: ADMIN_STATIC_DIR_INVARIANT.title,
             detail: `Admin staticDir resolves to ${resolvedAdminStaticDir} and exists.`,
-            why: 'This is the first-choice location for admin UI static assets.',
+            why: ADMIN_STATIC_DIR_INVARIANT.why,
             next: 'No action needed.'
           });
         } else if (staticDirExists) {
           addFinding(findings, {
             severity: 'FAIL',
             code: 'admin-static-dir-shape',
-            check: 'Admin static directory',
+            check: ADMIN_STATIC_DIR_INVARIANT.title,
             detail: `Admin staticDir resolves to ${resolvedAdminStaticDir}, but this path is not a directory.`,
-            why: 'Startup invariant validation fails when admin staticDir resolves to a non-directory path.',
-            next: `Replace ${resolvedAdminStaticDir} with a directory, or update config.admin.staticDir.`
+            why: ADMIN_STATIC_DIR_INVARIANT.why,
+            next: `${ADMIN_STATIC_DIR_INVARIANT.remediation} (Resolved path: ${resolvedAdminStaticDir})`
           });
         } else if (usingDefaultStaticDir) {
           addFinding(findings, {
             severity: 'WARN',
             code: 'admin-static-fallback',
-            check: 'Admin static directory',
+            check: ADMIN_STATIC_DIR_INVARIANT.title,
             detail: `Admin staticDir resolves to ${resolvedAdminStaticDir}, but this directory is missing.`,
-            why: 'Nimb can fall back to built-in admin shell/assets, but this can hide packaging/layout issues.',
-            next: 'If you expect custom admin assets, deploy them at the configured staticDir.'
+            why: ADMIN_STATIC_DIR_INVARIANT.why,
+            next: 'If you expect custom admin assets, deploy them at the configured staticDir; otherwise fallback behavior is expected.'
           });
         } else {
           addFinding(findings, {
             severity: 'FAIL',
             code: 'admin-static-configured-missing',
-            check: 'Admin static directory',
+            check: ADMIN_STATIC_DIR_INVARIANT.title,
             detail: `Admin staticDir resolves to ${resolvedAdminStaticDir}, but this directory is missing.`,
-            why: 'Startup invariant validation requires configured admin staticDir paths to exist.',
-            next: `Create ${resolvedAdminStaticDir}, or remove config.admin.staticDir to use the built-in fallback path.`
+            why: ADMIN_STATIC_DIR_INVARIANT.why,
+            next: `${ADMIN_STATIC_DIR_INVARIANT.remediation} (Resolved path: ${resolvedAdminStaticDir})`
           });
         }
       }
@@ -384,10 +389,10 @@ export const runPreflightDiagnostics = async ({ projectRoot, runtimeRoot, env = 
       addFinding(findings, {
         severity: 'FAIL',
         code: 'persistence-runtime-shape',
-        check: 'Persistence runtime file',
+        check: PERSISTENCE_RUNTIME_JSON_INVARIANT.title,
         detail: `${persistenceRuntimePath} exists but is not a file.`,
-        why: 'Startup invariant validation expects persistence runtime state at a JSON file path.',
-        next: `Replace ${persistenceRuntimePath} with a JSON file or remove it.`
+        why: PERSISTENCE_RUNTIME_JSON_INVARIANT.why,
+        next: `${PERSISTENCE_RUNTIME_JSON_INVARIANT.remediation} (Path: ${persistenceRuntimePath})`
       });
     } else {
       try {
@@ -395,19 +400,19 @@ export const runPreflightDiagnostics = async ({ projectRoot, runtimeRoot, env = 
         addFinding(findings, {
           severity: 'PASS',
           code: 'persistence-runtime-valid',
-          check: 'Persistence runtime file',
+          check: PERSISTENCE_RUNTIME_JSON_INVARIANT.title,
           detail: `${persistenceRuntimePath} exists and is valid JSON.`,
-          why: 'Startup invariant validation loads this file when present.',
+          why: PERSISTENCE_RUNTIME_JSON_INVARIANT.why,
           next: 'No action needed.'
         });
       } catch {
         addFinding(findings, {
           severity: 'FAIL',
           code: 'persistence-runtime-invalid-json',
-          check: 'Persistence runtime file',
+          check: PERSISTENCE_RUNTIME_JSON_INVARIANT.title,
           detail: `${persistenceRuntimePath} exists but is not valid JSON.`,
-          why: 'Startup invariant validation fails on invalid persistence runtime JSON.',
-          next: `Fix JSON formatting in ${persistenceRuntimePath}, or remove the file.`
+          why: PERSISTENCE_RUNTIME_JSON_INVARIANT.why,
+          next: `${PERSISTENCE_RUNTIME_JSON_INVARIANT.remediation} (Path: ${persistenceRuntimePath})`
         });
       }
     }
@@ -419,19 +424,19 @@ export const runPreflightDiagnostics = async ({ projectRoot, runtimeRoot, env = 
     addFinding(findings, {
       severity: 'PASS',
       code: 'startup-port-available',
-      check: 'Startup port availability',
+      check: STARTUP_PORT_INVARIANT.title,
       detail: `Port ${startupPort} is available for binding on 127.0.0.1.`,
-      why: 'Canonical startup validates port availability before HTTP server boot.',
+      why: STARTUP_PORT_INVARIANT.why,
       next: 'No action needed.'
     });
   } catch (error) {
     addFinding(findings, {
       severity: 'FAIL',
       code: 'startup-port-invalid-or-unavailable',
-      check: 'Startup port availability',
+      check: STARTUP_PORT_INVARIANT.title,
       detail: error instanceof Error ? error.message : String(error),
-      why: 'Canonical startup fails when the selected startup port is invalid or already in use.',
-      next: 'Set PORT (or config.server.port) to a valid, free port before startup.'
+      why: STARTUP_PORT_INVARIANT.why,
+      next: STARTUP_PORT_INVARIANT.remediation
     });
   }
 
