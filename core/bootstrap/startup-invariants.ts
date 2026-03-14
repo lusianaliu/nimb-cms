@@ -1,6 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
+import { SHARED_STARTUP_PREFLIGHT_INVARIANTS } from '../invariants/startup-preflight-invariants.ts';
+
+const ADMIN_STATIC_DIR_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.adminStaticDir;
+const PERSISTENCE_RUNTIME_JSON_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceRuntimeJson;
+const STARTUP_PORT_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.startupPort;
 
 export const resolveAdminStaticDir = (config, rootDirectory) => {
   const staticDir = config?.admin?.staticDir ?? './ui/admin';
@@ -22,11 +27,11 @@ export const validateAdminStaticDir = (config, rootDirectory) => {
       return;
     }
 
-    throw new Error(`Startup invariant failed: admin staticDir does not exist: ${adminDir}`);
+    throw new Error(`Startup invariant failed [${ADMIN_STATIC_DIR_INVARIANT.id}]: admin staticDir does not exist: ${adminDir}`);
   }
 
   if (!fs.statSync(adminDir).isDirectory()) {
-    throw new Error(`Startup invariant failed: admin staticDir is not a directory: ${adminDir}`);
+    throw new Error(`Startup invariant failed [${ADMIN_STATIC_DIR_INVARIANT.id}]: admin staticDir is not a directory: ${adminDir}`);
   }
 };
 
@@ -86,7 +91,7 @@ export const validatePersistenceStorage = (project, options = {}) => {
   try {
     JSON.parse(fs.readFileSync(runtimePath, 'utf8'));
   } catch (_error) {
-    throw new Error(`Startup invariant failed: persistence file is invalid JSON: ${runtimePath}`);
+    throw new Error(`Startup invariant failed [${PERSISTENCE_RUNTIME_JSON_INVARIANT.id}]: persistence file is invalid JSON: ${runtimePath}`);
   }
 };
 
@@ -103,7 +108,7 @@ export const validateLogsDirectoryWritable = (project, options = {}) => {
 
 export const validatePortAvailable = async (port) => {
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
-    throw new Error(`Startup invariant failed: invalid port: ${port}`);
+    throw new Error(`Startup invariant failed [${STARTUP_PORT_INVARIANT.id}]: invalid port: ${port}`);
   }
 
   await new Promise((resolve, reject) => {
@@ -119,8 +124,8 @@ export const validatePortAvailable = async (port) => {
       resolve(undefined);
     };
 
-    server.once('error', () => done(new Error(`Startup invariant failed: port is unavailable: ${port}`)));
-    server.once('listening', () => server.close((closeError) => done(closeError ? new Error(`Startup invariant failed: port check failed: ${port}`) : null)));
+    server.once('error', () => done(new Error(`Startup invariant failed [${STARTUP_PORT_INVARIANT.id}]: port is unavailable: ${port}`)));
+    server.once('listening', () => server.close((closeError) => done(closeError ? new Error(`Startup invariant failed [${STARTUP_PORT_INVARIANT.id}]: port check failed: ${port}`) : null)));
     server.listen(port, '127.0.0.1');
   });
 };
