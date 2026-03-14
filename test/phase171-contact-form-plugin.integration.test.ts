@@ -1118,7 +1118,7 @@ test('phase 176: admin submissions summary API returns notification counts for a
   }
 });
 
-test('phase 177: admin contact page definition includes summary scope toggle near compact notification summary', async () => {
+test('phase 178: admin contact page definition includes summary scope clarification microcopy near compact notification summary', async () => {
   const cwd = mkdtemp();
   writeConfig(cwd);
   writeInstallState(cwd);
@@ -1136,6 +1136,9 @@ test('phase 177: admin contact page definition includes summary scope toggle nea
     assert.equal(adminHtml.includes('<option value="all">All saved submissions</option>'), true);
     assert.equal(adminHtml.includes('<option value="filtered">Current filtered results</option>'), true);
     assert.equal(adminHtml.includes('All saved submissions — Total: loading…'), true);
+    assert.equal(adminHtml.includes('id="contact-notification-summary-help"'), true);
+    assert.equal(adminHtml.includes('Counts are for all saved submissions in this contact form.'), true);
+    assert.equal(adminHtml.includes('Counts are from the filtered rows currently shown in this list.'), true);
     assert.equal(adminHtml.includes("fetch('/admin-api/contact-form/submissions/summary')"), true);
   } finally {
     await started.server.stop();

@@ -148,6 +148,27 @@ What this does **not** do:
 - It does not add background workers, queue processing, charts, or broad analytics.
 - It does not introduce a global/core mail subsystem.
 
+
+
+## Summary scope microcopy clarification (Phase 178)
+A small helper line now appears directly under the notification summary in the **Submissions** section on `/admin/contact-form`.
+
+What it clarifies:
+- In `All saved submissions` scope: counts describe all saved submissions in this contact form dataset.
+- In `Current filtered results` scope: counts describe the filtered rows currently loaded in the submissions list.
+
+Why this was added:
+- It reduces ambiguity about what each scope represents without changing any summary math.
+- It keeps wording calm and non-technical for non-technical admins.
+
+What this does **not** do:
+- It does not change summary/filter/list/storage behavior.
+- It does not add analytics, dashboards, workers, or queue processing.
+
+Storage-first remains unchanged:
+- submission storage is still the primary success path
+- SMTP notification remains best-effort and secondary
+
 ## Success / failure contract (storage-first)
 Submission flow order:
 1. Validate request payload.
