@@ -749,9 +749,14 @@ const renderAdminPage = () => `
           <option value="skipped">Skipped</option>
           <option value="not-attempted">Not attempted</option>
         </select>
+        <label for="contact-notification-summary-scope" style="font-weight:600;color:#0f172a;">Summary scope</label>
+        <select id="contact-notification-summary-scope" style="padding:.35rem .5rem;border:1px solid #cbd5e1;border-radius:8px;background:#fff;max-width:100%;">
+          <option value="all">All saved submissions</option>
+          <option value="filtered">Current filtered results</option>
+        </select>
         <span style="color:#64748b;font-size:.9rem;">Messages are always saved, even when notification fails or is skipped.</span>
       </div>
-      <p id="contact-notification-summary" style="margin:.25rem 0 .7rem;color:#334155;font-size:.92rem;line-height:1.4;">Notification totals: loading…</p>
+      <p id="contact-notification-summary" style="margin:.25rem 0 .7rem;color:#334155;font-size:.92rem;line-height:1.4;">All saved submissions — Total: loading…</p>
       <div id="contact-submissions-empty" style="display:none;">No submissions yet.</div>
       <table id="contact-submissions-table" style="width:100%;border-collapse:collapse;display:none;">
         <thead>
@@ -780,6 +785,7 @@ const renderAdminPage = () => `
     const tbody = table.querySelector('tbody');
     const detail = document.getElementById('contact-submission-detail');
     const notificationFilter = document.getElementById('contact-notification-filter');
+    const notificationSummaryScope = document.getElementById('contact-notification-summary-scope');
     const notificationSummary = document.getElementById('contact-notification-summary');
 
     const escapeHtml = (value) => String(value ?? '')
@@ -840,17 +846,55 @@ const renderAdminPage = () => `
         + '</tr>';
     }).join('');
 
-    const renderNotificationSummary = (summary) => {
+    let allSavedSummary = { total: 0, failed: 0, skipped: 0, sent: 0, notAttempted: 0 };
+    let currentFilteredSummary = { total: 0, failed: 0, skipped: 0, sent: 0, notAttempted: 0 };
+
+    const countNotificationsFromRecords = (records) => {
+      const counts = { total: 0, failed: 0, skipped: 0, sent: 0, notAttempted: 0 };
+      if (!Array.isArray(records)) {
+        return counts;
+      }
+
+      counts.total = records.length;
+      for (const record of records) {
+        const status = record?.notificationStatus;
+        if (status === 'success') {
+          counts.sent += 1;
+          continue;
+        }
+
+        if (status === 'failed') {
+          counts.failed += 1;
+          continue;
+        }
+
+        if (status === 'skipped') {
+          counts.skipped += 1;
+          continue;
+        }
+
+        counts.notAttempted += 1;
+      }
+
+      return counts;
+    };
+
+    const getSummaryScope = () => notificationSummaryScope?.value === 'filtered' ? 'filtered' : 'all';
+
+    const renderNotificationSummary = () => {
       if (!notificationSummary) {
         return;
       }
 
+      const selectedScope = getSummaryScope();
+      const summary = selectedScope === 'filtered' ? currentFilteredSummary : allSavedSummary;
+      const scopeLabel = selectedScope === 'filtered' ? 'Current filtered results' : 'All saved submissions';
       const total = Number(summary?.total ?? 0);
       const failed = Number(summary?.failed ?? 0);
       const skipped = Number(summary?.skipped ?? 0);
       const sent = Number(summary?.sent ?? 0);
-      notificationSummary.textContent = 'Notification totals (all saved submissions): '
-        + 'Total: ' + total
+      notificationSummary.textContent = scopeLabel
+        + ' — Total: ' + total
         + ' · Failed: ' + failed
         + ' · Skipped: ' + skipped
         + ' · Sent: ' + sent;
@@ -858,8 +902,8 @@ const renderAdminPage = () => `
 
     const loadNotificationSummary = async () => {
       const response = await fetch('/admin-api/contact-form/submissions/summary');
-      const summary = await response.json();
-      renderNotificationSummary(summary);
+      allSavedSummary = await response.json();
+      renderNotificationSummary();
     };
 
     const loadSubmissions = async () => {
@@ -870,6 +914,8 @@ const renderAdminPage = () => `
 
       const response = await fetch('/admin-api/contact-form/submissions' + query);
       const records = await response.json();
+      currentFilteredSummary = countNotificationsFromRecords(records);
+      renderNotificationSummary();
 
       if (!Array.isArray(records) || records.length === 0) {
         table.style.display = 'none';
@@ -949,6 +995,10 @@ const renderAdminPage = () => `
 
     notificationFilter?.addEventListener('change', () => {
       void loadSubmissions();
+    });
+
+    notificationSummaryScope?.addEventListener('change', () => {
+      renderNotificationSummary();
     });
 
     void loadSettings();

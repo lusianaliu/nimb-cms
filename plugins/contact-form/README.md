@@ -124,6 +124,30 @@ Storage-first remains intact:
 - submissions are still the primary source of truth
 - SMTP notification remains best-effort and secondary
 
+
+
+## Count summary scope toggle (Phase 177)
+The submissions notification summary now includes a tiny **Summary scope** toggle beside the existing notification filter on `/admin/contact-form`.
+
+Scope options:
+- `All saved submissions`: shows counts for the full saved contact-submission dataset (same plugin-scoped dataset used by the summary API).
+- `Current filtered results`: shows counts for the currently loaded submissions list result after the selected notification filter is applied.
+
+How current filtered results are calculated:
+- The admin page fetches the submissions list using the active notification filter (`all`, `sent`, `failed`, `skipped`, `not-attempted`).
+- The summary in `Current filtered results` scope is computed from that loaded list response in the admin UI.
+- This keeps behavior compact and grounded in the existing list/filter flow without adding analytics infrastructure.
+
+Important limits and intent:
+- This is a triage clarity refinement, not a reporting dashboard.
+- If existing list endpoints are capped in a future phase, filtered-scope counts reflect the loaded result set under that same cap.
+- No storage semantics change: submissions remain primary and durable, SMTP remains best-effort.
+
+What this does **not** do:
+- It does not retry notifications.
+- It does not add background workers, queue processing, charts, or broad analytics.
+- It does not introduce a global/core mail subsystem.
+
 ## Success / failure contract (storage-first)
 Submission flow order:
 1. Validate request payload.
