@@ -758,6 +758,7 @@ const renderAdminPage = () => `
       </div>
       <p id="contact-notification-summary" style="margin:.25rem 0 .7rem;color:#334155;font-size:.92rem;line-height:1.4;">All saved submissions — Total: loading…</p>
       <p id="contact-notification-summary-help" style="margin:-.2rem 0 .7rem;color:#64748b;font-size:.86rem;line-height:1.35;">Counts are for all saved submissions in this contact form.</p>
+      <p id="contact-notification-summary-refreshed" style="margin:-.35rem 0 .7rem;color:#64748b;font-size:.82rem;line-height:1.35;">Last refreshed not yet.</p>
       <div id="contact-submissions-empty" style="display:none;">No submissions yet.</div>
       <table id="contact-submissions-table" style="width:100%;border-collapse:collapse;display:none;">
         <thead>
@@ -789,6 +790,7 @@ const renderAdminPage = () => `
     const notificationSummaryScope = document.getElementById('contact-notification-summary-scope');
     const notificationSummary = document.getElementById('contact-notification-summary');
     const notificationSummaryHelp = document.getElementById('contact-notification-summary-help');
+    const notificationSummaryRefreshed = document.getElementById('contact-notification-summary-refreshed');
 
     const escapeHtml = (value) => String(value ?? '')
       .replaceAll('&', '&amp;')
@@ -850,6 +852,7 @@ const renderAdminPage = () => `
 
     let allSavedSummary = { total: 0, failed: 0, skipped: 0, sent: 0, notAttempted: 0 };
     let currentFilteredSummary = { total: 0, failed: 0, skipped: 0, sent: 0, notAttempted: 0 };
+    let summaryRefreshedAt = null;
 
     const countNotificationsFromRecords = (records) => {
       const counts = { total: 0, failed: 0, skipped: 0, sent: 0, notAttempted: 0 };
@@ -883,6 +886,27 @@ const renderAdminPage = () => `
 
     const getSummaryScope = () => notificationSummaryScope?.value === 'filtered' ? 'filtered' : 'all';
 
+    const formatRefreshedHint = (refreshedAt) => {
+      if (!refreshedAt) {
+        return 'Last refreshed not yet.';
+      }
+
+      const nowMs = Date.now();
+      if (nowMs - refreshedAt.getTime() < 60 * 1000) {
+        return 'Last refreshed just now';
+      }
+
+      const timeText = refreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return 'Last refreshed at ' + timeText;
+    };
+
+    const setNotificationRefreshedAt = (refreshedAt) => {
+      summaryRefreshedAt = refreshedAt;
+      if (notificationSummaryRefreshed) {
+        notificationSummaryRefreshed.textContent = formatRefreshedHint(summaryRefreshedAt);
+      }
+    };
+
     const renderNotificationSummary = () => {
       if (!notificationSummary) {
         return;
@@ -912,6 +936,7 @@ const renderAdminPage = () => `
       const response = await fetch('/admin-api/contact-form/submissions/summary');
       allSavedSummary = await response.json();
       renderNotificationSummary();
+      setNotificationRefreshedAt(new Date());
     };
 
     const loadSubmissions = async () => {
@@ -924,6 +949,7 @@ const renderAdminPage = () => `
       const records = await response.json();
       currentFilteredSummary = countNotificationsFromRecords(records);
       renderNotificationSummary();
+      setNotificationRefreshedAt(new Date());
 
       if (!Array.isArray(records) || records.length === 0) {
         table.style.display = 'none';
@@ -1007,6 +1033,7 @@ const renderAdminPage = () => `
 
     notificationSummaryScope?.addEventListener('change', () => {
       renderNotificationSummary();
+      setNotificationRefreshedAt(new Date());
     });
 
     void loadSettings();
