@@ -70,6 +70,34 @@ Meaning of statuses:
 
 This metadata is intentionally lightweight and informational only. It does **not** guarantee inbox delivery and is **not** a full mail activity history.
 
+## Notification status filter for submissions (Phase 175)
+Admins can now filter the submissions list by notification outcome to speed up triage on busy sites.
+
+Where to use it:
+- Admin page: `/admin/contact-form`
+- Location: top of the **Submissions** section (compact dropdown)
+
+Filter options:
+- `All`: show every saved submission
+- `Sent`: show submissions where notification status is `success`
+- `Failed`: show submissions where notification status is `failed`
+- `Skipped`: show submissions where notification status is `skipped`
+- `Not attempted`: show submissions where notification status is `unknown` (older/fallback records)
+
+What the filter means:
+- It is a read-only admin convenience for operational visibility.
+- It helps quickly focus on sends that failed or were skipped.
+- It uses existing per-submission notification metadata and badge wording.
+
+What the filter does **not** do:
+- It does not alter submission records.
+- It does not retry notification sends.
+- It does not introduce queue/workers or a global mail subsystem.
+
+Storage-first contract remains unchanged:
+- submissions are still saved as the primary success path
+- notification status remains secondary, best-effort metadata
+
 ## Success / failure contract (storage-first)
 Submission flow order:
 1. Validate request payload.
