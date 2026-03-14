@@ -757,6 +757,7 @@ const renderAdminPage = () => `
         <span style="color:#64748b;font-size:.9rem;">Messages are always saved, even when notification fails or is skipped.</span>
       </div>
       <p id="contact-notification-summary" style="margin:.25rem 0 .7rem;color:#334155;font-size:.92rem;line-height:1.4;">All saved submissions — Total: loading…</p>
+      <p id="contact-notification-summary-help" style="margin:-.2rem 0 .7rem;color:#64748b;font-size:.86rem;line-height:1.35;">Counts are for all saved submissions in this contact form.</p>
       <div id="contact-submissions-empty" style="display:none;">No submissions yet.</div>
       <table id="contact-submissions-table" style="width:100%;border-collapse:collapse;display:none;">
         <thead>
@@ -787,6 +788,7 @@ const renderAdminPage = () => `
     const notificationFilter = document.getElementById('contact-notification-filter');
     const notificationSummaryScope = document.getElementById('contact-notification-summary-scope');
     const notificationSummary = document.getElementById('contact-notification-summary');
+    const notificationSummaryHelp = document.getElementById('contact-notification-summary-help');
 
     const escapeHtml = (value) => String(value ?? '')
       .replaceAll('&', '&amp;')
@@ -889,6 +891,9 @@ const renderAdminPage = () => `
       const selectedScope = getSummaryScope();
       const summary = selectedScope === 'filtered' ? currentFilteredSummary : allSavedSummary;
       const scopeLabel = selectedScope === 'filtered' ? 'Current filtered results' : 'All saved submissions';
+      const scopeHelp = selectedScope === 'filtered'
+        ? 'Counts are from the filtered rows currently shown in this list.'
+        : 'Counts are for all saved submissions in this contact form.';
       const total = Number(summary?.total ?? 0);
       const failed = Number(summary?.failed ?? 0);
       const skipped = Number(summary?.skipped ?? 0);
@@ -898,6 +903,9 @@ const renderAdminPage = () => `
         + ' · Failed: ' + failed
         + ' · Skipped: ' + skipped
         + ' · Sent: ' + sent;
+      if (notificationSummaryHelp) {
+        notificationSummaryHelp.textContent = scopeHelp;
+      }
     };
 
     const loadNotificationSummary = async () => {
