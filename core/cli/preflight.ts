@@ -11,6 +11,10 @@ const INSTALL_STATE_RELATIVE_PATH = path.join('data', 'system', 'config.json');
 const ADMIN_STATIC_DIR_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.adminStaticDir;
 const PERSISTENCE_RUNTIME_JSON_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceRuntimeJson;
 const STARTUP_PORT_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.startupPort;
+const INSTALL_STATE_CONFIG_JSON_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.installStateConfigJson;
+const DATA_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.dataDirectoryWritable;
+const PERSISTENCE_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceDirectoryWritable;
+const LOGS_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable;
 
 export type PreflightSeverity = 'PASS' | 'WARN' | 'FAIL';
 
@@ -97,7 +101,12 @@ const resolveNearestExistingPath = (targetPath: string) => {
   return currentPath;
 };
 
-const evaluateRequiredDirectory = (findings: PreflightFinding[], directoryPath: string, label: string) => {
+const evaluateRequiredDirectory = (
+  findings: PreflightFinding[],
+  directoryPath: string,
+  label: string,
+  invariant = DATA_DIRECTORY_WRITABLE_INVARIANT
+) => {
   if (fs.existsSync(directoryPath)) {
     if (!fs.statSync(directoryPath).isDirectory()) {
       addFinding(findings, {
@@ -105,7 +114,7 @@ const evaluateRequiredDirectory = (findings: PreflightFinding[], directoryPath: 
         code: 'required-directory-shape',
         check: `${label} path shape`,
         detail: `${directoryPath} exists but is not a directory.`,
-        why: 'Nimb startup requires this path to be a writable directory.',
+        why: invariant.why,
         next: `Replace ${directoryPath} with a directory before starting Nimb.`
       });
       return;
@@ -118,7 +127,7 @@ const evaluateRequiredDirectory = (findings: PreflightFinding[], directoryPath: 
         code: 'required-directory-writable',
         check: `${label} writable`,
         detail: `${directoryPath} exists and accepted a temporary write probe.`,
-        why: 'Nimb needs writable storage for runtime data and logs.',
+        why: invariant.why,
         next: 'No action needed.'
       });
     } catch {
@@ -127,8 +136,8 @@ const evaluateRequiredDirectory = (findings: PreflightFinding[], directoryPath: 
         code: 'required-directory-writable',
         check: `${label} writable`,
         detail: `${directoryPath} exists but is not writable by the current process.`,
-        why: 'Nimb startup invariants require writable runtime directories.',
-        next: `Adjust ownership/permissions for ${directoryPath} or choose a writable project root.`
+        why: invariant.why,
+        next: `${invariant.remediation} (Path: ${directoryPath})`
       });
     }
 
@@ -142,8 +151,8 @@ const evaluateRequiredDirectory = (findings: PreflightFinding[], directoryPath: 
       code: 'required-directory-parent',
       check: `${label} parent path`,
       detail: `Unable to resolve an existing parent path for ${directoryPath}.`,
-      why: 'Nimb cannot create required directories without a writable parent path.',
-      next: `Create ${directoryPath} (and parent folders) manually with writable permissions.`
+      why: invariant.why,
+      next: `${invariant.remediation} (Path: ${directoryPath})`
     });
     return;
   }
@@ -155,8 +164,8 @@ const evaluateRequiredDirectory = (findings: PreflightFinding[], directoryPath: 
       code: 'required-directory-missing',
       check: `${label} exists`,
       detail: `${directoryPath} is missing, but parent path ${nearestExisting} appears writable.`,
-      why: 'Nimb startup will attempt to create this required directory.',
-      next: `Optional: pre-create ${directoryPath} to reduce first-start surprises.`
+      why: invariant.why,
+      next: `${invariant.remediation} (Path: ${directoryPath})`
     });
   } catch {
     addFinding(findings, {
@@ -164,8 +173,8 @@ const evaluateRequiredDirectory = (findings: PreflightFinding[], directoryPath: 
       code: 'required-directory-parent',
       check: `${label} parent path writable`,
       detail: `${directoryPath} is missing and parent path ${nearestExisting} is not writable.`,
-      why: 'Nimb startup cannot create required runtime directories in read-only parents.',
-      next: `Grant write permissions on ${nearestExisting} or pre-create ${directoryPath} with correct ownership.`
+      why: invariant.why,
+      next: `${invariant.remediation} (Path: ${directoryPath}; Parent: ${nearestExisting})`
     });
   }
 };
@@ -336,19 +345,19 @@ export const runPreflightDiagnostics = async ({ projectRoot, runtimeRoot, env = 
     addFinding(findings, {
       severity: 'WARN',
       code: 'install-state-missing',
-      check: 'Install-state source path',
+      check: INSTALL_STATE_CONFIG_JSON_INVARIANT.title,
       detail: `Install-state file not found: ${installStatePath}`,
-      why: 'Canonical install state is read from data/system/config.json.',
-      next: 'This is normal for first install. For existing deployments, verify the file was deployed and is writable.'
+      why: INSTALL_STATE_CONFIG_JSON_INVARIANT.why,
+      next: `${INSTALL_STATE_CONFIG_JSON_INVARIANT.remediation} Missing path: ${installStatePath}. This is normal for first install.`
     });
   } else if (!fs.statSync(installStatePath).isFile()) {
     addFinding(findings, {
       severity: 'FAIL',
       code: 'install-state-shape',
-      check: 'Install-state source path',
+      check: INSTALL_STATE_CONFIG_JSON_INVARIANT.title,
       detail: `${installStatePath} exists but is not a file.`,
-      why: 'Nimb expects install state at a JSON file path.',
-      next: `Replace ${installStatePath} with a valid JSON file.`
+      why: INSTALL_STATE_CONFIG_JSON_INVARIANT.why,
+      next: `${INSTALL_STATE_CONFIG_JSON_INVARIANT.remediation} (Path: ${installStatePath})`
     });
   } else {
     try {
@@ -356,19 +365,19 @@ export const runPreflightDiagnostics = async ({ projectRoot, runtimeRoot, env = 
       addFinding(findings, {
         severity: 'PASS',
         code: 'install-state-readable',
-        check: 'Install-state source path',
+        check: INSTALL_STATE_CONFIG_JSON_INVARIANT.title,
         detail: `Install-state file exists and is valid JSON: ${installStatePath}`,
-        why: 'Install state drives canonical installed/uninstalled behavior.',
+        why: INSTALL_STATE_CONFIG_JSON_INVARIANT.why,
         next: 'No action needed.'
       });
     } catch {
       addFinding(findings, {
         severity: 'WARN',
         code: 'install-state-invalid-json',
-        check: 'Install-state source path',
+        check: INSTALL_STATE_CONFIG_JSON_INVARIANT.title,
         detail: `Install-state file exists but is not valid JSON: ${installStatePath}`,
-        why: 'Nimb will treat unreadable config as default state, which can misrepresent install status.',
-        next: `Repair JSON at ${installStatePath} to preserve expected install status.`
+        why: INSTALL_STATE_CONFIG_JSON_INVARIANT.why,
+        next: `${INSTALL_STATE_CONFIG_JSON_INVARIANT.remediation} (Path: ${installStatePath})`
       });
     }
   }
@@ -377,11 +386,11 @@ export const runPreflightDiagnostics = async ({ projectRoot, runtimeRoot, env = 
   evaluateExpectedDirectory(findings, path.join(normalizedProjectRoot, 'themes'), 'themes');
   evaluateExpectedDirectory(findings, path.join(normalizedProjectRoot, 'public'), 'public');
 
-  evaluateRequiredDirectory(findings, path.join(normalizedProjectRoot, 'data'), 'data');
-  evaluateRequiredDirectory(findings, path.join(normalizedProjectRoot, 'data', 'system'), 'data/system');
-  evaluateRequiredDirectory(findings, path.join(normalizedProjectRoot, 'data', 'content'), 'data/content');
-  evaluateRequiredDirectory(findings, path.join(normalizedProjectRoot, 'data', 'uploads'), 'data/uploads');
-  evaluateRequiredDirectory(findings, path.join(normalizedProjectRoot, 'logs'), 'logs');
+  evaluateRequiredDirectory(findings, path.join(normalizedProjectRoot, 'data'), 'data', DATA_DIRECTORY_WRITABLE_INVARIANT);
+  evaluateRequiredDirectory(findings, path.join(normalizedProjectRoot, 'data', 'system'), 'data/system', PERSISTENCE_DIRECTORY_WRITABLE_INVARIANT);
+  evaluateRequiredDirectory(findings, path.join(normalizedProjectRoot, 'data', 'content'), 'data/content', DATA_DIRECTORY_WRITABLE_INVARIANT);
+  evaluateRequiredDirectory(findings, path.join(normalizedProjectRoot, 'data', 'uploads'), 'data/uploads', DATA_DIRECTORY_WRITABLE_INVARIANT);
+  evaluateRequiredDirectory(findings, path.join(normalizedProjectRoot, 'logs'), 'logs', LOGS_DIRECTORY_WRITABLE_INVARIANT);
 
   const persistenceRuntimePath = path.join(normalizedProjectRoot, 'data', 'system', 'runtime.json');
   if (fs.existsSync(persistenceRuntimePath)) {
