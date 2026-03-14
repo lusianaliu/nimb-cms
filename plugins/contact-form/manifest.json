@@ -1,0 +1,13 @@
+{
+  "id": "contact-form",
+  "name": "contact-form",
+  "version": "1.0.0",
+  "entry": "index.ts",
+  "apiVersion": "1.0.0",
+  "capabilities": [
+    "admin.menu",
+    "admin.page",
+    "http.routes",
+    "content.types"
+  ]
+}
