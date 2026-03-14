@@ -98,6 +98,32 @@ Storage-first contract remains unchanged:
 - submissions are still saved as the primary success path
 - notification status remains secondary, best-effort metadata
 
+## Notification count summary for triage (Phase 176)
+Admins now see a compact notification count summary near the submissions notification filter on `/admin/contact-form`.
+
+What it shows:
+- `Total`: all saved contact submissions in the plugin dataset (same set used by the admin list endpoint limit)
+- `Failed`: submissions with notification status `failed`
+- `Skipped`: submissions with notification status `skipped`
+- `Sent`: submissions with notification status `success`
+
+What counts represent:
+- The summary is based on the **full saved submissions dataset**, not the currently selected filter result.
+- If admins apply a filter (for example `Failed`), list rows change, but summary counts still describe the overall saved dataset so triage context remains visible.
+
+Where admins see it:
+- In the **Submissions** section, directly under the notification filter control.
+- It is intentionally plain and lightweight (`Total · Failed · Skipped · Sent`) so it supports quick scanning without becoming a dashboard.
+
+What this does **not** do:
+- It does not change submission storage behavior.
+- It does not retry or alter notification attempts.
+- It does not add analytics infrastructure, charts, workers, or queue processing.
+
+Storage-first remains intact:
+- submissions are still the primary source of truth
+- SMTP notification remains best-effort and secondary
+
 ## Success / failure contract (storage-first)
 Submission flow order:
 1. Validate request payload.
