@@ -170,6 +170,34 @@ Storage-first remains unchanged:
 - SMTP notification remains best-effort and secondary
 
 ## Success / failure contract (storage-first)
+
+## Summary last-refreshed hint (Phase 179)
+Admins now see a tiny recency hint under the notification summary in the **Submissions** section on `/admin/contact-form`.
+
+What appears:
+- `Last refreshed not yet.` before submissions/summary data is loaded.
+- `Last refreshed just now` when the list/summary context is freshly loaded.
+- `Last refreshed at HH:MM` after roughly one minute has passed since the last refresh.
+
+What updates this hint:
+- Initial summary fetch.
+- Initial submissions list fetch.
+- Notification filter changes (through submissions list reload).
+- Summary scope toggle changes (local summary context re-render).
+
+What it means:
+- It is a lightweight cue for when the current summary/list context was last refreshed in the admin page session.
+- It helps clarify recency for operators without changing summary math.
+
+What it does **not** mean:
+- It is not live sync.
+- It does not add polling or background updates.
+- It does not change submission storage or notification behavior.
+
+Storage-first contract remains unchanged:
+- submission storage is still the primary success path
+- SMTP notification remains best-effort and secondary
+
 Submission flow order:
 1. Validate request payload.
 2. Store submission in plugin-owned durable storage.

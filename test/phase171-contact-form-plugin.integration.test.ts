@@ -1140,6 +1140,33 @@ test('phase 178: admin contact page definition includes summary scope clarificat
     assert.equal(adminHtml.includes('Counts are for all saved submissions in this contact form.'), true);
     assert.equal(adminHtml.includes('Counts are from the filtered rows currently shown in this list.'), true);
     assert.equal(adminHtml.includes("fetch('/admin-api/contact-form/submissions/summary')"), true);
+    assert.equal(adminHtml.includes('id="contact-notification-summary-refreshed"'), true);
+    assert.equal(adminHtml.includes('Last refreshed not yet.'), true);
+  } finally {
+    await started.server.stop();
+  }
+});
+
+
+test('phase 179: admin contact page wires a small last-refreshed hint to summary/list refresh events', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+  writeInstallState(cwd);
+  installContactPlugin(cwd);
+
+  const started = await createTestServer({ cwd });
+  await started.server.start();
+
+  try {
+    const adminPageDefinition = started.runtime.adminPages.get('/admin/contact-form');
+    assert.equal(Boolean(adminPageDefinition), true);
+    const adminHtml = adminPageDefinition?.render?.() ?? '';
+    assert.equal(adminHtml.includes('id="contact-notification-summary-refreshed"'), true);
+    assert.equal(adminHtml.includes('Last refreshed not yet.'), true);
+    assert.equal(adminHtml.includes("setNotificationRefreshedAt(new Date())"), true);
+    assert.equal(adminHtml.includes("notificationSummaryScope?.addEventListener('change'"), true);
+    assert.equal(adminHtml.includes("return 'Last refreshed just now'"), true);
+    assert.equal(adminHtml.includes("return 'Last refreshed at ' + timeText"), true);
   } finally {
     await started.server.stop();
   }
