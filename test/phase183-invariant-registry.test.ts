@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SHARED_STARTUP_PREFLIGHT_INVARIANTS, getSharedInvariant } from '../core/invariants/startup-preflight-invariants.ts';
 import { runPreflightDiagnostics } from '../core/cli/preflight.ts';
+import { validateDataDirectoryWritable } from '../core/bootstrap/startup-invariants.ts';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -47,8 +48,26 @@ test('phase 183: shared invariant registry exposes canonical metadata for aligne
   assert.equal(startupPort.id, 'startup-port');
   assert.equal(startupPort.severityIntent.preflight.fail, 'FAIL');
 
+  const installStateConfigJson = getSharedInvariant('installStateConfigJson');
+  assert.equal(installStateConfigJson.id, 'install-state-config-json');
+  assert.equal(installStateConfigJson.severityIntent.preflight.warn, 'WARN');
+
+  const dataDirectoryWritable = getSharedInvariant('dataDirectoryWritable');
+  assert.equal(dataDirectoryWritable.id, 'data-directory-writable');
+  assert.equal(dataDirectoryWritable.severityIntent.startup, 'FAIL');
+
+  const persistenceDirectoryWritable = getSharedInvariant('persistenceDirectoryWritable');
+  assert.equal(persistenceDirectoryWritable.id, 'persistence-directory-writable');
+
+  const logsDirectoryWritable = getSharedInvariant('logsDirectoryWritable');
+  assert.equal(logsDirectoryWritable.id, 'logs-directory-writable');
+
   assert.deepEqual(Object.keys(SHARED_STARTUP_PREFLIGHT_INVARIANTS).sort(), [
     'adminStaticDir',
+    'dataDirectoryWritable',
+    'installStateConfigJson',
+    'logsDirectoryWritable',
+    'persistenceDirectoryWritable',
     'persistenceRuntimeJson',
     'startupPort'
   ]);
@@ -74,4 +93,43 @@ test('phase 183: preflight uses shared invariant titles for aligned checks', asy
 
   const portCheck = report.findings.find((finding) => finding.code === 'startup-port-available');
   assert.equal(portCheck?.check, SHARED_STARTUP_PREFLIGHT_INVARIANTS.startupPort.title);
+});
+
+
+test('phase 184: preflight uses shared invariant metadata for install-state and writable directories', async () => {
+  const projectRoot = mkProjectRoot();
+  seedBasicProject(projectRoot);
+
+  fs.rmSync(path.join(projectRoot, 'data', 'system', 'config.json'), { force: true });
+
+  const report = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: '/workspace/nimb-cms'
+  });
+
+  const installStateFinding = report.findings.find((finding) => finding.code === 'install-state-missing');
+  assert.equal(installStateFinding?.check, SHARED_STARTUP_PREFLIGHT_INVARIANTS.installStateConfigJson.title);
+  assert.equal(installStateFinding?.why, SHARED_STARTUP_PREFLIGHT_INVARIANTS.installStateConfigJson.why);
+
+  const logsWritableFinding = report.findings.find(
+    (finding) => finding.code === 'required-directory-writable' && finding.check === 'logs writable'
+  );
+  assert.equal(logsWritableFinding?.why, SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable.why);
+});
+
+
+test('phase 184: startup data directory writability failure uses shared invariant id', () => {
+  const projectRoot = mkProjectRoot();
+  fs.mkdirSync(path.join(projectRoot, 'data'), { recursive: true });
+  fs.writeFileSync(path.join(projectRoot, 'data', 'content'), 'not-a-directory\n');
+
+  assert.throws(
+    () => validateDataDirectoryWritable({
+      dataDir: path.join(projectRoot, 'data'),
+      dataSystemDir: path.join(projectRoot, 'data', 'system'),
+      dataContentDir: path.join(projectRoot, 'data', 'content'),
+      dataUploadsDir: path.join(projectRoot, 'data', 'uploads')
+    }),
+    /Startup invariant failed \[data-directory-writable\]/
+  );
 });

@@ -6,6 +6,9 @@ import { SHARED_STARTUP_PREFLIGHT_INVARIANTS } from '../invariants/startup-prefl
 const ADMIN_STATIC_DIR_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.adminStaticDir;
 const PERSISTENCE_RUNTIME_JSON_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceRuntimeJson;
 const STARTUP_PORT_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.startupPort;
+const DATA_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.dataDirectoryWritable;
+const PERSISTENCE_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceDirectoryWritable;
+const LOGS_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable;
 
 export const resolveAdminStaticDir = (config, rootDirectory) => {
   const staticDir = config?.admin?.staticDir ?? './ui/admin';
@@ -70,7 +73,7 @@ export const validateDataDirectoryWritable = (project, options = {}) => {
     ensureDirectory(contentDirectory, 'data content directory', options.log);
     ensureDirectory(uploadsDirectory, 'data uploads directory', options.log);
   } catch (error) {
-    throw new Error(`Startup invariant failed: data directory is not writable: ${dataDirectory}`);
+    throw new Error(`Startup invariant failed [${DATA_DIRECTORY_WRITABLE_INVARIANT.id}]: data directory is not writable: ${dataDirectory}`);
   }
 };
 
@@ -80,7 +83,7 @@ export const validatePersistenceStorage = (project, options = {}) => {
   try {
     ensureDirectory(persistenceRoot, 'persistence directory', options.log);
   } catch (error) {
-    throw new Error(`Startup invariant failed: persistence directory is not writable: ${persistenceRoot}`);
+    throw new Error(`Startup invariant failed [${PERSISTENCE_DIRECTORY_WRITABLE_INVARIANT.id}]: persistence directory is not writable: ${persistenceRoot}`);
   }
 
   const runtimePath = path.join(persistenceRoot, 'runtime.json');
@@ -102,7 +105,7 @@ export const validateLogsDirectoryWritable = (project, options = {}) => {
   try {
     ensureDirectory(logsDirectory, 'logs directory', options.log);
   } catch (error) {
-    throw new Error(`Startup invariant failed: logs directory is not writable: ${logsDirectory}`);
+    throw new Error(`Startup invariant failed [${LOGS_DIRECTORY_WRITABLE_INVARIANT.id}]: logs directory is not writable: ${logsDirectory}`);
   }
 };
 
