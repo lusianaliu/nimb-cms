@@ -1118,7 +1118,7 @@ test('phase 176: admin submissions summary API returns notification counts for a
   }
 });
 
-test('phase 176: admin contact page definition includes compact notification summary copy near filter', async () => {
+test('phase 177: admin contact page definition includes summary scope toggle near compact notification summary', async () => {
   const cwd = mkdtemp();
   writeConfig(cwd);
   writeInstallState(cwd);
@@ -1132,8 +1132,99 @@ test('phase 176: admin contact page definition includes compact notification sum
     assert.equal(Boolean(adminPageDefinition), true);
     const adminHtml = adminPageDefinition?.render?.() ?? '';
     assert.equal(adminHtml.includes('id="contact-notification-summary"'), true);
-    assert.equal(adminHtml.includes('Notification totals (all saved submissions):'), true);
+    assert.equal(adminHtml.includes('id="contact-notification-summary-scope"'), true);
+    assert.equal(adminHtml.includes('<option value="all">All saved submissions</option>'), true);
+    assert.equal(adminHtml.includes('<option value="filtered">Current filtered results</option>'), true);
+    assert.equal(adminHtml.includes('All saved submissions — Total: loading…'), true);
     assert.equal(adminHtml.includes("fetch('/admin-api/contact-form/submissions/summary')"), true);
+  } finally {
+    await started.server.stop();
+  }
+});
+
+
+test('phase 177: compact summary scope model remains stable with filtered list context', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+  writeInstallState(cwd);
+  installContactPlugin(cwd);
+
+  const started = await createTestServer({ cwd });
+  const listening = await started.server.start();
+
+  try {
+    started.runtime.db.create('contact-submission', {
+      name: 'Filter Failed',
+      email: 'filter-failed@example.com',
+      subject: 'Failed',
+      message: 'failed',
+      status: 'new',
+      createdAt: new Date().toISOString(),
+      notificationStatus: 'failed'
+    });
+
+    started.runtime.db.create('contact-submission', {
+      name: 'Filter Sent',
+      email: 'filter-sent@example.com',
+      subject: 'Sent',
+      message: 'sent',
+      status: 'new',
+      createdAt: new Date().toISOString(),
+      notificationStatus: 'success'
+    });
+
+    started.runtime.db.create('contact-submission', {
+      name: 'Filter Unknown',
+      email: 'filter-unknown@example.com',
+      subject: 'Unknown',
+      message: 'unknown',
+      status: 'new',
+      createdAt: new Date().toISOString()
+    });
+
+    const allSummaryResponse = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/submissions/summary`);
+    assert.equal(allSummaryResponse.status, 200);
+    const allSummary = await allSummaryResponse.json();
+    assert.equal(allSummary.total, 3);
+    assert.equal(allSummary.failed, 1);
+    assert.equal(allSummary.sent, 1);
+    assert.equal(allSummary.skipped, 0);
+    assert.equal(allSummary.notAttempted, 1);
+
+    const filteredFailedResponse = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/submissions?notification=failed`);
+    assert.equal(filteredFailedResponse.status, 200);
+    const filteredFailed = await filteredFailedResponse.json();
+    assert.equal(filteredFailed.length, 1);
+    assert.equal(filteredFailed[0].notificationStatus, 'failed');
+
+    const filteredCounts = filteredFailed.reduce((counts, row) => {
+      counts.total += 1;
+      if (row.notificationStatus === 'failed') {
+        counts.failed += 1;
+      }
+      if (row.notificationStatus === 'success') {
+        counts.sent += 1;
+      }
+      if (row.notificationStatus === 'skipped') {
+        counts.skipped += 1;
+      }
+      if (row.notificationStatus !== 'success' && row.notificationStatus !== 'failed' && row.notificationStatus !== 'skipped') {
+        counts.notAttempted += 1;
+      }
+      return counts;
+    }, { total: 0, failed: 0, skipped: 0, sent: 0, notAttempted: 0 });
+
+    assert.deepEqual(filteredCounts, {
+      total: 1,
+      failed: 1,
+      skipped: 0,
+      sent: 0,
+      notAttempted: 0
+    });
+
+    const allSummaryAfterFilterResponse = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/submissions/summary`);
+    const allSummaryAfterFilter = await allSummaryAfterFilterResponse.json();
+    assert.deepEqual(allSummaryAfterFilter, allSummary);
   } finally {
     await started.server.stop();
   }
