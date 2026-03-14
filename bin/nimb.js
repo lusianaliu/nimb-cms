@@ -10,6 +10,7 @@ import { version, resolveRuntimeMode as resolveEnvironmentMode } from '../core/r
 import { resolveRuntimeMode } from '../core/runtime/resolve-runtime-mode.ts';
 import { runBuild } from '../core/cli/build.ts';
 import { runRelease } from '../core/cli/release.ts';
+import { resolveProjectRootFromArgs } from '../core/cli/project-root-resolver.ts';
 
 const invocationCwd = process.cwd();
 const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -79,34 +80,6 @@ const resolveRuntimeAdapter = (config, env = process.env) => {
   const fromEnv = env.NIMB_RUNTIME_ADAPTER;
   const fromConfig = config?.runtime?.adapter;
   return resolveAdapterType(fromEnv ?? fromConfig ?? 'node');
-};
-
-const resolveProjectRoot = (argv, env = process.env) => {
-  let fromArg;
-  const cleaned = [];
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (arg === '--project-root') {
-      fromArg = argv[index + 1];
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--project-root=')) {
-      fromArg = arg.slice('--project-root='.length);
-      continue;
-    }
-
-    cleaned.push(arg);
-  }
-
-  const fromCwd = invocationCwd;
-  const fromEnv = env.NIMB_ROOT ?? env.NIMB_PROJECT_ROOT;
-  const configuredRoot = fromArg ?? fromCwd ?? fromEnv;
-  const projectRoot = path.resolve(invocationCwd, configuredRoot);
-
-  return Object.freeze({ projectRoot, args: Object.freeze(cleaned) });
 };
 
 const createProject = (projectName) => {
@@ -321,7 +294,10 @@ const startServer = async () => {
   process.on('SIGTERM', shutdown);
 };
 
-const { projectRoot, args } = resolveProjectRoot(process.argv.slice(2));
+const { projectRoot, args } = resolveProjectRootFromArgs({
+  argv: process.argv.slice(2),
+  invocationCwd
+});
 
 if (args[0] === 'init') {
   try {
