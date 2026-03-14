@@ -1,11 +1,27 @@
+import net from 'node:net';
+import tls from 'node:tls';
+
 const CONTACT_SUBMISSION_TYPE = 'contact-submission';
 const CONTACT_SETTINGS_TYPE = 'contact-form-settings';
 const SPAM_COOLDOWN_MS = 10_000;
+
+type ContactNotificationSettings = {
+  enabled: boolean;
+  recipientEmail: string;
+  fromName: string;
+  fromEmail: string;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecure: boolean;
+  smtpUsername: string;
+  smtpPassword: string;
+};
 
 type ContactSettings = {
   formTitle: string;
   submitButtonText: string;
   successMessage: string;
+  notification: ContactNotificationSettings;
 };
 
 type ContactFormValues = {
@@ -19,7 +35,18 @@ type ContactFormValues = {
 const DEFAULT_SETTINGS: ContactSettings = Object.freeze({
   formTitle: 'Contact Us',
   submitButtonText: 'Send Message',
-  successMessage: 'Thanks for your message. We will review it soon.'
+  successMessage: 'Thanks for your message. We will review it soon.',
+  notification: {
+    enabled: false,
+    recipientEmail: '',
+    fromName: 'Nimb CMS Contact Form',
+    fromEmail: '',
+    smtpHost: '',
+    smtpPort: 587,
+    smtpSecure: false,
+    smtpUsername: '',
+    smtpPassword: ''
+  }
 });
 
 const escapeHtml = (value: unknown): string => `${value ?? ''}`
@@ -35,7 +62,267 @@ const normalizeText = (value: unknown, fallback: string) => {
   return trimmed || fallback;
 };
 
+const normalizeBoolean = (value: unknown, fallback = false) => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  const text = `${value ?? ''}`.trim().toLowerCase();
+  if (text === 'true' || text === '1' || text === 'on' || text === 'yes') {
+    return true;
+  }
+  if (text === 'false' || text === '0' || text === 'off' || text === 'no') {
+    return false;
+  }
+
+  return fallback;
+};
+
+const normalizePort = (value: unknown, fallback: number) => {
+  const asNumber = Number.parseInt(`${value ?? ''}`.trim(), 10);
+  if (Number.isFinite(asNumber) && asNumber > 0 && asNumber <= 65_535) {
+    return asNumber;
+  }
+
+  return fallback;
+};
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const normalizeNotificationSettings = (value: unknown): ContactNotificationSettings => {
+  const source = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return {
+    enabled: normalizeBoolean(source.enabled, DEFAULT_SETTINGS.notification.enabled),
+    recipientEmail: trimText(source.recipientEmail).toLowerCase(),
+    fromName: normalizeText(source.fromName, DEFAULT_SETTINGS.notification.fromName),
+    fromEmail: trimText(source.fromEmail).toLowerCase(),
+    smtpHost: trimText(source.smtpHost),
+    smtpPort: normalizePort(source.smtpPort, DEFAULT_SETTINGS.notification.smtpPort),
+    smtpSecure: normalizeBoolean(source.smtpSecure, DEFAULT_SETTINGS.notification.smtpSecure),
+    smtpUsername: trimText(source.smtpUsername),
+    smtpPassword: trimText(source.smtpPassword)
+  };
+};
+
+const normalizeNotificationSettingsFromRecord = (entryData: Record<string, unknown> | null | undefined) => {
+  const notificationSource = entryData?.notification && typeof entryData.notification === 'object'
+    ? entryData.notification as Record<string, unknown>
+    : {};
+
+  return normalizeNotificationSettings({
+    enabled: entryData?.notificationEnabled ?? notificationSource.enabled,
+    recipientEmail: entryData?.notificationRecipientEmail ?? notificationSource.recipientEmail,
+    fromName: entryData?.notificationFromName ?? notificationSource.fromName,
+    fromEmail: entryData?.notificationFromEmail ?? notificationSource.fromEmail,
+    smtpHost: entryData?.smtpHost ?? notificationSource.smtpHost,
+    smtpPort: entryData?.smtpPort ?? notificationSource.smtpPort,
+    smtpSecure: entryData?.smtpSecure ?? notificationSource.smtpSecure,
+    smtpUsername: entryData?.smtpUsername ?? notificationSource.smtpUsername,
+    smtpPassword: entryData?.smtpPassword ?? notificationSource.smtpPassword
+  });
+};
+
+const toStoredSettings = (settings: ContactSettings) => ({
+  formTitle: settings.formTitle,
+  submitButtonText: settings.submitButtonText,
+  successMessage: settings.successMessage,
+  notificationEnabled: settings.notification.enabled,
+  notificationRecipientEmail: settings.notification.recipientEmail,
+  notificationFromName: settings.notification.fromName,
+  notificationFromEmail: settings.notification.fromEmail,
+  smtpHost: settings.notification.smtpHost,
+  smtpPort: settings.notification.smtpPort,
+  smtpSecure: settings.notification.smtpSecure,
+  smtpUsername: settings.notification.smtpUsername,
+  smtpPassword: settings.notification.smtpPassword
+});
+
+const isValidNotificationSettings = (settings: ContactNotificationSettings) => {
+  if (!settings.enabled) {
+    return false;
+  }
+
+  return EMAIL_PATTERN.test(settings.recipientEmail)
+    && EMAIL_PATTERN.test(settings.fromEmail)
+    && Boolean(settings.smtpHost)
+    && Number.isFinite(settings.smtpPort);
+};
+
+const createNotificationText = (submission: { name: string, email: string, subject: string, message: string, createdAt: string }) => {
+  const submittedSubject = submission.subject || '(no subject)';
+  return [
+    'New contact form submission',
+    '',
+    `Name: ${submission.name}`,
+    `Email: ${submission.email}`,
+    `Subject: ${submittedSubject}`,
+    `Submitted at: ${submission.createdAt}`,
+    '',
+    'Message:',
+    submission.message
+  ].join('\n');
+};
+
+const withSmtpDotStuffing = (value: string) => value
+  .replaceAll('\r\n', '\n')
+  .replaceAll('\r', '\n')
+  .split('\n')
+  .map((line) => (line.startsWith('.') ? `.${line}` : line))
+  .join('\r\n');
+
+const toSmtpAddress = (email: string) => `<${email}>`;
+
+const createNotificationRawEmail = ({
+  settings,
+  submission
+}: {
+  settings: ContactNotificationSettings;
+  submission: { name: string, email: string, subject: string, message: string, createdAt: string };
+}) => {
+  const subject = submission.subject
+    ? `New contact form submission: ${submission.subject}`
+    : 'New contact form submission';
+  const body = withSmtpDotStuffing(createNotificationText(submission));
+
+  return [
+    `From: ${settings.fromName} <${settings.fromEmail}>`,
+    `To: ${settings.recipientEmail}`,
+    `Reply-To: ${submission.email}`,
+    `Subject: ${subject}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=utf-8',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    body,
+    ''
+  ].join('\r\n');
+};
+
+const sendSmtpNotification = async ({
+  settings,
+  submission
+}: {
+  settings: ContactNotificationSettings;
+  submission: { name: string, email: string, subject: string, message: string, createdAt: string };
+}) => {
+  await new Promise<void>((resolve, reject) => {
+    const socket = settings.smtpSecure
+      ? tls.connect({ host: settings.smtpHost, port: settings.smtpPort, servername: settings.smtpHost })
+      : net.createConnection({ host: settings.smtpHost, port: settings.smtpPort });
+
+    socket.setEncoding('utf8');
+    socket.setTimeout(2_500);
+
+    let buffer = '';
+    let awaiting: { resolve: (value: string) => void, reject: (error: Error) => void } | null = null;
+
+    const cleanup = () => {
+      socket.removeAllListeners('data');
+      socket.removeAllListeners('error');
+      socket.removeAllListeners('timeout');
+      socket.removeAllListeners('close');
+    };
+
+    const fail = (message: string) => {
+      cleanup();
+      socket.destroy();
+      reject(new Error(message));
+    };
+
+    const complete = () => {
+      cleanup();
+      socket.end();
+      resolve();
+    };
+
+    const readResponse = () => new Promise<string>((resolveRead, rejectRead) => {
+      awaiting = { resolve: resolveRead, reject: rejectRead };
+      const lines = buffer.split('\r\n').filter(Boolean);
+      const last = lines.at(-1);
+      if (last && /^\d{3}\s/.test(last)) {
+        const chunk = buffer;
+        buffer = '';
+        awaiting = null;
+        resolveRead(chunk);
+      }
+    });
+
+    const writeCommand = async (command: string, expectedCodePrefix = '2') => {
+      socket.write(`${command}\r\n`);
+      const response = await readResponse();
+      if (!response.trim().startsWith(expectedCodePrefix)) {
+        throw new Error(`SMTP command failed (${command}): ${response.trim()}`);
+      }
+    };
+
+    socket.on('data', (chunk: string) => {
+      buffer += chunk;
+      if (!awaiting) {
+        return;
+      }
+
+      const lines = buffer.split('\r\n').filter(Boolean);
+      const last = lines.at(-1);
+      if (!last || !/^\d{3}\s/.test(last)) {
+        return;
+      }
+
+      const pending = awaiting;
+      awaiting = null;
+      const response = buffer;
+      buffer = '';
+      pending.resolve(response);
+    });
+
+    socket.on('error', (error) => {
+      if (awaiting) {
+        awaiting.reject(error instanceof Error ? error : new Error(`${error ?? 'SMTP socket error'}`));
+        awaiting = null;
+      }
+      fail(`SMTP socket error: ${error instanceof Error ? error.message : `${error ?? ''}`}`);
+    });
+
+    socket.on('timeout', () => {
+      fail('SMTP socket timeout');
+    });
+
+    socket.on('close', () => {
+      if (awaiting) {
+        awaiting.reject(new Error('SMTP socket closed unexpectedly'));
+        awaiting = null;
+      }
+    });
+
+    const run = async () => {
+      await readResponse();
+      await writeCommand('EHLO nimb-cms');
+
+      if (settings.smtpUsername) {
+        await writeCommand(`AUTH LOGIN`, '3');
+        await writeCommand(Buffer.from(settings.smtpUsername, 'utf8').toString('base64'), '3');
+        await writeCommand(Buffer.from(settings.smtpPassword, 'utf8').toString('base64'));
+      }
+
+      await writeCommand(`MAIL FROM:${toSmtpAddress(settings.fromEmail)}`);
+      await writeCommand(`RCPT TO:${toSmtpAddress(settings.recipientEmail)}`);
+      await writeCommand('DATA', '3');
+
+      const rawEmail = createNotificationRawEmail({ settings, submission });
+      socket.write(`${rawEmail}\r\n.\r\n`);
+      const dataResult = await readResponse();
+      if (!dataResult.trim().startsWith('2')) {
+        throw new Error(`SMTP DATA failed: ${dataResult.trim()}`);
+      }
+
+      socket.write('QUIT\r\n');
+      complete();
+    };
+
+    void run().catch((error) => {
+      fail(error instanceof Error ? error.message : `${error ?? 'SMTP send failed'}`);
+    });
+  });
+};
 
 const readBodyText = async (request: AsyncIterable<unknown>) => {
   const chunks: Buffer[] = [];
@@ -192,6 +479,30 @@ const renderAdminPage = () => `
         <input name="submitButtonText" style="width:100%;padding:.55rem;margin-bottom:.75rem;" />
         <label style="display:block;margin-bottom:.4rem;">Success message</label>
         <textarea name="successMessage" style="width:100%;padding:.55rem;min-height:90px;"></textarea>
+        <hr style="margin:1rem 0;border:none;border-top:1px solid #dbe4ee;" />
+        <p style="margin:0 0 .6rem;color:#334155;">Submissions are always stored first. SMTP email is an optional notification layer.</p>
+        <label style="display:flex;align-items:center;gap:.45rem;margin-bottom:.75rem;">
+          <input type="checkbox" name="notificationEnabled" />
+          Enable email notifications
+        </label>
+        <label style="display:block;margin-bottom:.4rem;">Notification recipient email</label>
+        <input name="recipientEmail" type="email" style="width:100%;padding:.55rem;margin-bottom:.75rem;" placeholder="owner@example.com" />
+        <label style="display:block;margin-bottom:.4rem;">From name</label>
+        <input name="fromName" style="width:100%;padding:.55rem;margin-bottom:.75rem;" placeholder="Nimb CMS Contact Form" />
+        <label style="display:block;margin-bottom:.4rem;">From email</label>
+        <input name="fromEmail" type="email" style="width:100%;padding:.55rem;margin-bottom:.75rem;" placeholder="no-reply@example.com" />
+        <label style="display:block;margin-bottom:.4rem;">SMTP host</label>
+        <input name="smtpHost" style="width:100%;padding:.55rem;margin-bottom:.75rem;" placeholder="smtp.example.com" />
+        <label style="display:block;margin-bottom:.4rem;">SMTP port</label>
+        <input name="smtpPort" type="number" min="1" max="65535" style="width:100%;padding:.55rem;margin-bottom:.75rem;" placeholder="587" />
+        <label style="display:flex;align-items:center;gap:.45rem;margin-bottom:.75rem;">
+          <input type="checkbox" name="smtpSecure" />
+          Use secure SMTP (TLS)
+        </label>
+        <label style="display:block;margin-bottom:.4rem;">SMTP username (optional)</label>
+        <input name="smtpUsername" style="width:100%;padding:.55rem;margin-bottom:.75rem;" />
+        <label style="display:block;margin-bottom:.4rem;">SMTP password (optional)</label>
+        <input name="smtpPassword" type="password" style="width:100%;padding:.55rem;margin-bottom:.75rem;" autocomplete="off" />
         <div style="margin-top:.75rem;">
           <button type="submit">Save settings</button>
           <span id="contact-settings-status" style="margin-left:.6rem;color:#166534;"></span>
@@ -240,6 +551,15 @@ const renderAdminPage = () => `
       settingsForm.elements.formTitle.value = settings.formTitle ?? '';
       settingsForm.elements.submitButtonText.value = settings.submitButtonText ?? '';
       settingsForm.elements.successMessage.value = settings.successMessage ?? '';
+      settingsForm.elements.notificationEnabled.checked = Boolean(settings.notification?.enabled);
+      settingsForm.elements.recipientEmail.value = settings.notification?.recipientEmail ?? '';
+      settingsForm.elements.fromName.value = settings.notification?.fromName ?? '';
+      settingsForm.elements.fromEmail.value = settings.notification?.fromEmail ?? '';
+      settingsForm.elements.smtpHost.value = settings.notification?.smtpHost ?? '';
+      settingsForm.elements.smtpPort.value = settings.notification?.smtpPort ?? '';
+      settingsForm.elements.smtpSecure.checked = Boolean(settings.notification?.smtpSecure);
+      settingsForm.elements.smtpUsername.value = settings.notification?.smtpUsername ?? '';
+      settingsForm.elements.smtpPassword.value = settings.notification?.smtpPassword ?? '';
     };
 
     const renderSubmissionRows = (records) => records.map((record) => {
@@ -318,7 +638,18 @@ const renderAdminPage = () => `
         body: JSON.stringify({
           formTitle: settingsForm.elements.formTitle.value,
           submitButtonText: settingsForm.elements.submitButtonText.value,
-          successMessage: settingsForm.elements.successMessage.value
+          successMessage: settingsForm.elements.successMessage.value,
+          notification: {
+            enabled: settingsForm.elements.notificationEnabled.checked,
+            recipientEmail: settingsForm.elements.recipientEmail.value,
+            fromName: settingsForm.elements.fromName.value,
+            fromEmail: settingsForm.elements.fromEmail.value,
+            smtpHost: settingsForm.elements.smtpHost.value,
+            smtpPort: settingsForm.elements.smtpPort.value,
+            smtpSecure: settingsForm.elements.smtpSecure.checked,
+            smtpUsername: settingsForm.elements.smtpUsername.value,
+            smtpPassword: settingsForm.elements.smtpPassword.value
+          }
         })
       });
       settingsStatus.textContent = 'Saved';
@@ -347,6 +678,28 @@ const toSubmissionDetail = (record) => ({
 export default async function register(api) {
   const recentSubmissions = new Map<string, number>();
 
+  const logNotificationFailure = (message: string, error?: unknown) => {
+    const details = error instanceof Error ? error.message : `${error ?? ''}`;
+    if (typeof api?.runtime?.logger?.warn === 'function') {
+      api.runtime.logger.warn(`[contact-form] ${message}${details ? ` (${details})` : ''}`);
+      return;
+    }
+
+    console.warn(`[contact-form] ${message}${details ? ` (${details})` : ''}`);
+  };
+
+  const sendNotificationEmail = async (settings: ContactNotificationSettings, submission: { name: string, email: string, subject: string, message: string, createdAt: string }) => {
+    if (!isValidNotificationSettings(settings)) {
+      return;
+    }
+
+    try {
+      await sendSmtpNotification({ settings, submission });
+    } catch (error) {
+      logNotificationFailure('Failed to send contact form notification email.', error);
+    }
+  };
+
   const loadSettings = (): ContactSettings => {
     const rows = api.runtime.db.list(CONTACT_SETTINGS_TYPE, { limit: 1 });
     const entry = rows[0];
@@ -358,23 +711,25 @@ export default async function register(api) {
     return {
       formTitle: normalizeText(entry?.data?.formTitle, DEFAULT_SETTINGS.formTitle),
       submitButtonText: normalizeText(entry?.data?.submitButtonText, DEFAULT_SETTINGS.submitButtonText),
-      successMessage: normalizeText(entry?.data?.successMessage, DEFAULT_SETTINGS.successMessage)
+      successMessage: normalizeText(entry?.data?.successMessage, DEFAULT_SETTINGS.successMessage),
+      notification: normalizeNotificationSettingsFromRecord(entry?.data)
     };
   };
 
   const saveSettings = (data: Record<string, unknown>) => {
     const existing = api.runtime.db.list(CONTACT_SETTINGS_TYPE, { limit: 1 })[0];
-    const normalized = {
+    const normalized: ContactSettings = {
       formTitle: normalizeText(data.formTitle, DEFAULT_SETTINGS.formTitle),
       submitButtonText: normalizeText(data.submitButtonText, DEFAULT_SETTINGS.submitButtonText),
-      successMessage: normalizeText(data.successMessage, DEFAULT_SETTINGS.successMessage)
+      successMessage: normalizeText(data.successMessage, DEFAULT_SETTINGS.successMessage),
+      notification: normalizeNotificationSettings(data.notification)
     };
 
     if (!existing) {
-      return api.runtime.db.create(CONTACT_SETTINGS_TYPE, normalized);
+      return api.runtime.db.create(CONTACT_SETTINGS_TYPE, toStoredSettings(normalized));
     }
 
-    return api.runtime.db.update(CONTACT_SETTINGS_TYPE, `${existing.id}`, normalized);
+    return api.runtime.db.update(CONTACT_SETTINGS_TYPE, `${existing.id}`, toStoredSettings(normalized));
   };
 
   api.runtime.contentTypes.register({
@@ -396,12 +751,21 @@ export default async function register(api) {
     fields: [
       { name: 'formTitle', type: 'string', required: true },
       { name: 'submitButtonText', type: 'string', required: true },
-      { name: 'successMessage', type: 'string', required: true }
+      { name: 'successMessage', type: 'string', required: true },
+      { name: 'notificationEnabled', type: 'boolean' },
+      { name: 'notificationRecipientEmail', type: 'string' },
+      { name: 'notificationFromName', type: 'string' },
+      { name: 'notificationFromEmail', type: 'string' },
+      { name: 'smtpHost', type: 'string' },
+      { name: 'smtpPort', type: 'number' },
+      { name: 'smtpSecure', type: 'boolean' },
+      { name: 'smtpUsername', type: 'string' },
+      { name: 'smtpPassword', type: 'string' }
     ]
   });
 
   if (!api.runtime.db.list(CONTACT_SETTINGS_TYPE, { limit: 1 })[0]) {
-    api.runtime.db.create(CONTACT_SETTINGS_TYPE, { ...DEFAULT_SETTINGS });
+    api.runtime.db.create(CONTACT_SETTINGS_TYPE, toStoredSettings({ ...DEFAULT_SETTINGS }));
   }
 
   api.runtime.admin.navRegistry.register({
@@ -496,13 +860,22 @@ export default async function register(api) {
 
       recentSubmissions.set(clientAddress, now);
 
+      const createdAt = new Date().toISOString();
       api.runtime.db.create(CONTACT_SUBMISSION_TYPE, {
         name: values.name,
         email: values.email,
         subject: values.subject,
         message: values.message,
         status: 'new',
-        createdAt: new Date().toISOString()
+        createdAt
+      });
+
+      await sendNotificationEmail(settings.notification, {
+        name: values.name,
+        email: values.email,
+        subject: values.subject,
+        message: values.message,
+        createdAt
       });
 
       return toRedirect('/contact?success=1');

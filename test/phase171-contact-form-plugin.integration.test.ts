@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createTestServer } from './helpers/create-test-server.ts';
+import net from 'node:net';
 
 const mkdtemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase171-'));
 
@@ -196,6 +197,200 @@ test('phase 171: contact form anti-spam blocks rapid repeat submission and honey
     const entries = started.runtime.db.query('contact-submission', { sort: 'id asc' });
     assert.equal(entries.length, 1);
     assert.equal(entries[0]?.data?.email, 'first@example.com');
+  } finally {
+    await started.server.stop();
+  }
+});
+
+test('phase 172: notification path sends smtp email when enabled and valid settings are configured', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+  writeInstallState(cwd);
+  installContactPlugin(cwd);
+
+  const started = await createTestServer({ cwd });
+  const listening = await started.server.start();
+
+  const smtpEvents: string[] = [];
+  const smtpServer = net.createServer((socket) => {
+    socket.setEncoding('utf8');
+    socket.write('220 nimb-test-smtp\r\n');
+
+    let dataMode = false;
+    let buffer = '';
+
+    socket.on('data', (chunk) => {
+      buffer += chunk;
+
+      while (buffer.includes('\r\n')) {
+        const lineBreak = buffer.indexOf('\r\n');
+        const line = buffer.slice(0, lineBreak);
+        buffer = buffer.slice(lineBreak + 2);
+
+        if (dataMode) {
+          if (line === '.') {
+            dataMode = false;
+            socket.write('250 Message accepted\r\n');
+          } else {
+            smtpEvents.push(`DATA:${line}`);
+          }
+          continue;
+        }
+
+        const normalized = line.toUpperCase();
+        smtpEvents.push(normalized);
+
+        if (normalized.startsWith('EHLO') || normalized.startsWith('HELO')) {
+          socket.write('250-nimb-test-smtp\r\n250 AUTH PLAIN LOGIN\r\n');
+        } else if (normalized.startsWith('MAIL FROM')) {
+          socket.write('250 OK\r\n');
+        } else if (normalized.startsWith('RCPT TO')) {
+          socket.write('250 OK\r\n');
+        } else if (normalized === 'DATA') {
+          dataMode = true;
+          socket.write('354 End data with <CR><LF>.<CR><LF>\r\n');
+        } else if (normalized === 'QUIT') {
+          socket.write('221 Bye\r\n');
+          socket.end();
+        } else {
+          socket.write('250 OK\r\n');
+        }
+      }
+    });
+  });
+
+  await new Promise<void>((resolve) => smtpServer.listen(0, '127.0.0.1', () => resolve()));
+  const smtpAddress = smtpServer.address();
+  assert.equal(typeof smtpAddress, 'object');
+  const smtpPort = smtpAddress && 'port' in smtpAddress ? smtpAddress.port : 0;
+
+  try {
+    const settingsUpdate = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/settings`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        formTitle: 'Contact Us',
+        submitButtonText: 'Send Message',
+        successMessage: 'Stored',
+        notification: {
+          enabled: true,
+          recipientEmail: 'owner@example.com',
+          fromName: 'Nimb Notifications',
+          fromEmail: 'notify@example.com',
+          smtpHost: '127.0.0.1',
+          smtpPort,
+          smtpSecure: false,
+          smtpUsername: '',
+          smtpPassword: ''
+        }
+      })
+    });
+    assert.equal(settingsUpdate.status, 200);
+
+    const submit = await submitContact(listening.port, {
+      name: 'SMTP Sender',
+      email: 'sender@example.com',
+      subject: 'SMTP Test',
+      message: 'This should trigger a notification email.',
+      website: ''
+    });
+    assert.equal(submit.status, 302);
+
+    const entries = started.runtime.db.query('contact-submission', { sort: 'id desc' });
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0]?.data?.email, 'sender@example.com');
+
+    assert.equal(smtpEvents.some((line) => line.startsWith('MAIL FROM')), true);
+    assert.equal(smtpEvents.some((line) => line.startsWith('RCPT TO')), true);
+    assert.equal(smtpEvents.some((line) => line.toUpperCase().includes('SUBJECT: NEW CONTACT FORM SUBMISSION: SMTP TEST')), true);
+  } finally {
+    await started.server.stop();
+    await new Promise<void>((resolve) => smtpServer.close(() => resolve()));
+  }
+});
+
+test('phase 172: notification is skipped when disabled and submission remains successful', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+  writeInstallState(cwd);
+  installContactPlugin(cwd);
+
+  const started = await createTestServer({ cwd });
+  const listening = await started.server.start();
+
+  try {
+    const settingsResponse = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/settings`);
+    const settingsBody = await settingsResponse.json();
+    assert.equal(settingsBody.notification.enabled, false);
+
+    const submit = await submitContact(listening.port, {
+      name: 'No Email Sender',
+      email: 'no-email@example.com',
+      subject: 'Stored only',
+      message: 'Keep storage as source of truth.',
+      website: ''
+    });
+
+    assert.equal(submit.status, 302);
+    const entries = started.runtime.db.query('contact-submission', {});
+    assert.equal(entries.length, 1);
+  } finally {
+    await started.server.stop();
+  }
+});
+
+test('phase 172: smtp failure does not block submission success and settings persist', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+  writeInstallState(cwd);
+  installContactPlugin(cwd);
+
+  const started = await createTestServer({ cwd });
+  const listening = await started.server.start();
+
+  try {
+    const settingsUpdate = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/settings`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        formTitle: 'Contact Us',
+        submitButtonText: 'Send Message',
+        successMessage: 'Stored',
+        notification: {
+          enabled: true,
+          recipientEmail: 'owner@example.com',
+          fromName: 'Nimb Notifications',
+          fromEmail: 'notify@example.com',
+          smtpHost: '127.0.0.1',
+          smtpPort: 1,
+          smtpSecure: false,
+          smtpUsername: 'smtp-user',
+          smtpPassword: 'smtp-pass'
+        }
+      })
+    });
+    assert.equal(settingsUpdate.status, 200);
+
+    const persistedSettings = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/settings`);
+    const persistedSettingsBody = await persistedSettings.json();
+    assert.equal(persistedSettingsBody.notification.enabled, true);
+    assert.equal(persistedSettingsBody.notification.smtpUsername, 'smtp-user');
+    assert.equal(persistedSettingsBody.notification.smtpPassword, 'smtp-pass');
+
+    const submit = await submitContact(listening.port, {
+      name: 'Failure Sender',
+      email: 'failure@example.com',
+      subject: 'SMTP unavailable',
+      message: 'Storage should still succeed.',
+      website: ''
+    });
+
+    assert.equal(submit.status, 302);
+    assert.equal(submit.headers.get('location'), '/contact?success=1');
+
+    const entries = started.runtime.db.query('contact-submission', { sort: 'id asc' });
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0]?.data?.email, 'failure@example.com');
   } finally {
     await started.server.stop();
   }
