@@ -45,6 +45,14 @@ type ContactFormValues = {
 type ContactSubmissionNotificationStatus = 'success' | 'failed' | 'skipped' | 'unknown';
 type ContactSubmissionNotificationFilter = 'all' | 'sent' | 'failed' | 'skipped' | 'not-attempted';
 
+type ContactSubmissionNotificationCounts = {
+  total: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+  notAttempted: number;
+};
+
 type ContactSubmissionNotificationState = {
   status: ContactSubmissionNotificationStatus;
   attemptedAt: string;
@@ -274,6 +282,37 @@ const matchesNotificationFilter = (status: ContactSubmissionNotificationStatus, 
   }
 
   return status === 'unknown';
+};
+
+const countSubmissionNotifications = (summaries: Array<{ notificationStatus: ContactSubmissionNotificationStatus }>): ContactSubmissionNotificationCounts => {
+  const counts: ContactSubmissionNotificationCounts = {
+    total: summaries.length,
+    sent: 0,
+    failed: 0,
+    skipped: 0,
+    notAttempted: 0
+  };
+
+  for (const summary of summaries) {
+    if (summary.notificationStatus === 'success') {
+      counts.sent += 1;
+      continue;
+    }
+
+    if (summary.notificationStatus === 'failed') {
+      counts.failed += 1;
+      continue;
+    }
+
+    if (summary.notificationStatus === 'skipped') {
+      counts.skipped += 1;
+      continue;
+    }
+
+    counts.notAttempted += 1;
+  }
+
+  return counts;
 };
 
 const buildNotificationHealthHint = (settings: ContactSettings) => {
@@ -712,6 +751,7 @@ const renderAdminPage = () => `
         </select>
         <span style="color:#64748b;font-size:.9rem;">Messages are always saved, even when notification fails or is skipped.</span>
       </div>
+      <p id="contact-notification-summary" style="margin:.25rem 0 .7rem;color:#334155;font-size:.92rem;line-height:1.4;">Notification totals: loading…</p>
       <div id="contact-submissions-empty" style="display:none;">No submissions yet.</div>
       <table id="contact-submissions-table" style="width:100%;border-collapse:collapse;display:none;">
         <thead>
@@ -740,6 +780,7 @@ const renderAdminPage = () => `
     const tbody = table.querySelector('tbody');
     const detail = document.getElementById('contact-submission-detail');
     const notificationFilter = document.getElementById('contact-notification-filter');
+    const notificationSummary = document.getElementById('contact-notification-summary');
 
     const escapeHtml = (value) => String(value ?? '')
       .replaceAll('&', '&amp;')
@@ -798,6 +839,28 @@ const renderAdminPage = () => `
         + '<td>' + createdAt + '</td>'
         + '</tr>';
     }).join('');
+
+    const renderNotificationSummary = (summary) => {
+      if (!notificationSummary) {
+        return;
+      }
+
+      const total = Number(summary?.total ?? 0);
+      const failed = Number(summary?.failed ?? 0);
+      const skipped = Number(summary?.skipped ?? 0);
+      const sent = Number(summary?.sent ?? 0);
+      notificationSummary.textContent = 'Notification totals (all saved submissions): '
+        + 'Total: ' + total
+        + ' · Failed: ' + failed
+        + ' · Skipped: ' + skipped
+        + ' · Sent: ' + sent;
+    };
+
+    const loadNotificationSummary = async () => {
+      const response = await fetch('/admin-api/contact-form/submissions/summary');
+      const summary = await response.json();
+      renderNotificationSummary(summary);
+    };
 
     const loadSubmissions = async () => {
       const selectedFilter = notificationFilter?.value || 'all';
@@ -889,6 +952,7 @@ const renderAdminPage = () => `
     });
 
     void loadSettings();
+    void loadNotificationSummary();
     void loadSubmissions();
   </script>
 `;
@@ -1250,6 +1314,17 @@ export default async function register(api) {
       const summaries = rows.map(toSubmissionSummary);
       const filtered = summaries.filter((summary) => matchesNotificationFilter(summary.notificationStatus, notificationFilter));
       return toJsonResponse(filtered);
+    }
+  });
+
+  api.runtime.http.register({
+    method: 'GET',
+    path: '/admin-api/contact-form/submissions/summary',
+    handler: () => {
+      const rows = api.runtime.db.list(CONTACT_SUBMISSION_TYPE, { sort: 'createdAt desc', limit: 200 });
+      const summaries = rows.map(toSubmissionSummary);
+      const counts = countSubmissionNotifications(summaries);
+      return toJsonResponse(counts);
     }
   });
 

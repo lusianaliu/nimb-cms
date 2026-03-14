@@ -938,3 +938,203 @@ test('phase 175: admin contact page definition includes notification filter cont
     await started.server.stop();
   }
 });
+
+test('phase 176: admin submissions summary API returns notification counts for all saved submissions', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+  writeInstallState(cwd);
+  installContactPlugin(cwd);
+
+  const started = await createTestServer({ cwd });
+  const listening = await started.server.start();
+
+  const smtpServer = net.createServer((socket) => {
+    socket.setEncoding('utf8');
+    socket.write('220 nimb-test-smtp\r\n');
+
+    let dataMode = false;
+    let buffer = '';
+
+    socket.on('data', (chunk) => {
+      buffer += chunk;
+      while (buffer.includes('\r\n')) {
+        const lineBreak = buffer.indexOf('\r\n');
+        const line = buffer.slice(0, lineBreak);
+        buffer = buffer.slice(lineBreak + 2);
+
+        if (dataMode) {
+          if (line === '.') {
+            dataMode = false;
+            socket.write('250 Message accepted\r\n');
+          }
+          continue;
+        }
+
+        const normalized = line.toUpperCase();
+        if (normalized.startsWith('EHLO') || normalized.startsWith('HELO')) {
+          socket.write('250-nimb-test-smtp\r\n250 AUTH PLAIN LOGIN\r\n');
+        } else if (normalized.startsWith('MAIL FROM')) {
+          socket.write('250 OK\r\n');
+        } else if (normalized.startsWith('RCPT TO')) {
+          socket.write('250 OK\r\n');
+        } else if (normalized === 'DATA') {
+          dataMode = true;
+          socket.write('354 End data with <CR><LF>.<CR><LF>\r\n');
+        } else if (normalized === 'QUIT') {
+          socket.write('221 Bye\r\n');
+          socket.end();
+        } else {
+          socket.write('250 OK\r\n');
+        }
+      }
+    });
+  });
+
+  await new Promise<void>((resolve) => smtpServer.listen(0, '127.0.0.1', () => resolve()));
+  const smtpAddress = smtpServer.address();
+  assert.equal(typeof smtpAddress, 'object');
+  const smtpPort = smtpAddress && 'port' in smtpAddress ? smtpAddress.port : 0;
+
+  try {
+    const settingsEnable = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/settings`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        formTitle: 'Contact Us',
+        submitButtonText: 'Send Message',
+        successMessage: 'Stored',
+        notification: {
+          enabled: true,
+          recipientEmail: 'owner@example.com',
+          fromName: 'Nimb Notifications',
+          fromEmail: 'notify@example.com',
+          smtpHost: '127.0.0.1',
+          smtpPort,
+          smtpSecure: false,
+          smtpUsername: '',
+          smtpPassword: ''
+        }
+      })
+    });
+    assert.equal(settingsEnable.status, 200);
+
+    const sentSubmit = await submitContact(listening.port, {
+      name: 'Summary Sent Sender',
+      email: 'summary-sent@example.com',
+      subject: 'SMTP up',
+      message: 'Expect sent count.',
+      website: ''
+    });
+    assert.equal(sentSubmit.status, 302);
+
+    await new Promise<void>((resolve) => smtpServer.close(() => resolve()));
+
+    const failedSubmit = await fetch(`http://127.0.0.1:${listening.port}/contact`, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-forwarded-for': '198.51.100.35'
+      },
+      body: new URLSearchParams({
+        name: 'Summary Failed Sender',
+        email: 'summary-failed@example.com',
+        subject: 'SMTP down',
+        message: 'Expect failed count.',
+        website: ''
+      }).toString()
+    });
+    assert.equal(failedSubmit.status, 302);
+
+    const settingsDisable = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/settings`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        formTitle: 'Contact Us',
+        submitButtonText: 'Send Message',
+        successMessage: 'Stored',
+        notification: {
+          enabled: false,
+          recipientEmail: 'owner@example.com',
+          fromName: 'Nimb Notifications',
+          fromEmail: 'notify@example.com',
+          smtpHost: '127.0.0.1',
+          smtpPort,
+          smtpSecure: false,
+          smtpUsername: '',
+          smtpPassword: ''
+        }
+      })
+    });
+    assert.equal(settingsDisable.status, 200);
+
+    const skippedSubmit = await fetch(`http://127.0.0.1:${listening.port}/contact`, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-forwarded-for': '203.0.113.61'
+      },
+      body: new URLSearchParams({
+        name: 'Summary Skipped Sender',
+        email: 'summary-skipped@example.com',
+        subject: 'Notifications off',
+        message: 'Expect skipped count.',
+        website: ''
+      }).toString()
+    });
+    assert.equal(skippedSubmit.status, 302);
+
+    started.runtime.db.create('contact-submission', {
+      name: 'Legacy Sender',
+      email: 'legacy@example.com',
+      subject: 'Legacy',
+      message: 'Legacy entry without notification metadata.',
+      status: 'new',
+      createdAt: new Date().toISOString()
+    });
+
+    const summaryResponse = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/submissions/summary`);
+    assert.equal(summaryResponse.status, 200);
+    const summaryBody = await summaryResponse.json();
+    assert.equal(summaryBody.total, 4);
+    assert.equal(summaryBody.sent, 1);
+    assert.equal(summaryBody.failed, 1);
+    assert.equal(summaryBody.skipped, 1);
+    assert.equal(summaryBody.notAttempted, 1);
+
+    const filteredResponse = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/submissions?notification=failed`);
+    const filteredBody = await filteredResponse.json();
+    assert.equal(filteredBody.length, 1);
+
+    const summaryAfterFilterResponse = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/submissions/summary`);
+    const summaryAfterFilterBody = await summaryAfterFilterResponse.json();
+    assert.equal(summaryAfterFilterBody.total, 4);
+  } finally {
+    await started.server.stop();
+    if (smtpServer.listening) {
+      await new Promise<void>((resolve) => smtpServer.close(() => resolve()));
+    }
+  }
+});
+
+test('phase 176: admin contact page definition includes compact notification summary copy near filter', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+  writeInstallState(cwd);
+  installContactPlugin(cwd);
+
+  const started = await createTestServer({ cwd });
+  const listening = await started.server.start();
+
+  try {
+    const adminPageDefinition = started.runtime.adminPages.get('/admin/contact-form');
+    assert.equal(Boolean(adminPageDefinition), true);
+    const adminHtml = adminPageDefinition?.render?.() ?? '';
+    assert.equal(adminHtml.includes('id="contact-notification-summary"'), true);
+    assert.equal(adminHtml.includes('Notification totals (all saved submissions):'), true);
+    assert.equal(adminHtml.includes("fetch('/admin-api/contact-form/submissions/summary')"), true);
+  } finally {
+    await started.server.stop();
+  }
+});
