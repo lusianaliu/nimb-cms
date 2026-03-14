@@ -22,6 +22,16 @@ type ContactSettings = {
   submitButtonText: string;
   successMessage: string;
   notification: ContactNotificationSettings;
+  notificationHealth: ContactNotificationHealth;
+};
+
+type ContactNotificationHealthStatus = 'success' | 'failed' | 'skipped' | 'never';
+
+type ContactNotificationHealth = {
+  lastNotificationAttemptAt: string;
+  lastNotificationStatus: ContactNotificationHealthStatus;
+  lastNotificationErrorSummary: string;
+  lastNotificationSkipReason: string;
 };
 
 type ContactFormValues = {
@@ -46,6 +56,12 @@ const DEFAULT_SETTINGS: ContactSettings = Object.freeze({
     smtpSecure: false,
     smtpUsername: '',
     smtpPassword: ''
+  },
+  notificationHealth: {
+    lastNotificationAttemptAt: '',
+    lastNotificationStatus: 'never',
+    lastNotificationErrorSummary: '',
+    lastNotificationSkipReason: ''
   }
 });
 
@@ -134,8 +150,88 @@ const toStoredSettings = (settings: ContactSettings) => ({
   smtpPort: settings.notification.smtpPort,
   smtpSecure: settings.notification.smtpSecure,
   smtpUsername: settings.notification.smtpUsername,
-  smtpPassword: settings.notification.smtpPassword
+  smtpPassword: settings.notification.smtpPassword,
+  lastNotificationAttemptAt: settings.notificationHealth.lastNotificationAttemptAt,
+  lastNotificationStatus: settings.notificationHealth.lastNotificationStatus,
+  lastNotificationErrorSummary: settings.notificationHealth.lastNotificationErrorSummary,
+  lastNotificationSkipReason: settings.notificationHealth.lastNotificationSkipReason
 });
+
+const normalizeNotificationHealthFromRecord = (entryData: Record<string, unknown> | null | undefined): ContactNotificationHealth => {
+  const statusText = trimText(entryData?.lastNotificationStatus).toLowerCase();
+  const status: ContactNotificationHealthStatus = statusText === 'success'
+    || statusText === 'failed'
+    || statusText === 'skipped'
+    || statusText === 'never'
+    ? statusText
+    : 'never';
+
+  return {
+    lastNotificationAttemptAt: trimText(entryData?.lastNotificationAttemptAt),
+    lastNotificationStatus: status,
+    lastNotificationErrorSummary: trimText(entryData?.lastNotificationErrorSummary),
+    lastNotificationSkipReason: trimText(entryData?.lastNotificationSkipReason)
+  };
+};
+
+const summarizeNotificationError = (error: unknown) => {
+  const raw = error instanceof Error ? error.message : `${error ?? ''}`;
+  const collapsed = raw.trim().replaceAll(/\s+/g, ' ');
+  if (!collapsed) {
+    return 'Notification send failed.';
+  }
+
+  return collapsed.slice(0, 160);
+};
+
+const buildNotificationHealthHint = (settings: ContactSettings) => {
+  if (!settings.notification.enabled) {
+    return {
+      tone: 'neutral',
+      message: 'Email notifications are off. Messages are still stored in admin.'
+    };
+  }
+
+  if (!isValidNotificationSettings(settings.notification)) {
+    return {
+      tone: 'warning',
+      message: 'Notification settings are incomplete. Messages are still stored in admin.'
+    };
+  }
+
+  const attemptAt = settings.notificationHealth.lastNotificationAttemptAt;
+  if (settings.notificationHealth.lastNotificationStatus === 'success') {
+    return {
+      tone: 'positive',
+      message: attemptAt
+        ? `Last notification was sent successfully at ${attemptAt}.`
+        : 'Last notification was sent successfully.'
+    };
+  }
+
+  if (settings.notificationHealth.lastNotificationStatus === 'failed') {
+    const suffix = settings.notificationHealth.lastNotificationErrorSummary
+      ? ` (${settings.notificationHealth.lastNotificationErrorSummary})`
+      : '';
+    return {
+      tone: 'warning',
+      message: `Last notification attempt failed${suffix}. New messages are still being saved.`
+    };
+  }
+
+  if (settings.notificationHealth.lastNotificationStatus === 'skipped') {
+    const reason = settings.notificationHealth.lastNotificationSkipReason || 'send conditions were not met';
+    return {
+      tone: 'neutral',
+      message: `Last notification was skipped because ${reason}. Messages are still stored in admin.`
+    };
+  }
+
+  return {
+    tone: 'neutral',
+    message: 'Notification is enabled. No delivery attempt has been recorded yet.'
+  };
+};
 
 const isValidNotificationSettings = (settings: ContactNotificationSettings) => {
   if (!settings.enabled) {
@@ -507,6 +603,7 @@ const renderAdminPage = () => `
           <button type="submit">Save settings</button>
           <span id="contact-settings-status" style="margin-left:.6rem;color:#166534;"></span>
         </div>
+        <div id="contact-notification-health" style="margin-top:.9rem;padding:.75rem;border:1px solid #dbe4ee;border-radius:10px;background:#f8fafc;color:#334155;">Loading notification health...</div>
       </form>
     </section>
 
@@ -533,6 +630,7 @@ const renderAdminPage = () => `
   <script>
     const settingsForm = document.getElementById('contact-settings-form');
     const settingsStatus = document.getElementById('contact-settings-status');
+    const notificationHealth = document.getElementById('contact-notification-health');
     const table = document.getElementById('contact-submissions-table');
     const emptyState = document.getElementById('contact-submissions-empty');
     const tbody = table.querySelector('tbody');
@@ -560,6 +658,13 @@ const renderAdminPage = () => `
       settingsForm.elements.smtpSecure.checked = Boolean(settings.notification?.smtpSecure);
       settingsForm.elements.smtpUsername.value = settings.notification?.smtpUsername ?? '';
       settingsForm.elements.smtpPassword.value = settings.notification?.smtpPassword ?? '';
+
+      const hint = settings.notificationHealthHint || {};
+      notificationHealth.textContent = hint.message || 'Notification health will appear after setup.';
+      const tone = hint.tone || 'neutral';
+      notificationHealth.style.borderColor = tone === 'positive' ? '#86efac' : tone === 'warning' ? '#fcd34d' : '#dbe4ee';
+      notificationHealth.style.background = tone === 'positive' ? '#f0fdf4' : tone === 'warning' ? '#fffbeb' : '#f8fafc';
+      notificationHealth.style.color = tone === 'positive' ? '#166534' : tone === 'warning' ? '#92400e' : '#334155';
     };
 
     const renderSubmissionRows = (records) => records.map((record) => {
@@ -653,6 +758,7 @@ const renderAdminPage = () => `
         })
       });
       settingsStatus.textContent = 'Saved';
+      await loadSettings();
     });
 
     void loadSettings();
@@ -688,15 +794,60 @@ export default async function register(api) {
     console.warn(`[contact-form] ${message}${details ? ` (${details})` : ''}`);
   };
 
+  const persistNotificationHealth = (status: ContactNotificationHealthStatus, update?: Partial<ContactNotificationHealth>) => {
+    const existing = loadSettings();
+    const next: ContactSettings = {
+      ...existing,
+      notificationHealth: {
+        ...existing.notificationHealth,
+        ...update,
+        lastNotificationStatus: status
+      }
+    };
+
+    const row = api.runtime.db.list(CONTACT_SETTINGS_TYPE, { limit: 1 })[0];
+    if (!row) {
+      api.runtime.db.create(CONTACT_SETTINGS_TYPE, toStoredSettings(next));
+      return;
+    }
+
+    api.runtime.db.update(CONTACT_SETTINGS_TYPE, `${row.id}`, toStoredSettings(next));
+  };
+
   const sendNotificationEmail = async (settings: ContactNotificationSettings, submission: { name: string, email: string, subject: string, message: string, createdAt: string }) => {
+    const attemptedAt = new Date().toISOString();
+    if (!settings.enabled) {
+      persistNotificationHealth('skipped', {
+        lastNotificationAttemptAt: attemptedAt,
+        lastNotificationSkipReason: 'email notifications are off',
+        lastNotificationErrorSummary: ''
+      });
+      return;
+    }
+
     if (!isValidNotificationSettings(settings)) {
+      persistNotificationHealth('skipped', {
+        lastNotificationAttemptAt: attemptedAt,
+        lastNotificationSkipReason: 'notification settings are incomplete',
+        lastNotificationErrorSummary: ''
+      });
       return;
     }
 
     try {
       await sendSmtpNotification({ settings, submission });
+      persistNotificationHealth('success', {
+        lastNotificationAttemptAt: attemptedAt,
+        lastNotificationErrorSummary: '',
+        lastNotificationSkipReason: ''
+      });
     } catch (error) {
       logNotificationFailure('Failed to send contact form notification email.', error);
+      persistNotificationHealth('failed', {
+        lastNotificationAttemptAt: attemptedAt,
+        lastNotificationErrorSummary: summarizeNotificationError(error),
+        lastNotificationSkipReason: ''
+      });
     }
   };
 
@@ -712,7 +863,8 @@ export default async function register(api) {
       formTitle: normalizeText(entry?.data?.formTitle, DEFAULT_SETTINGS.formTitle),
       submitButtonText: normalizeText(entry?.data?.submitButtonText, DEFAULT_SETTINGS.submitButtonText),
       successMessage: normalizeText(entry?.data?.successMessage, DEFAULT_SETTINGS.successMessage),
-      notification: normalizeNotificationSettingsFromRecord(entry?.data)
+      notification: normalizeNotificationSettingsFromRecord(entry?.data),
+      notificationHealth: normalizeNotificationHealthFromRecord(entry?.data)
     };
   };
 
@@ -722,7 +874,10 @@ export default async function register(api) {
       formTitle: normalizeText(data.formTitle, DEFAULT_SETTINGS.formTitle),
       submitButtonText: normalizeText(data.submitButtonText, DEFAULT_SETTINGS.submitButtonText),
       successMessage: normalizeText(data.successMessage, DEFAULT_SETTINGS.successMessage),
-      notification: normalizeNotificationSettings(data.notification)
+      notification: normalizeNotificationSettings(data.notification),
+      notificationHealth: existing
+        ? normalizeNotificationHealthFromRecord(existing.data)
+        : { ...DEFAULT_SETTINGS.notificationHealth }
     };
 
     if (!existing) {
@@ -760,7 +915,11 @@ export default async function register(api) {
       { name: 'smtpPort', type: 'number' },
       { name: 'smtpSecure', type: 'boolean' },
       { name: 'smtpUsername', type: 'string' },
-      { name: 'smtpPassword', type: 'string' }
+      { name: 'smtpPassword', type: 'string' },
+      { name: 'lastNotificationAttemptAt', type: 'string' },
+      { name: 'lastNotificationStatus', type: 'string' },
+      { name: 'lastNotificationErrorSummary', type: 'string' },
+      { name: 'lastNotificationSkipReason', type: 'string' }
     ]
   });
 
@@ -885,7 +1044,13 @@ export default async function register(api) {
   api.runtime.http.register({
     method: 'GET',
     path: '/admin-api/contact-form/settings',
-    handler: () => toJsonResponse(loadSettings())
+    handler: () => {
+      const settings = loadSettings();
+      return toJsonResponse({
+        ...settings,
+        notificationHealthHint: buildNotificationHealthHint(settings)
+      });
+    }
   });
 
   api.runtime.http.register({

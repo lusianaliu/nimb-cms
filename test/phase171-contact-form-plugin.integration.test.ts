@@ -221,7 +221,6 @@ test('phase 172: notification path sends smtp email when enabled and valid setti
 
     socket.on('data', (chunk) => {
       buffer += chunk;
-
       while (buffer.includes('\r\n')) {
         const lineBreak = buffer.indexOf('\r\n');
         const line = buffer.slice(0, lineBreak);
@@ -239,7 +238,6 @@ test('phase 172: notification path sends smtp email when enabled and valid setti
 
         const normalized = line.toUpperCase();
         smtpEvents.push(normalized);
-
         if (normalized.startsWith('EHLO') || normalized.startsWith('HELO')) {
           socket.write('250-nimb-test-smtp\r\n250 AUTH PLAIN LOGIN\r\n');
         } else if (normalized.startsWith('MAIL FROM')) {
@@ -391,6 +389,177 @@ test('phase 172: smtp failure does not block submission success and settings per
     const entries = started.runtime.db.query('contact-submission', { sort: 'id asc' });
     assert.equal(entries.length, 1);
     assert.equal(entries[0]?.data?.email, 'failure@example.com');
+  } finally {
+    await started.server.stop();
+  }
+});
+
+
+test('phase 173: settings API exposes notification health hint states for disabled and incomplete config', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+  writeInstallState(cwd);
+  installContactPlugin(cwd);
+
+  const started = await createTestServer({ cwd });
+  const listening = await started.server.start();
+
+  try {
+    const initialSettingsResponse = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/settings`);
+    const initialSettings = await initialSettingsResponse.json();
+    assert.equal(initialSettings.notificationHealthHint.message.includes('Email notifications are off'), true);
+
+    const incompleteUpdate = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/settings`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        formTitle: 'Contact Us',
+        submitButtonText: 'Send Message',
+        successMessage: 'Stored',
+        notification: {
+          enabled: true,
+          recipientEmail: '',
+          fromName: 'Nimb Notifications',
+          fromEmail: '',
+          smtpHost: '',
+          smtpPort: 587,
+          smtpSecure: false,
+          smtpUsername: '',
+          smtpPassword: ''
+        }
+      })
+    });
+    assert.equal(incompleteUpdate.status, 200);
+
+    const incompleteSettingsResponse = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/settings`);
+    const incompleteSettings = await incompleteSettingsResponse.json();
+    assert.equal(incompleteSettings.notificationHealthHint.message.includes('Notification settings are incomplete'), true);
+  } finally {
+    await started.server.stop();
+  }
+});
+
+test('phase 173: notification health metadata tracks success and failed attempts without changing storage-first behavior', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+  writeInstallState(cwd);
+  installContactPlugin(cwd);
+
+  const started = await createTestServer({ cwd });
+  const listening = await started.server.start();
+
+  const smtpServer = net.createServer((socket) => {
+    socket.setEncoding('utf8');
+    socket.write('220 nimb-test-smtp\r\n');
+
+    let dataMode = false;
+    let buffer = '';
+
+    socket.on('data', (chunk) => {
+      buffer += chunk;
+      while (buffer.includes('\r\n')) {
+        const lineBreak = buffer.indexOf('\r\n');
+        const line = buffer.slice(0, lineBreak);
+        buffer = buffer.slice(lineBreak + 2);
+
+        if (dataMode) {
+          if (line === '.') {
+            dataMode = false;
+            socket.write('250 Message accepted\r\n');
+          }
+          continue;
+        }
+
+        const normalized = line.toUpperCase();
+        if (normalized.startsWith('EHLO') || normalized.startsWith('HELO')) {
+          socket.write('250-nimb-test-smtp\r\n250 AUTH PLAIN LOGIN\r\n');
+        } else if (normalized.startsWith('MAIL FROM')) {
+          socket.write('250 OK\r\n');
+        } else if (normalized.startsWith('RCPT TO')) {
+          socket.write('250 OK\r\n');
+        } else if (normalized === 'DATA') {
+          dataMode = true;
+          socket.write('354 End data with <CR><LF>.<CR><LF>\r\n');
+        } else if (normalized === 'QUIT') {
+          socket.write('221 Bye\r\n');
+          socket.end();
+        } else {
+          socket.write('250 OK\r\n');
+        }
+      }
+    });
+  });
+
+  await new Promise<void>((resolve) => smtpServer.listen(0, '127.0.0.1', () => resolve()));
+  const smtpAddress = smtpServer.address();
+  assert.equal(typeof smtpAddress, 'object');
+  const smtpPort = smtpAddress && 'port' in smtpAddress ? smtpAddress.port : 0;
+
+  try {
+    const settingsUpdate = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/settings`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        formTitle: 'Contact Us',
+        submitButtonText: 'Send Message',
+        successMessage: 'Stored',
+        notification: {
+          enabled: true,
+          recipientEmail: 'owner@example.com',
+          fromName: 'Nimb Notifications',
+          fromEmail: 'notify@example.com',
+          smtpHost: '127.0.0.1',
+          smtpPort,
+          smtpSecure: false,
+          smtpUsername: '',
+          smtpPassword: ''
+        }
+      })
+    });
+    assert.equal(settingsUpdate.status, 200);
+
+    const successSubmit = await submitContact(listening.port, {
+      name: 'Health Success',
+      email: 'health-success@example.com',
+      subject: 'Healthy SMTP',
+      message: 'Health should mark success.',
+      website: ''
+    });
+    assert.equal(successSubmit.status, 302);
+
+    const successHealth = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/settings`);
+    const successHealthBody = await successHealth.json();
+    assert.equal(successHealthBody.notificationHealth.lastNotificationStatus, 'success');
+    assert.equal(Boolean(successHealthBody.notificationHealth.lastNotificationAttemptAt), true);
+    assert.equal(successHealthBody.notificationHealthHint.message.includes('sent successfully'), true);
+
+    await new Promise<void>((resolve) => smtpServer.close(() => resolve()));
+
+    const failedForm = new URLSearchParams({
+      name: 'Health Failure',
+      email: 'health-failure@example.com',
+      subject: 'SMTP down',
+      message: 'Health should mark failure.',
+      website: ''
+    });
+    const failedSubmit = await fetch(`http://127.0.0.1:${listening.port}/contact`, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-forwarded-for': '203.0.113.17'
+      },
+      body: failedForm.toString()
+    });
+    assert.equal(failedSubmit.status, 302);
+
+    const failedHealth = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/settings`);
+    const failedHealthBody = await failedHealth.json();
+    assert.equal(failedHealthBody.notificationHealth.lastNotificationStatus, 'failed');
+    assert.equal(failedHealthBody.notificationHealthHint.message.includes('New messages are still being saved'), true);
+
+    const entries = started.runtime.db.query('contact-submission', { sort: 'id asc' });
+    assert.equal(entries.length, 2);
   } finally {
     await started.server.stop();
   }

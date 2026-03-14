@@ -26,6 +26,29 @@ The plugin settings now include an optional notification section:
 
 Current phase stores SMTP credentials in plugin settings for practical setup speed. This is acceptable for now, but a future phase should move secrets to safer secret-management patterns.
 
+
+## Notification health hint (Phase 173)
+The plugin now tracks lightweight notification health metadata in the plugin settings entry:
+- `lastNotificationAttemptAt`
+- `lastNotificationStatus` (`never`, `success`, `failed`, `skipped`)
+- `lastNotificationErrorSummary` (short and safe summary)
+- `lastNotificationSkipReason`
+
+This metadata is plugin-scoped and informational only. It is surfaced on the admin Contact Form settings screen as a concise health hint for operators.
+
+Example hint states:
+- notifications off
+- notification settings incomplete
+- last notification sent successfully
+- last notification attempt failed (with short summary)
+
+What this does **not** guarantee:
+- It does not provide queue-based reliability.
+- It does not guarantee inbox delivery.
+- It is not a global/core mail monitoring subsystem.
+
+Storage-first behavior is unchanged: submissions are still stored as the primary success path, and email remains best-effort.
+
 ## Success / failure contract (storage-first)
 Submission flow order:
 1. Validate request payload.
