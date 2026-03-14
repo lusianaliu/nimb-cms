@@ -42,6 +42,15 @@ type ContactFormValues = {
   website: string;
 };
 
+type ContactSubmissionNotificationStatus = 'success' | 'failed' | 'skipped' | 'unknown';
+
+type ContactSubmissionNotificationState = {
+  status: ContactSubmissionNotificationStatus;
+  attemptedAt: string;
+  errorSummary: string;
+  skipReason: string;
+};
+
 const DEFAULT_SETTINGS: ContactSettings = Object.freeze({
   formTitle: 'Contact Us',
   submitButtonText: 'Send Message',
@@ -182,6 +191,59 @@ const summarizeNotificationError = (error: unknown) => {
   }
 
   return collapsed.slice(0, 160);
+};
+
+const normalizeSubmissionNotificationState = (recordData: Record<string, unknown> | null | undefined): ContactSubmissionNotificationState => {
+  const statusText = trimText(recordData?.notificationStatus).toLowerCase();
+  const status: ContactSubmissionNotificationStatus = statusText === 'success'
+    || statusText === 'failed'
+    || statusText === 'skipped'
+    || statusText === 'unknown'
+    ? statusText
+    : 'unknown';
+
+  return {
+    status,
+    attemptedAt: trimText(recordData?.notificationAttemptedAt),
+    errorSummary: trimText(recordData?.notificationErrorSummary),
+    skipReason: trimText(recordData?.notificationSkipReason)
+  };
+};
+
+const toNotificationStatusView = (state: ContactSubmissionNotificationState) => {
+  if (state.status === 'success') {
+    return {
+      badgeLabel: 'Sent',
+      detailText: state.attemptedAt
+        ? `Notification sent at ${state.attemptedAt}.`
+        : 'Notification sent.',
+      tone: 'positive'
+    };
+  }
+
+  if (state.status === 'failed') {
+    const summary = state.errorSummary ? ` (${state.errorSummary})` : '';
+    return {
+      badgeLabel: 'Failed',
+      detailText: `Notification failed. The message is still saved${summary}.`,
+      tone: 'warning'
+    };
+  }
+
+  if (state.status === 'skipped') {
+    const reason = state.skipReason || 'email settings were not ready';
+    return {
+      badgeLabel: 'Skipped',
+      detailText: `Notification skipped because ${reason}. The message is still saved.`,
+      tone: 'neutral'
+    };
+  }
+
+  return {
+    badgeLabel: 'Not attempted',
+    detailText: 'Notification has not been attempted yet. The message is still saved.',
+    tone: 'neutral'
+  };
 };
 
 const buildNotificationHealthHint = (settings: ContactSettings) => {
@@ -617,6 +679,7 @@ const renderAdminPage = () => `
             <th align="left">Email</th>
             <th align="left">Subject</th>
             <th align="left">Status</th>
+            <th align="left">Notification</th>
             <th align="left">Created</th>
           </tr>
         </thead>
@@ -667,18 +730,29 @@ const renderAdminPage = () => `
       notificationHealth.style.color = tone === 'positive' ? '#166534' : tone === 'warning' ? '#92400e' : '#334155';
     };
 
+    const renderNotificationBadge = (record) => {
+      const label = escapeHtml(record.notificationBadgeLabel || 'Not attempted');
+      const tone = record.notificationBadgeTone || 'neutral';
+      const border = tone === 'positive' ? '#86efac' : tone === 'warning' ? '#fcd34d' : '#dbe4ee';
+      const background = tone === 'positive' ? '#f0fdf4' : tone === 'warning' ? '#fffbeb' : '#f8fafc';
+      const color = tone === 'positive' ? '#166534' : tone === 'warning' ? '#92400e' : '#334155';
+      return '<span style="display:inline-block;padding:.15rem .5rem;border:1px solid ' + border + ';border-radius:999px;background:' + background + ';color:' + color + ';font-size:.84rem;">' + label + '</span>';
+    };
+
     const renderSubmissionRows = (records) => records.map((record) => {
       const id = escapeHtml(record.id);
       const name = escapeHtml(record.name);
       const email = escapeHtml(record.email);
       const subject = escapeHtml(record.subject || '-');
       const status = escapeHtml(record.status);
+      const notificationBadge = renderNotificationBadge(record);
       const createdAt = escapeHtml(record.createdAt);
       return '<tr>'
         + '<td><button data-id="' + id + '" style="border:none;background:none;padding:0;color:#0f4c81;cursor:pointer;text-decoration:underline;">' + name + '</button></td>'
         + '<td>' + email + '</td>'
         + '<td>' + subject + '</td>'
         + '<td>' + status + '</td>'
+        + '<td>' + notificationBadge + '</td>'
         + '<td>' + createdAt + '</td>'
         + '</tr>';
     }).join('');
@@ -721,6 +795,8 @@ const renderAdminPage = () => `
         + '<p><strong>Email:</strong> ' + escapeHtml(record.email) + '</p>'
         + '<p><strong>Subject:</strong> ' + escapeHtml(record.subject || '-') + '</p>'
         + '<p><strong>Status:</strong> ' + escapeHtml(record.status) + '</p>'
+        + '<p><strong>Notification:</strong> ' + renderNotificationBadge(record) + '</p>'
+        + '<p style="margin-top:.35rem;color:#334155;">' + escapeHtml(record.notificationDetailText || 'Notification state is unavailable. The message is still saved.') + '</p>'
         + '<p><strong>Submitted:</strong> ' + escapeHtml(record.createdAt) + '</p>'
         + '<h3>Message</h3>'
         + '<pre style="white-space:pre-wrap;background:#f8fafc;padding:.75rem;border:1px solid #dbe4ee;border-radius:8px;">' + escapeHtml(record.message) + '</pre>'
@@ -767,14 +843,26 @@ const renderAdminPage = () => `
 `;
 
 
-const toSubmissionSummary = (record) => ({
-  id: `${record?.id ?? ''}`,
-  name: `${record?.data?.name ?? ''}`,
-  email: `${record?.data?.email ?? ''}`,
-  subject: `${record?.data?.subject ?? ''}`,
-  status: `${record?.data?.status ?? 'new'}`,
-  createdAt: `${record?.data?.createdAt ?? record?.createdAt ?? ''}`
-});
+const toSubmissionSummary = (record) => {
+  const notification = normalizeSubmissionNotificationState(record?.data);
+  const notificationView = toNotificationStatusView(notification);
+
+  return {
+    id: `${record?.id ?? ''}`,
+    name: `${record?.data?.name ?? ''}`,
+    email: `${record?.data?.email ?? ''}`,
+    subject: `${record?.data?.subject ?? ''}`,
+    status: `${record?.data?.status ?? 'new'}`,
+    createdAt: `${record?.data?.createdAt ?? record?.createdAt ?? ''}`,
+    notificationStatus: notification.status,
+    notificationAttemptedAt: notification.attemptedAt,
+    notificationErrorSummary: notification.errorSummary,
+    notificationSkipReason: notification.skipReason,
+    notificationBadgeLabel: notificationView.badgeLabel,
+    notificationBadgeTone: notificationView.tone,
+    notificationDetailText: notificationView.detailText
+  };
+};
 
 const toSubmissionDetail = (record) => ({
   ...toSubmissionSummary(record),
@@ -814,7 +902,7 @@ export default async function register(api) {
     api.runtime.db.update(CONTACT_SETTINGS_TYPE, `${row.id}`, toStoredSettings(next));
   };
 
-  const sendNotificationEmail = async (settings: ContactNotificationSettings, submission: { name: string, email: string, subject: string, message: string, createdAt: string }) => {
+  const sendNotificationEmail = async (settings: ContactNotificationSettings, submission: { name: string, email: string, subject: string, message: string, createdAt: string }): Promise<ContactSubmissionNotificationState> => {
     const attemptedAt = new Date().toISOString();
     if (!settings.enabled) {
       persistNotificationHealth('skipped', {
@@ -822,7 +910,12 @@ export default async function register(api) {
         lastNotificationSkipReason: 'email notifications are off',
         lastNotificationErrorSummary: ''
       });
-      return;
+      return {
+        status: 'skipped',
+        attemptedAt,
+        errorSummary: '',
+        skipReason: 'email notifications are off'
+      };
     }
 
     if (!isValidNotificationSettings(settings)) {
@@ -831,7 +924,12 @@ export default async function register(api) {
         lastNotificationSkipReason: 'notification settings are incomplete',
         lastNotificationErrorSummary: ''
       });
-      return;
+      return {
+        status: 'skipped',
+        attemptedAt,
+        errorSummary: '',
+        skipReason: 'notification settings are incomplete'
+      };
     }
 
     try {
@@ -841,13 +939,26 @@ export default async function register(api) {
         lastNotificationErrorSummary: '',
         lastNotificationSkipReason: ''
       });
+      return {
+        status: 'success',
+        attemptedAt,
+        errorSummary: '',
+        skipReason: ''
+      };
     } catch (error) {
       logNotificationFailure('Failed to send contact form notification email.', error);
+      const errorSummary = summarizeNotificationError(error);
       persistNotificationHealth('failed', {
         lastNotificationAttemptAt: attemptedAt,
-        lastNotificationErrorSummary: summarizeNotificationError(error),
+        lastNotificationErrorSummary: errorSummary,
         lastNotificationSkipReason: ''
       });
+      return {
+        status: 'failed',
+        attemptedAt,
+        errorSummary,
+        skipReason: ''
+      };
     }
   };
 
@@ -896,7 +1007,11 @@ export default async function register(api) {
       { name: 'subject', type: 'string' },
       { name: 'message', type: 'string', required: true },
       { name: 'status', type: 'string', required: true },
-      { name: 'createdAt', type: 'string', required: true }
+      { name: 'createdAt', type: 'string', required: true },
+      { name: 'notificationStatus', type: 'string' },
+      { name: 'notificationAttemptedAt', type: 'string' },
+      { name: 'notificationErrorSummary', type: 'string' },
+      { name: 'notificationSkipReason', type: 'string' }
     ]
   });
 
@@ -1020,21 +1135,33 @@ export default async function register(api) {
       recentSubmissions.set(clientAddress, now);
 
       const createdAt = new Date().toISOString();
-      api.runtime.db.create(CONTACT_SUBMISSION_TYPE, {
+      const created = api.runtime.db.create(CONTACT_SUBMISSION_TYPE, {
         name: values.name,
         email: values.email,
         subject: values.subject,
         message: values.message,
         status: 'new',
-        createdAt
+        createdAt,
+        notificationStatus: 'unknown',
+        notificationAttemptedAt: '',
+        notificationErrorSummary: '',
+        notificationSkipReason: ''
       });
 
-      await sendNotificationEmail(settings.notification, {
+      const notificationState = await sendNotificationEmail(settings.notification, {
         name: values.name,
         email: values.email,
         subject: values.subject,
         message: values.message,
         createdAt
+      });
+
+      api.runtime.db.update(CONTACT_SUBMISSION_TYPE, `${created.id}`, {
+        ...created.data,
+        notificationStatus: notificationState.status,
+        notificationAttemptedAt: notificationState.attemptedAt,
+        notificationErrorSummary: notificationState.errorSummary,
+        notificationSkipReason: notificationState.skipReason
       });
 
       return toRedirect('/contact?success=1');

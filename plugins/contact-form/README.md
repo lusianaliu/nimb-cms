@@ -49,6 +49,27 @@ What this does **not** guarantee:
 
 Storage-first behavior is unchanged: submissions are still stored as the primary success path, and email remains best-effort.
 
+
+
+## Per-submission notification status (Phase 174)
+Each contact submission now stores compact notification metadata directly on the submission record:
+- `notificationStatus` (`success`, `failed`, `skipped`, `unknown`)
+- `notificationAttemptedAt`
+- `notificationErrorSummary` (short safe summary)
+- `notificationSkipReason`
+
+Where admins see it:
+- submissions list: small notification badge (`Sent`, `Failed`, `Skipped`, `Not attempted`)
+- submission detail: badge plus plain-language explanation
+
+Meaning of statuses:
+- `success`: notification send attempt completed successfully
+- `failed`: send attempt failed, but the message is still stored
+- `skipped`: notifications were off or settings were incomplete, and message is still stored
+- `unknown`: fallback for older records that predate this metadata
+
+This metadata is intentionally lightweight and informational only. It does **not** guarantee inbox delivery and is **not** a full mail activity history.
+
 ## Success / failure contract (storage-first)
 Submission flow order:
 1. Validate request payload.

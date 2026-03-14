@@ -564,3 +564,172 @@ test('phase 173: notification health metadata tracks success and failed attempts
     await started.server.stop();
   }
 });
+
+
+test('phase 174: per-submission notification status is stored as skipped and exposed in admin submission APIs', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+  writeInstallState(cwd);
+  installContactPlugin(cwd);
+
+  const started = await createTestServer({ cwd });
+  const listening = await started.server.start();
+
+  try {
+    const submit = await submitContact(listening.port, {
+      name: 'Skipped Sender',
+      email: 'skipped@example.com',
+      subject: 'Stored only',
+      message: 'Notification is disabled.',
+      website: ''
+    });
+
+    assert.equal(submit.status, 302);
+
+    const stored = started.runtime.db.query('contact-submission', { sort: 'id desc' });
+    assert.equal(stored.length, 1);
+    assert.equal(stored[0]?.data?.notificationStatus, 'skipped');
+    assert.equal(Boolean(stored[0]?.data?.notificationAttemptedAt), true);
+    assert.equal(stored[0]?.data?.notificationSkipReason, 'email notifications are off');
+
+    const listResponse = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/submissions`);
+    assert.equal(listResponse.status, 200);
+    const listBody = await listResponse.json();
+    assert.equal(listBody[0].notificationStatus, 'skipped');
+    assert.equal(listBody[0].notificationBadgeLabel, 'Skipped');
+
+    const detailResponse = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/submissions/${stored[0].id}`);
+    assert.equal(detailResponse.status, 200);
+    const detailBody = await detailResponse.json();
+    assert.equal(detailBody.notificationDetailText.includes('The message is still saved'), true);
+  } finally {
+    await started.server.stop();
+  }
+});
+
+test('phase 174: per-submission notification status captures success and failure without breaking storage-first success', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+  writeInstallState(cwd);
+  installContactPlugin(cwd);
+
+  const started = await createTestServer({ cwd });
+  const listening = await started.server.start();
+
+  const smtpServer = net.createServer((socket) => {
+    socket.setEncoding('utf8');
+    socket.write('220 nimb-test-smtp\r\n');
+
+    let dataMode = false;
+    let buffer = '';
+
+    socket.on('data', (chunk) => {
+      buffer += chunk;
+      while (buffer.includes('\r\n')) {
+        const lineBreak = buffer.indexOf('\r\n');
+        const line = buffer.slice(0, lineBreak);
+        buffer = buffer.slice(lineBreak + 2);
+
+        if (dataMode) {
+          if (line === '.') {
+            dataMode = false;
+            socket.write('250 Message accepted\r\n');
+          }
+          continue;
+        }
+
+        const normalized = line.toUpperCase();
+        if (normalized.startsWith('EHLO') || normalized.startsWith('HELO')) {
+          socket.write('250-nimb-test-smtp\r\n250 AUTH PLAIN LOGIN\r\n');
+        } else if (normalized.startsWith('MAIL FROM')) {
+          socket.write('250 OK\r\n');
+        } else if (normalized.startsWith('RCPT TO')) {
+          socket.write('250 OK\r\n');
+        } else if (normalized === 'DATA') {
+          dataMode = true;
+          socket.write('354 End data with <CR><LF>.<CR><LF>\r\n');
+        } else if (normalized === 'QUIT') {
+          socket.write('221 Bye\r\n');
+          socket.end();
+        } else {
+          socket.write('250 OK\r\n');
+        }
+      }
+    });
+  });
+
+  await new Promise<void>((resolve) => smtpServer.listen(0, '127.0.0.1', () => resolve()));
+  const smtpAddress = smtpServer.address();
+  assert.equal(typeof smtpAddress, 'object');
+  const smtpPort = smtpAddress && 'port' in smtpAddress ? smtpAddress.port : 0;
+
+  try {
+    const settingsUpdate = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/settings`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        formTitle: 'Contact Us',
+        submitButtonText: 'Send Message',
+        successMessage: 'Stored',
+        notification: {
+          enabled: true,
+          recipientEmail: 'owner@example.com',
+          fromName: 'Nimb Notifications',
+          fromEmail: 'notify@example.com',
+          smtpHost: '127.0.0.1',
+          smtpPort,
+          smtpSecure: false,
+          smtpUsername: '',
+          smtpPassword: ''
+        }
+      })
+    });
+    assert.equal(settingsUpdate.status, 200);
+
+    const successSubmit = await submitContact(listening.port, {
+      name: 'Success Sender',
+      email: 'success@example.com',
+      subject: 'SMTP up',
+      message: 'Expect success status.',
+      website: ''
+    });
+    assert.equal(successSubmit.status, 302);
+
+    await new Promise<void>((resolve) => smtpServer.close(() => resolve()));
+
+    const failedSubmitForm = new URLSearchParams({
+      name: 'Failure Sender',
+      email: 'failed@example.com',
+      subject: 'SMTP down',
+      message: 'Expect failure status but saved message.',
+      website: ''
+    });
+    const failedSubmit = await fetch(`http://127.0.0.1:${listening.port}/contact`, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-forwarded-for': '198.51.100.24'
+      },
+      body: failedSubmitForm.toString()
+    });
+    assert.equal(failedSubmit.status, 302);
+
+    const rows = started.runtime.db.query('contact-submission', { sort: 'id asc' });
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0]?.data?.notificationStatus, 'success');
+    assert.equal(rows[1]?.data?.notificationStatus, 'failed');
+    assert.equal(Boolean(rows[1]?.data?.notificationErrorSummary), true);
+
+    const listResponse = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/submissions`);
+    assert.equal(listResponse.status, 200);
+    const listBody = await listResponse.json();
+    assert.equal(listBody[0].notificationBadgeLabel, 'Failed');
+    assert.equal(listBody[1].notificationBadgeLabel, 'Sent');
+  } finally {
+    await started.server.stop();
+    if (smtpServer.listening) {
+      await new Promise<void>((resolve) => smtpServer.close(() => resolve()));
+    }
+  }
+});
