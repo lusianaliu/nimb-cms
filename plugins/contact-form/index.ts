@@ -43,6 +43,7 @@ type ContactFormValues = {
 };
 
 type ContactSubmissionNotificationStatus = 'success' | 'failed' | 'skipped' | 'unknown';
+type ContactSubmissionNotificationFilter = 'all' | 'sent' | 'failed' | 'skipped' | 'not-attempted';
 
 type ContactSubmissionNotificationState = {
   status: ContactSubmissionNotificationStatus;
@@ -244,6 +245,35 @@ const toNotificationStatusView = (state: ContactSubmissionNotificationState) => 
     detailText: 'Notification has not been attempted yet. The message is still saved.',
     tone: 'neutral'
   };
+};
+
+const normalizeNotificationFilter = (value: unknown): ContactSubmissionNotificationFilter => {
+  const filterText = trimText(value).toLowerCase();
+  if (filterText === 'sent' || filterText === 'failed' || filterText === 'skipped' || filterText === 'not-attempted') {
+    return filterText;
+  }
+
+  return 'all';
+};
+
+const matchesNotificationFilter = (status: ContactSubmissionNotificationStatus, filter: ContactSubmissionNotificationFilter): boolean => {
+  if (filter === 'all') {
+    return true;
+  }
+
+  if (filter === 'sent') {
+    return status === 'success';
+  }
+
+  if (filter === 'failed') {
+    return status === 'failed';
+  }
+
+  if (filter === 'skipped') {
+    return status === 'skipped';
+  }
+
+  return status === 'unknown';
 };
 
 const buildNotificationHealthHint = (settings: ContactSettings) => {
@@ -671,6 +701,17 @@ const renderAdminPage = () => `
 
     <section style="margin:1rem 0;padding:1rem;border:1px solid #dbe4ee;border-radius:12px;background:#fff;">
       <h2 style="margin-top:0;">Submissions</h2>
+      <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.7rem;">
+        <label for="contact-notification-filter" style="font-weight:600;color:#0f172a;">Notification</label>
+        <select id="contact-notification-filter" style="padding:.35rem .5rem;border:1px solid #cbd5e1;border-radius:8px;background:#fff;max-width:100%;">
+          <option value="all">All</option>
+          <option value="sent">Sent</option>
+          <option value="failed">Failed</option>
+          <option value="skipped">Skipped</option>
+          <option value="not-attempted">Not attempted</option>
+        </select>
+        <span style="color:#64748b;font-size:.9rem;">Messages are always saved, even when notification fails or is skipped.</span>
+      </div>
       <div id="contact-submissions-empty" style="display:none;">No submissions yet.</div>
       <table id="contact-submissions-table" style="width:100%;border-collapse:collapse;display:none;">
         <thead>
@@ -698,6 +739,7 @@ const renderAdminPage = () => `
     const emptyState = document.getElementById('contact-submissions-empty');
     const tbody = table.querySelector('tbody');
     const detail = document.getElementById('contact-submission-detail');
+    const notificationFilter = document.getElementById('contact-notification-filter');
 
     const escapeHtml = (value) => String(value ?? '')
       .replaceAll('&', '&amp;')
@@ -758,7 +800,12 @@ const renderAdminPage = () => `
     }).join('');
 
     const loadSubmissions = async () => {
-      const response = await fetch('/admin-api/contact-form/submissions');
+      const selectedFilter = notificationFilter?.value || 'all';
+      const query = selectedFilter === 'all'
+        ? ''
+        : '?notification=' + encodeURIComponent(selectedFilter);
+
+      const response = await fetch('/admin-api/contact-form/submissions' + query);
       const records = await response.json();
 
       if (!Array.isArray(records) || records.length === 0) {
@@ -835,6 +882,10 @@ const renderAdminPage = () => `
       });
       settingsStatus.textContent = 'Saved';
       await loadSettings();
+    });
+
+    notificationFilter?.addEventListener('change', () => {
+      void loadSubmissions();
     });
 
     void loadSettings();
@@ -1193,9 +1244,12 @@ export default async function register(api) {
   api.runtime.http.register({
     method: 'GET',
     path: '/admin-api/contact-form/submissions',
-    handler: () => {
+    handler: (context) => {
+      const notificationFilter = normalizeNotificationFilter(context?.query?.notification);
       const rows = api.runtime.db.list(CONTACT_SUBMISSION_TYPE, { sort: 'createdAt desc', limit: 200 });
-      return toJsonResponse(rows.map(toSubmissionSummary));
+      const summaries = rows.map(toSubmissionSummary);
+      const filtered = summaries.filter((summary) => matchesNotificationFilter(summary.notificationStatus, notificationFilter));
+      return toJsonResponse(filtered);
     }
   });
 

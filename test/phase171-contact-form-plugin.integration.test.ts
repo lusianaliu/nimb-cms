@@ -733,3 +733,208 @@ test('phase 174: per-submission notification status captures success and failure
     }
   }
 });
+
+test('phase 175: admin submissions API supports notification status filtering for triage', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+  writeInstallState(cwd);
+  installContactPlugin(cwd);
+
+  const started = await createTestServer({ cwd });
+  const listening = await started.server.start();
+
+  const smtpServer = net.createServer((socket) => {
+    socket.setEncoding('utf8');
+    socket.write('220 nimb-test-smtp\r\n');
+
+    let dataMode = false;
+    let buffer = '';
+
+    socket.on('data', (chunk) => {
+      buffer += chunk;
+      while (buffer.includes('\r\n')) {
+        const lineBreak = buffer.indexOf('\r\n');
+        const line = buffer.slice(0, lineBreak);
+        buffer = buffer.slice(lineBreak + 2);
+
+        if (dataMode) {
+          if (line === '.') {
+            dataMode = false;
+            socket.write('250 Message accepted\r\n');
+          }
+          continue;
+        }
+
+        const normalized = line.toUpperCase();
+        if (normalized.startsWith('EHLO') || normalized.startsWith('HELO')) {
+          socket.write('250-nimb-test-smtp\r\n250 AUTH PLAIN LOGIN\r\n');
+        } else if (normalized.startsWith('MAIL FROM')) {
+          socket.write('250 OK\r\n');
+        } else if (normalized.startsWith('RCPT TO')) {
+          socket.write('250 OK\r\n');
+        } else if (normalized === 'DATA') {
+          dataMode = true;
+          socket.write('354 End data with <CR><LF>.<CR><LF>\r\n');
+        } else if (normalized === 'QUIT') {
+          socket.write('221 Bye\r\n');
+          socket.end();
+        } else {
+          socket.write('250 OK\r\n');
+        }
+      }
+    });
+  });
+
+  await new Promise<void>((resolve) => smtpServer.listen(0, '127.0.0.1', () => resolve()));
+  const smtpAddress = smtpServer.address();
+  assert.equal(typeof smtpAddress, 'object');
+  const smtpPort = smtpAddress && 'port' in smtpAddress ? smtpAddress.port : 0;
+
+  try {
+    const settingsUpdate = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/settings`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        formTitle: 'Contact Us',
+        submitButtonText: 'Send Message',
+        successMessage: 'Stored',
+        notification: {
+          enabled: true,
+          recipientEmail: 'owner@example.com',
+          fromName: 'Nimb Notifications',
+          fromEmail: 'notify@example.com',
+          smtpHost: '127.0.0.1',
+          smtpPort,
+          smtpSecure: false,
+          smtpUsername: '',
+          smtpPassword: ''
+        }
+      })
+    });
+    assert.equal(settingsUpdate.status, 200);
+
+    const successSubmit = await submitContact(listening.port, {
+      name: 'Filter Success Sender',
+      email: 'filter-success@example.com',
+      subject: 'SMTP up',
+      message: 'Expect sent filter match.',
+      website: ''
+    });
+    assert.equal(successSubmit.status, 302);
+
+    await new Promise<void>((resolve) => smtpServer.close(() => resolve()));
+
+    const failedSubmitForm = new URLSearchParams({
+      name: 'Filter Failure Sender',
+      email: 'filter-failed@example.com',
+      subject: 'SMTP down',
+      message: 'Expect failed filter match.',
+      website: ''
+    });
+    const failedSubmit = await fetch(`http://127.0.0.1:${listening.port}/contact`, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-forwarded-for': '198.51.100.25'
+      },
+      body: failedSubmitForm.toString()
+    });
+    assert.equal(failedSubmit.status, 302);
+
+    const settingsDisable = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/settings`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        formTitle: 'Contact Us',
+        submitButtonText: 'Send Message',
+        successMessage: 'Stored',
+        notification: {
+          enabled: false,
+          recipientEmail: 'owner@example.com',
+          fromName: 'Nimb Notifications',
+          fromEmail: 'notify@example.com',
+          smtpHost: '127.0.0.1',
+          smtpPort,
+          smtpSecure: false,
+          smtpUsername: '',
+          smtpPassword: ''
+        }
+      })
+    });
+    assert.equal(settingsDisable.status, 200);
+
+    const skippedSubmit = await fetch(`http://127.0.0.1:${listening.port}/contact`, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-forwarded-for': '203.0.113.45'
+      },
+      body: new URLSearchParams({
+        name: 'Filter Skipped Sender',
+        email: 'filter-skipped@example.com',
+        subject: 'Notifications off',
+        message: 'Expect skipped filter match.',
+        website: ''
+      }).toString()
+    });
+    assert.equal(skippedSubmit.status, 302);
+
+    const rows = started.runtime.db.query('contact-submission', { sort: 'id asc' });
+    assert.equal(rows.length, 3);
+
+    const allResponse = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/submissions`);
+    assert.equal(allResponse.status, 200);
+    const allBody = await allResponse.json();
+    assert.equal(allBody.length, 3);
+
+    const sentResponse = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/submissions?notification=sent`);
+    const sentBody = await sentResponse.json();
+    assert.equal(sentBody.length, 1);
+    assert.equal(sentBody[0].notificationStatus, 'success');
+
+    const failedResponse = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/submissions?notification=failed`);
+    const failedBody = await failedResponse.json();
+    assert.equal(failedBody.length, 1);
+    assert.equal(failedBody[0].notificationStatus, 'failed');
+
+    const skippedResponse = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/submissions?notification=skipped`);
+    const skippedBody = await skippedResponse.json();
+    assert.equal(skippedBody.length, 1);
+    assert.equal(skippedBody[0].notificationStatus, 'skipped');
+
+    const invalidResponse = await fetch(`http://127.0.0.1:${listening.port}/admin-api/contact-form/submissions?notification=not-a-filter`);
+    const invalidBody = await invalidResponse.json();
+    assert.equal(invalidBody.length, 3);
+  } finally {
+    await started.server.stop();
+    if (smtpServer.listening) {
+      await new Promise<void>((resolve) => smtpServer.close(() => resolve()));
+    }
+  }
+});
+
+test('phase 175: admin contact page definition includes notification filter control', async () => {
+  const cwd = mkdtemp();
+  writeConfig(cwd);
+  writeInstallState(cwd);
+  installContactPlugin(cwd);
+
+  const started = await createTestServer({ cwd });
+  const listening = await started.server.start();
+
+  try {
+    const adminPageDefinition = started.runtime.adminPages.get('/admin/contact-form');
+    assert.equal(Boolean(adminPageDefinition), true);
+    const adminHtml = adminPageDefinition?.render?.() ?? '';
+    assert.equal(adminHtml.includes('id="contact-notification-filter"'), true);
+    assert.equal(adminHtml.includes('<option value="all">All</option>'), true);
+    assert.equal(adminHtml.includes('<option value="sent">Sent</option>'), true);
+    assert.equal(adminHtml.includes('<option value="failed">Failed</option>'), true);
+    assert.equal(adminHtml.includes('<option value="skipped">Skipped</option>'), true);
+    assert.equal(adminHtml.includes('<option value="not-attempted">Not attempted</option>'), true);
+  } finally {
+    await started.server.stop();
+  }
+});
