@@ -5,7 +5,11 @@ import { runPreflightDiagnostics } from '../core/cli/preflight.ts';
 import { validateAdminStaticDir, validateDataDirectoryWritable } from '../core/bootstrap/startup-invariants.ts';
 import { assertValidStartupPort, formatStartupPortInvariantFailure } from '../core/invariants/startup-port.ts';
 import { formatPersistenceRuntimeJsonInvariantFailure } from '../core/invariants/persistence-runtime-json.ts';
-import { formatDirectoryShapeInvariantFailure, formatDirectoryWritabilityInvariantFailure } from '../core/invariants/directory-writability.ts';
+import {
+  formatDirectoryParentNotWritableInvariantFailure,
+  formatDirectoryShapeInvariantFailure,
+  formatDirectoryWritabilityInvariantFailure
+} from '../core/invariants/directory-writability.ts';
 import { ADMIN_STATIC_DIR_INVARIANT, formatAdminStaticDirInvariantFailure } from '../core/invariants/admin-static-dir.ts';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -396,3 +400,41 @@ test('phase 190: preflight required-directory shape detail reuses canonical help
     formatDirectoryShapeInvariantFailure(SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable, 'logs', logsPath)
   );
 });
+
+
+test('phase 191: shared parent-not-writable helper enforces canonical invariant failure text', () => {
+  assert.equal(
+    formatDirectoryParentNotWritableInvariantFailure(
+      SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable,
+      '/tmp/site/logs',
+      '/tmp/site'
+    ),
+    'Startup invariant failed [logs-directory-writable]: /tmp/site/logs is missing and parent path /tmp/site is not writable.'
+  );
+});
+
+test('phase 191: preflight required-directory parent-path writable failure detail reuses canonical helper text', async () => {
+  const projectRoot = '/sys';
+
+  const report = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: projectRoot
+  });
+
+  const logsPath = path.join(projectRoot, 'logs');
+
+  const logsParentFinding = report.findings.find(
+    (finding) => finding.code === 'required-directory-parent' && finding.check === 'logs parent path writable'
+  );
+
+  assert.equal(logsParentFinding?.severity, SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable.severityIntent.preflight.fail);
+  assert.equal(
+    logsParentFinding?.detail,
+    formatDirectoryParentNotWritableInvariantFailure(
+      SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable,
+      logsPath,
+      projectRoot
+    )
+  );
+});
+

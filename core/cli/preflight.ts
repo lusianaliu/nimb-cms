@@ -6,7 +6,12 @@ import { SHARED_STARTUP_PREFLIGHT_INVARIANTS } from '../invariants/startup-prefl
 import { ADMIN_STATIC_DIR_INVARIANT, formatAdminStaticDirInvariantFailure } from '../invariants/admin-static-dir.ts';
 import { STARTUP_PORT_INVARIANT, assertValidStartupPort, formatStartupPortInvariantFailure } from '../invariants/startup-port.ts';
 import { formatPersistenceRuntimeJsonInvariantFailure } from '../invariants/persistence-runtime-json.ts';
-import { formatDirectoryShapeInvariantFailure, formatDirectoryWritabilityInvariantFailure } from '../invariants/directory-writability.ts';
+import {
+  formatDirectoryParentNotWritableInvariantFailure,
+  formatDirectoryShapeInvariantFailure,
+  formatDirectoryWritabilityInvariantFailure,
+  resolveNearestExistingPath
+} from '../invariants/directory-writability.ts';
 
 const LEGACY_CONFIG_FILENAME = 'nimb.config.json';
 const DEFAULT_ADMIN_STATIC_DIR = './ui/admin';
@@ -87,20 +92,6 @@ const isWritableDirectory = (directoryPath: string) => {
   fs.rmSync(probePath, { force: true });
 };
 
-const resolveNearestExistingPath = (targetPath: string) => {
-  let currentPath = path.resolve(targetPath);
-  while (!fs.existsSync(currentPath)) {
-    const nextPath = path.dirname(currentPath);
-    if (nextPath === currentPath) {
-      return null;
-    }
-
-    currentPath = nextPath;
-  }
-
-  return currentPath;
-};
-
 const evaluateRequiredDirectory = (
   findings: PreflightFinding[],
   directoryPath: string,
@@ -172,7 +163,7 @@ const evaluateRequiredDirectory = (
       severity: 'FAIL',
       code: 'required-directory-parent',
       check: `${label} parent path writable`,
-      detail: `${directoryPath} is missing and parent path ${nearestExisting} is not writable.`,
+      detail: formatDirectoryParentNotWritableInvariantFailure(invariant, directoryPath, nearestExisting),
       why: invariant.why,
       next: `${invariant.remediation} (Path: ${directoryPath}; Parent: ${nearestExisting})`
     });
