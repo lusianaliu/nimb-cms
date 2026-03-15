@@ -101,6 +101,9 @@ test('phase 45: nimb init scaffolds a runnable project', async () => {
 
   const readmeContent = fs.readFileSync(path.join(projectRoot, 'README.md'), 'utf8');
   assert.ok(readmeContent.includes('Generated with `nimb init`.'));
+  assert.ok(readmeContent.includes('Project vs repository'));
+  assert.ok(readmeContent.includes('npx nimb preflight'));
+  assert.ok(readmeContent.includes('Required writable paths'));
 
   const child = spawn('node', ['/workspace/nimb-cms/bin/nimb.js'], {
     cwd: projectRoot,
