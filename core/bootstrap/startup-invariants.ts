@@ -5,7 +5,7 @@ import { SHARED_STARTUP_PREFLIGHT_INVARIANTS } from '../invariants/startup-prefl
 import { formatAdminStaticDirInvariantFailure } from '../invariants/admin-static-dir.ts';
 import { STARTUP_PORT_INVARIANT, assertValidStartupPort, formatStartupPortInvariantFailure } from '../invariants/startup-port.ts';
 import { formatPersistenceRuntimeJsonInvariantFailure } from '../invariants/persistence-runtime-json.ts';
-import { formatDirectoryWritabilityInvariantFailure } from '../invariants/directory-writability.ts';
+import { formatDirectoryShapeInvariantFailure, formatDirectoryWritabilityInvariantFailure } from '../invariants/directory-writability.ts';
 
 const DATA_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.dataDirectoryWritable;
 const PERSISTENCE_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceDirectoryWritable;
@@ -39,14 +39,14 @@ export const validateAdminStaticDir = (config, rootDirectory) => {
   }
 };
 
-const ensureWritableDirectory = (directoryPath, label) => {
+const ensureWritableDirectory = (directoryPath, label, invariant) => {
   fs.mkdirSync(directoryPath, { recursive: true });
   const probePath = path.join(directoryPath, '.nimb-write-check.tmp');
   fs.writeFileSync(probePath, 'ok\n');
   fs.rmSync(probePath, { force: true });
 
   if (!fs.statSync(directoryPath).isDirectory()) {
-    throw new Error(`Startup invariant failed: ${label} is not a directory: ${directoryPath}`);
+    throw new Error(formatDirectoryShapeInvariantFailure(invariant, label, directoryPath));
   }
 };
 
@@ -56,9 +56,9 @@ const startupLog = (log, message) => {
   }
 };
 
-const ensureDirectory = (directoryPath, label, log) => {
+const ensureDirectory = (directoryPath, label, invariant, log) => {
   const existedBefore = fs.existsSync(directoryPath);
-  ensureWritableDirectory(directoryPath, label);
+  ensureWritableDirectory(directoryPath, label, invariant);
   startupLog(log, `Startup invariant: ${existedBefore ? 'verified' : 'created'} ${label}: ${directoryPath}`);
 };
 
@@ -69,10 +69,10 @@ export const validateDataDirectoryWritable = (project, options = {}) => {
   const uploadsDirectory = project.dataUploadsDir ?? path.join(dataDirectory, 'uploads');
 
   try {
-    ensureDirectory(dataDirectory, 'data directory', options.log);
-    ensureDirectory(systemDirectory, 'data system directory', options.log);
-    ensureDirectory(contentDirectory, 'data content directory', options.log);
-    ensureDirectory(uploadsDirectory, 'data uploads directory', options.log);
+    ensureDirectory(dataDirectory, 'data directory', DATA_DIRECTORY_WRITABLE_INVARIANT, options.log);
+    ensureDirectory(systemDirectory, 'data system directory', DATA_DIRECTORY_WRITABLE_INVARIANT, options.log);
+    ensureDirectory(contentDirectory, 'data content directory', DATA_DIRECTORY_WRITABLE_INVARIANT, options.log);
+    ensureDirectory(uploadsDirectory, 'data uploads directory', DATA_DIRECTORY_WRITABLE_INVARIANT, options.log);
   } catch (error) {
     throw new Error(formatDirectoryWritabilityInvariantFailure(DATA_DIRECTORY_WRITABLE_INVARIANT, `data directory is not writable: ${dataDirectory}`));
   }
@@ -82,7 +82,7 @@ export const validatePersistenceStorage = (project, options = {}) => {
   const persistenceRoot = project.persistenceDir ?? project.persistenceDirectory;
 
   try {
-    ensureDirectory(persistenceRoot, 'persistence directory', options.log);
+    ensureDirectory(persistenceRoot, 'persistence directory', PERSISTENCE_DIRECTORY_WRITABLE_INVARIANT, options.log);
   } catch (error) {
     throw new Error(formatDirectoryWritabilityInvariantFailure(PERSISTENCE_DIRECTORY_WRITABLE_INVARIANT, `persistence directory is not writable: ${persistenceRoot}`));
   }
@@ -104,7 +104,7 @@ export const validateLogsDirectoryWritable = (project, options = {}) => {
   const logsDirectory = project.logsDir ?? path.join(project.projectRoot ?? process.cwd(), 'logs');
 
   try {
-    ensureDirectory(logsDirectory, 'logs directory', options.log);
+    ensureDirectory(logsDirectory, 'logs directory', LOGS_DIRECTORY_WRITABLE_INVARIANT, options.log);
   } catch (error) {
     throw new Error(formatDirectoryWritabilityInvariantFailure(LOGS_DIRECTORY_WRITABLE_INVARIANT, `logs directory is not writable: ${logsDirectory}`));
   }
