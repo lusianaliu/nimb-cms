@@ -12,6 +12,7 @@ import { runBuild } from '../core/cli/build.ts';
 import { runRelease } from '../core/cli/release.ts';
 import { runPreflightDiagnostics, formatPreflightReport } from '../core/cli/preflight.ts';
 import { resolveProjectRootFromArgs } from '../core/cli/project-root-resolver.ts';
+import { assertValidStartupPort } from '../core/invariants/startup-port.ts';
 
 const invocationCwd = process.cwd();
 const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -61,16 +62,11 @@ const appendErrorLog = ({ projectRoot, error, context }) => {
 const resolvePort = (config) => {
   const fromEnv = process.env.PORT;
   if (fromEnv !== undefined && `${fromEnv}`.trim() !== '') {
-    const envPort = Number(fromEnv);
-    if (!Number.isInteger(envPort) || envPort < 0 || envPort > 65535) {
-      throw new Error(`Invalid PORT environment variable: ${fromEnv}`);
-    }
-
-    return envPort;
+    return assertValidStartupPort(Number(fromEnv), 'PORT environment variable');
   }
 
   if (config?.server?.port !== undefined) {
-    return config.server.port;
+    return assertValidStartupPort(config.server.port, 'config.server.port');
   }
 
   return 3000;

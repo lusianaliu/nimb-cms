@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { SHARED_STARTUP_PREFLIGHT_INVARIANTS, getSharedInvariant } from '../core/invariants/startup-preflight-invariants.ts';
 import { runPreflightDiagnostics } from '../core/cli/preflight.ts';
 import { validateDataDirectoryWritable } from '../core/bootstrap/startup-invariants.ts';
+import { assertValidStartupPort, formatStartupPortInvariantFailure } from '../core/invariants/startup-port.ts';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -169,4 +170,31 @@ test('phase 185: preflight severity for shared admin/install-state checks follow
 
   const installStateMissingFinding = reportMissingInstallState.findings.find((finding) => finding.code === 'install-state-missing');
   assert.equal(installStateMissingFinding?.severity, SHARED_STARTUP_PREFLIGHT_INVARIANTS.installStateConfigJson.severityIntent.preflight.warn);
+});
+
+
+test('phase 186: shared startup-port helper enforces canonical invariant failure text', () => {
+  assert.equal(formatStartupPortInvariantFailure('port is unavailable: 3000'), 'Startup invariant failed [startup-port]: port is unavailable: 3000');
+
+  assert.equal(assertValidStartupPort(3000, 'port'), 3000);
+
+  assert.throws(
+    () => assertValidStartupPort(-1, 'PORT environment variable'),
+    /Startup invariant failed \[startup-port\]: invalid PORT environment variable: -1/
+  );
+});
+
+test('phase 186: preflight startup-port finding detail reuses canonical invalid-port invariant text', async () => {
+  const projectRoot = mkProjectRoot();
+  seedBasicProject(projectRoot);
+
+  const report = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: projectRoot,
+    env: { ...process.env, PORT: 'not-a-number' }
+  });
+
+  const portFinding = report.findings.find((finding) => finding.code === 'startup-port-invalid-or-unavailable');
+  assert.equal(portFinding?.severity, 'FAIL');
+  assert.match(portFinding?.detail ?? '', /Startup invariant failed \[startup-port\]: invalid PORT environment variable: NaN/);
 });
