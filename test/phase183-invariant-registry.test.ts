@@ -9,6 +9,7 @@ import {
   formatDirectoryMissingWithWritableParentDetail,
   formatDirectoryNextParentAnnotation,
   formatDirectoryNextPathSuffix,
+  formatDirectoryRemediationWithPathSuffix,
   formatDirectoryParentNotWritableInvariantFailure,
   formatDirectoryShapeInvariantFailure,
   formatDirectoryUnresolvedParentInvariantFailure,
@@ -541,6 +542,14 @@ test('phase 194: writable-directory invariants reuse shared remediation fragment
   );
 });
 
+
+
+test('phase 197: shared remediation+path helper formats canonical writable-directory next fragment', () => {
+  assert.equal(
+    formatDirectoryRemediationWithPathSuffix('Grant write permissions for logs/.', '/tmp/site/logs'),
+    'Grant write permissions for logs/. (Path: /tmp/site/logs)'
+  );
+});
 test('phase 196: shared directory parent annotation helper formats parent suffix fragment', () => {
   assert.equal(
     formatDirectoryNextParentAnnotation('/tmp/site'),
@@ -583,6 +592,34 @@ test('phase 196: preflight parent-not-writable next text reuses shared parent an
   }
 });
 
+
+
+test('phase 197: preflight unresolved-parent next text reuses shared remediation+path suffix helper', async () => {
+  const projectRoot = '/tmp/nimb-phase197-unresolved-parent-next';
+  const originalExistsSync = fs.existsSync;
+
+  fs.existsSync = () => false;
+
+  try {
+    const report = await runPreflightDiagnostics({
+      projectRoot,
+      runtimeRoot: projectRoot
+    });
+
+    const logsPath = path.join(projectRoot, 'logs');
+
+    const logsParentFinding = report.findings.find(
+      (finding) => finding.code === 'required-directory-parent' && finding.check === 'logs parent path'
+    );
+
+    assert.equal(
+      logsParentFinding?.next,
+      formatDirectoryRemediationWithPathSuffix(SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable.remediation, logsPath)
+    );
+  } finally {
+    fs.existsSync = originalExistsSync;
+  }
+});
 test('phase 195: shared directory next path suffix helper formats canonical path annotation', () => {
   assert.equal(
     formatDirectoryNextPathSuffix('/tmp/site/logs'),
@@ -606,5 +643,5 @@ test('phase 195: preflight writable-directory next text reuses shared path suffi
     (finding) => finding.code === 'required-directory-missing' && finding.check === 'logs exists'
   );
 
-  assert.equal(logsMissingFinding?.next, `${SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable.remediation} ${formatDirectoryNextPathSuffix(logsPath)}`);
+  assert.equal(logsMissingFinding?.next, formatDirectoryRemediationWithPathSuffix(SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable.remediation, logsPath));
 });
