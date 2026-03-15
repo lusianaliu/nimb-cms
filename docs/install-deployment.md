@@ -80,6 +80,10 @@ How to interpret preflight remediation blocks:
 - `Warnings to review (WARN findings)` means startup may continue but you still have risk/debt to resolve.
 - Findings are grouped by remediation category so operators can work one problem type at a time (for example: project layout, filesystem permissions, configuration, network/port binding).
 - `Retry summary` gives a concise fix-first checklist: blocking counts, warning counts, and an ordered category list for what to fix first.
+- `Decision path` gives explicit branching for the immediate next move:
+  - **Re-run setup now** only when blockers are missing required directories setup can safely create.
+  - **Re-run preflight after manual fixes** when blockers are shape/permission/config/install-state/port issues that setup cannot safely auto-fix.
+  - **Ask support now** when blocker type commonly needs technical help (for example invalid JSON in config/install-state/runtime data, or persistent startup port conflicts).
 - `Support handoff` in the summary shows a copy-paste command to export machine-readable output for a helper.
 - Preflight is explicit about limits: it validates path/layout/writability assumptions and does **not** prove full runtime behavior.
 
@@ -104,6 +108,14 @@ When to stop and fix before retrying:
 - any `FAIL` finding remains unresolved,
 - setup shows any `Manual action required` paths,
 - preflight reports project-root/config/path-shape blockers.
+
+Canonical retry decision path after setup/preflight failures:
+
+1. Run `npx nimb setup` first (recommended baseline).
+2. Read the preflight `Decision path` block in the output.
+3. If it says **Re-run setup now**, run `npx nimb setup` again immediately.
+4. If it says setup is not recommended, stop and fix blockers manually, then run `npx nimb preflight`.
+5. If it says **Ask support now**, export JSON handoff and include it with your support request instead of retrying blindly.
 
 ## 6) Start Nimb
 

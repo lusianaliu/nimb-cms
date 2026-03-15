@@ -52,6 +52,12 @@ export type PreflightReport = {
   exitCode: number;
 };
 
+export type RetryDecisionPath = {
+  rerunSetupNow: boolean;
+  rerunPreflightAfterManualFix: boolean;
+  askSupportNow: boolean;
+};
+
 type RemediationCategory = 'Project layout' | 'Filesystem permissions' | 'Configuration' | 'Network/port binding' | 'Install-state data' | 'Other';
 
 const REMEDIATION_CATEGORY_PRIORITY: RemediationCategory[] = [
@@ -180,7 +186,57 @@ const buildRetrySummaryLines = (report: PreflightReport) => {
 
   lines.push('- Retry after fixes: npx nimb preflight');
   lines.push('- Support handoff: npx nimb preflight --json > nimb-preflight-report.json');
+  lines.push(...buildDecisionPathLines(report));
   lines.push('');
+  return lines;
+};
+
+const SUPPORT_NOW_FAIL_CODES = new Set([
+  'config-invalid',
+  'install-state-invalid-json',
+  'persistence-runtime-invalid-json',
+  'startup-port-invalid-or-unavailable'
+]);
+
+export const deriveRetryDecisionPath = (report: PreflightReport): RetryDecisionPath => {
+  const failFindings = report.findings.filter((finding) => finding.severity === 'FAIL');
+  const hasSetupFixableMissingDirectory = report.findings.some((finding) => finding.code === 'required-directory-missing');
+  const rerunSetupNow = hasSetupFixableMissingDirectory && failFindings.length === 0;
+  const askSupportNow = failFindings.some((finding) => SUPPORT_NOW_FAIL_CODES.has(finding.code));
+
+  return Object.freeze({
+    rerunSetupNow,
+    rerunPreflightAfterManualFix: failFindings.length > 0 && rerunSetupNow === false,
+    askSupportNow
+  });
+};
+
+const buildDecisionPathLines = (report: PreflightReport) => {
+  const decision = deriveRetryDecisionPath(report);
+  const lines: string[] = [];
+  lines.push('Decision path:');
+
+  if (decision.rerunSetupNow) {
+    lines.push('- Re-run setup now: FAIL findings are missing required directories that setup can create safely.');
+    lines.push('  command: npx nimb setup');
+  } else {
+    lines.push('- Re-run setup now: not recommended for current FAIL findings.');
+  }
+
+  if (decision.rerunPreflightAfterManualFix) {
+    lines.push('- Re-run preflight after manual fixes: use preflight to confirm blockers are cleared without changing files.');
+    lines.push('  command: npx nimb preflight');
+  } else {
+    lines.push('- Re-run preflight after manual fixes: not needed yet.');
+  }
+
+  if (decision.askSupportNow) {
+    lines.push('- Ask support now: blocker type usually needs technical help if unclear after one fix attempt.');
+    lines.push('  handoff: npx nimb preflight --json > nimb-preflight-report.json');
+  } else {
+    lines.push('- Ask support now: optional (use if blockers remain unclear).');
+  }
+
   return lines;
 };
 
@@ -190,6 +246,7 @@ export const formatPreflightReportJson = (report: PreflightReport) => {
   const failGroups = groupFindingsByCategory(failFindings);
   const warnGroups = groupFindingsByCategory(warnFindings);
   const overall = report.summary.fail > 0 ? 'FAIL' : report.summary.warn > 0 ? 'WARN' : 'PASS';
+  const decisionPath = deriveRetryDecisionPath(report);
 
   return `${JSON.stringify({
     projectRoot: report.projectRoot,
@@ -208,7 +265,8 @@ export const formatPreflightReportJson = (report: PreflightReport) => {
         operatorNextStep: remediationPlaybook[category],
         findings: findings.map((finding) => ({ check: finding.check, code: finding.code, next: finding.next }))
       })),
-      retryCommand: 'npx nimb preflight'
+      retryCommand: 'npx nimb preflight',
+      decisionPath
     },
     findings: report.findings
   }, null, 2)}\n`;

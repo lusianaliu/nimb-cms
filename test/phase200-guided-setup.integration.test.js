@@ -63,4 +63,6 @@ test('phase 200: setup command reports manual action for non-directory path conf
   assert.match(result.stdout, /- logs exists as a non-directory path or could not be created safely\./);
   assert.match(result.stdout, /\[FAIL\] logs path shape/);
   assert.match(result.stdout, /Resolve FAIL findings and any manual-action paths listed above/);
+  assert.match(result.stdout, /Do not retry setup blindly for these blockers\./);
+  assert.match(result.stdout, /After manual fixes, validate with: npx nimb preflight/);
 });

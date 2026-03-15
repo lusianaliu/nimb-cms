@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { formatPreflightReport, runPreflightDiagnostics } from './preflight.ts';
+import { deriveRetryDecisionPath, formatPreflightReport, runPreflightDiagnostics } from './preflight.ts';
 
 const SETUP_DIRECTORIES = [
   'content',
@@ -89,13 +89,26 @@ export const runSetupCommand = async ({ projectRoot, runtimeRoot }: { projectRoo
   const report = await runPreflightDiagnostics({ projectRoot: normalizedProjectRoot, runtimeRoot });
   process.stdout.write(formatPreflightReport(report));
 
+  const decisionPath = deriveRetryDecisionPath(report);
   process.stdout.write('\nSetup next step:\n');
   if (report.exitCode === 0 && blockedPaths.length === 0) {
     process.stdout.write('- Setup checks passed without FAIL findings.\n');
     process.stdout.write('- Start Nimb: npx nimb\n');
   } else {
     process.stdout.write('- Resolve FAIL findings and any manual-action paths listed above.\n');
-    process.stdout.write('- Re-run: npx nimb setup\n');
+
+    if (decisionPath.rerunSetupNow && blockedPaths.length === 0) {
+      process.stdout.write('- Recommended retry now: npx nimb setup\n');
+      process.stdout.write('  Use setup because blockers are missing required directories it can create safely.\n');
+    } else {
+      process.stdout.write('- Do not retry setup blindly for these blockers.\n');
+      process.stdout.write('- After manual fixes, validate with: npx nimb preflight\n');
+    }
+
+    if (decisionPath.askSupportNow) {
+      process.stdout.write('- If unclear after one manual fix attempt, ask support now with:\n');
+      process.stdout.write('  npx nimb preflight --json > nimb-preflight-report.json\n');
+    }
   }
 
   return {
