@@ -31,6 +31,8 @@ export const formatDirectoryUnresolvedParentDetail = (directoryPath: string) =>
 export const formatDirectoryMissingWithWritableParentDetail = (directoryPath: string, nearestExistingPath: string) =>
   `${directoryPath} is missing, but parent path ${nearestExistingPath} appears writable so startup can create it.`;
 
+export const formatDirectoryNextPathSuffix = (directoryPath: string) => `(Path: ${directoryPath})`;
+
 
 export const formatDirectoryParentNotWritableInvariantFailure = (
   invariant: SharedInvariantDefinition,

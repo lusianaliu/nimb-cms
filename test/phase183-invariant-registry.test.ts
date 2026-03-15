@@ -7,6 +7,7 @@ import { assertValidStartupPort, formatStartupPortInvariantFailure } from '../co
 import { formatPersistenceRuntimeJsonInvariantFailure } from '../core/invariants/persistence-runtime-json.ts';
 import {
   formatDirectoryMissingWithWritableParentDetail,
+  formatDirectoryNextPathSuffix,
   formatDirectoryParentNotWritableInvariantFailure,
   formatDirectoryShapeInvariantFailure,
   formatDirectoryUnresolvedParentInvariantFailure,
@@ -537,4 +538,31 @@ test('phase 194: writable-directory invariants reuse shared remediation fragment
     SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable.remediation,
     formatWritableDirectoryRemediation('logs/')
   );
+});
+
+
+test('phase 195: shared directory next path suffix helper formats canonical path annotation', () => {
+  assert.equal(
+    formatDirectoryNextPathSuffix('/tmp/site/logs'),
+    '(Path: /tmp/site/logs)'
+  );
+});
+
+test('phase 195: preflight writable-directory next text reuses shared path suffix helper', async () => {
+  const projectRoot = mkProjectRoot();
+  seedBasicProject(projectRoot);
+
+  const logsPath = path.join(projectRoot, 'logs');
+  fs.rmSync(logsPath, { recursive: true, force: true });
+
+  const report = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: projectRoot
+  });
+
+  const logsMissingFinding = report.findings.find(
+    (finding) => finding.code === 'required-directory-missing' && finding.check === 'logs exists'
+  );
+
+  assert.equal(logsMissingFinding?.next, `${SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable.remediation} ${formatDirectoryNextPathSuffix(logsPath)}`);
 });
