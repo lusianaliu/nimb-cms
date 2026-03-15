@@ -14,6 +14,7 @@ Quick commands:
 npx nimb init my-site
 cd my-site
 npm install
-npx nimb preflight
+npx nimb guide
+npx nimb setup
 npx nimb
 ```
