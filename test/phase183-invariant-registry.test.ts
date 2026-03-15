@@ -13,6 +13,7 @@ import {
   formatDirectoryWritabilityInvariantFailure
 } from '../core/invariants/directory-writability.ts';
 import { ADMIN_STATIC_DIR_INVARIANT, formatAdminStaticDirInvariantFailure } from '../core/invariants/admin-static-dir.ts';
+import { formatWritableDirectoryRemediation } from '../core/invariants/remediation-fragments.ts';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -513,5 +514,27 @@ test('phase 193: preflight required-directory missing detail reuses shared writa
   assert.equal(
     logsMissingFinding?.detail,
     formatDirectoryMissingWithWritableParentDetail(logsPath, projectRoot)
+  );
+});
+
+test('phase 194: shared writable-directory remediation fragment keeps project-root fallback wording aligned', () => {
+  assert.equal(
+    formatWritableDirectoryRemediation('logs/'),
+    'Grant write permissions for logs/, or choose a writable project root.'
+  );
+});
+
+test('phase 194: writable-directory invariants reuse shared remediation fragment wording', () => {
+  assert.equal(
+    SHARED_STARTUP_PREFLIGHT_INVARIANTS.dataDirectoryWritable.remediation,
+    formatWritableDirectoryRemediation('data/, data/system, data/content, and data/uploads')
+  );
+  assert.equal(
+    SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceDirectoryWritable.remediation,
+    formatWritableDirectoryRemediation('the persistence directory (canonical path: data/system)')
+  );
+  assert.equal(
+    SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable.remediation,
+    formatWritableDirectoryRemediation('logs/')
   );
 });

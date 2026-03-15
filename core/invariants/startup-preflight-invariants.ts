@@ -1,3 +1,5 @@
+import { formatWritableDirectoryRemediation } from './remediation-fragments.ts';
+
 export type SharedInvariantDefinition = {
   id: string;
   title: string;
@@ -73,7 +75,7 @@ export const SHARED_STARTUP_PREFLIGHT_INVARIANTS = Object.freeze({
       })
     }),
     why: 'Startup requires writable data directories for system/content/uploads state.',
-    remediation: 'Grant write permissions for data/, data/system, data/content, and data/uploads (or choose a writable project root).'
+    remediation: formatWritableDirectoryRemediation('data/, data/system, data/content, and data/uploads')
   } satisfies SharedInvariantDefinition),
   persistenceDirectoryWritable: Object.freeze({
     id: 'persistence-directory-writable',
@@ -86,7 +88,7 @@ export const SHARED_STARTUP_PREFLIGHT_INVARIANTS = Object.freeze({
       })
     }),
     why: 'Startup requires a writable persistence directory for runtime persistence files.',
-    remediation: 'Grant write permissions for the persistence directory (canonical path: data/system) or choose a writable project root.'
+    remediation: formatWritableDirectoryRemediation('the persistence directory (canonical path: data/system)')
   } satisfies SharedInvariantDefinition),
   logsDirectoryWritable: Object.freeze({
     id: 'logs-directory-writable',
@@ -99,7 +101,7 @@ export const SHARED_STARTUP_PREFLIGHT_INVARIANTS = Object.freeze({
       })
     }),
     why: 'Startup requires a writable logs directory for runtime diagnostics output.',
-    remediation: 'Grant write permissions for logs/ (or choose a writable project root).'
+    remediation: formatWritableDirectoryRemediation('logs/')
   } satisfies SharedInvariantDefinition)
 });
 
