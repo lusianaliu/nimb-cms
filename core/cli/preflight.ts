@@ -54,6 +54,15 @@ export type PreflightReport = {
 
 type RemediationCategory = 'Project layout' | 'Filesystem permissions' | 'Configuration' | 'Network/port binding' | 'Install-state data' | 'Other';
 
+const REMEDIATION_CATEGORY_PRIORITY: RemediationCategory[] = [
+  'Project layout',
+  'Filesystem permissions',
+  'Configuration',
+  'Install-state data',
+  'Network/port binding',
+  'Other'
+];
+
 const addFinding = (findings: PreflightFinding[], finding: PreflightFinding) => {
   findings.push(Object.freeze(finding));
 };
@@ -91,15 +100,22 @@ const remediationPlaybook: Record<RemediationCategory, string> = {
   Other: 'Review finding details and resolve the blocker before startup.'
 };
 
-const pushGroupedFindings = ({ lines, title, findings }: { lines: string[]; title: string; findings: PreflightFinding[] }) => {
-  lines.push(title);
+const sortCategoryEntries = (entries: [RemediationCategory, PreflightFinding[]][]) => entries.sort((left, right) => {
+  const leftPriority = REMEDIATION_CATEGORY_PRIORITY.indexOf(left[0]);
+  const rightPriority = REMEDIATION_CATEGORY_PRIORITY.indexOf(right[0]);
 
-  if (findings.length === 0) {
-    lines.push('- none');
-    lines.push('');
-    return;
+  if (leftPriority !== rightPriority) {
+    return leftPriority - rightPriority;
   }
 
+  if (left[1].length !== right[1].length) {
+    return right[1].length - left[1].length;
+  }
+
+  return left[0].localeCompare(right[0]);
+});
+
+const groupFindingsByCategory = (findings: PreflightFinding[]) => {
   const grouped = new Map<RemediationCategory, PreflightFinding[]>();
   for (const finding of findings) {
     const category = categorizeFinding(finding);
@@ -111,7 +127,19 @@ const pushGroupedFindings = ({ lines, title, findings }: { lines: string[]; titl
     }
   }
 
-  for (const [category, categoryFindings] of grouped.entries()) {
+  return sortCategoryEntries([...grouped.entries()]);
+};
+
+const pushGroupedFindings = ({ lines, title, findings }: { lines: string[]; title: string; findings: PreflightFinding[] }) => {
+  lines.push(title);
+
+  if (findings.length === 0) {
+    lines.push('- none');
+    lines.push('');
+    return;
+  }
+
+  for (const [category, categoryFindings] of groupFindingsByCategory(findings)) {
     lines.push(`- ${category}:`);
     lines.push(`  operator next step: ${remediationPlaybook[category]}`);
     for (const finding of categoryFindings) {
@@ -121,6 +149,69 @@ const pushGroupedFindings = ({ lines, title, findings }: { lines: string[]; titl
   }
 
   lines.push('');
+};
+
+const buildRetrySummaryLines = (report: PreflightReport) => {
+  const failFindings = report.findings.filter((finding) => finding.severity === 'FAIL');
+  const warnFindings = report.findings.filter((finding) => finding.severity === 'WARN');
+  const failGroups = groupFindingsByCategory(failFindings);
+  const warnGroups = groupFindingsByCategory(warnFindings);
+
+  const lines: string[] = [];
+  lines.push('Retry summary:');
+  lines.push(`- Blocking now: ${failFindings.length} FAIL finding(s) across ${failGroups.length} categor${failGroups.length === 1 ? 'y' : 'ies'}.`);
+  lines.push(`- Can wait: ${warnFindings.length} WARN finding(s) across ${warnGroups.length} categor${warnGroups.length === 1 ? 'y' : 'ies'}.`);
+
+  if (failGroups.length > 0) {
+    lines.push('- Fix first (in order):');
+    failGroups.forEach(([category, categoryFindings], index) => {
+      lines.push(`  ${index + 1}. ${category} (${categoryFindings.length} blocker${categoryFindings.length === 1 ? '' : 's'}) — ${remediationPlaybook[category]}`);
+    });
+  } else {
+    lines.push('- Fix first: none (no blocking findings).');
+  }
+
+  if (warnGroups.length > 0) {
+    lines.push('- Warnings to schedule after blockers are cleared:');
+    for (const [category, categoryFindings] of warnGroups) {
+      lines.push(`  - ${category} (${categoryFindings.length} warning${categoryFindings.length === 1 ? '' : 's'})`);
+    }
+  }
+
+  lines.push('- Retry after fixes: npx nimb preflight');
+  lines.push('- Support handoff: npx nimb preflight --json > nimb-preflight-report.json');
+  lines.push('');
+  return lines;
+};
+
+export const formatPreflightReportJson = (report: PreflightReport) => {
+  const failFindings = report.findings.filter((finding) => finding.severity === 'FAIL');
+  const warnFindings = report.findings.filter((finding) => finding.severity === 'WARN');
+  const failGroups = groupFindingsByCategory(failFindings);
+  const warnGroups = groupFindingsByCategory(warnFindings);
+  const overall = report.summary.fail > 0 ? 'FAIL' : report.summary.warn > 0 ? 'WARN' : 'PASS';
+
+  return `${JSON.stringify({
+    projectRoot: report.projectRoot,
+    result: overall,
+    summary: report.summary,
+    retrySummary: {
+      blockingCategories: failGroups.map(([category, findings]) => ({
+        category,
+        findingCount: findings.length,
+        operatorNextStep: remediationPlaybook[category],
+        findings: findings.map((finding) => ({ check: finding.check, code: finding.code, next: finding.next }))
+      })),
+      warningCategories: warnGroups.map(([category, findings]) => ({
+        category,
+        findingCount: findings.length,
+        operatorNextStep: remediationPlaybook[category],
+        findings: findings.map((finding) => ({ check: finding.check, code: finding.code, next: finding.next }))
+      })),
+      retryCommand: 'npx nimb preflight'
+    },
+    findings: report.findings
+  }, null, 2)}\n`;
 };
 
 const parseStartupPort = (config: ReturnType<typeof loadConfig> | null, env = process.env) => {
@@ -555,6 +646,7 @@ export const formatPreflightReport = (report: PreflightReport) => {
   const warnFindings = report.findings.filter((finding) => finding.severity === 'WARN');
   pushGroupedFindings({ lines, title: 'Manual action required (FAIL findings):', findings: failFindings });
   pushGroupedFindings({ lines, title: 'Warnings to review (WARN findings):', findings: warnFindings });
+  lines.push(...buildRetrySummaryLines(report));
 
   const overall = report.summary.fail > 0 ? 'FAIL' : report.summary.warn > 0 ? 'WARN' : 'PASS';
   lines.push(`Preflight result: ${overall}`);

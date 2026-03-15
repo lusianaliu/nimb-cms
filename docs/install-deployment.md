@@ -79,6 +79,8 @@ How to interpret preflight remediation blocks:
 - `Manual action required (FAIL findings)` means startup is blocked.
 - `Warnings to review (WARN findings)` means startup may continue but you still have risk/debt to resolve.
 - Findings are grouped by remediation category so operators can work one problem type at a time (for example: project layout, filesystem permissions, configuration, network/port binding).
+- `Retry summary` gives a concise fix-first checklist: blocking counts, warning counts, and an ordered category list for what to fix first.
+- `Support handoff` in the summary shows a copy-paste command to export machine-readable output for a helper.
 - Preflight is explicit about limits: it validates path/layout/writability assumptions and does **not** prove full runtime behavior.
 
 Common manual fixes before retrying:
@@ -87,6 +89,15 @@ Common manual fixes before retrying:
 - **Permissions**: grant runtime write access to `data/`, `data/system/`, `data/content/`, `data/uploads/`, and `logs/`.
 - **Port conflicts**: change `PORT` / `config.server.port`, or stop the process that is currently using the port.
 - **Config errors**: fix invalid JSON or invalid values in `config/nimb.config.json`.
+
+
+Support/debug handoff output:
+
+```bash
+npx nimb preflight --json > nimb-preflight-report.json
+```
+
+Use this JSON report when sharing blockers with a technical helper. It includes canonical findings, grouped blocking categories, grouped warning categories, and the retry command.
 
 When to stop and fix before retrying:
 

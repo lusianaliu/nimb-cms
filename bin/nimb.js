@@ -10,7 +10,7 @@ import { version, resolveRuntimeMode as resolveEnvironmentMode } from '../core/r
 import { resolveRuntimeMode } from '../core/runtime/resolve-runtime-mode.ts';
 import { runBuild } from '../core/cli/build.ts';
 import { runRelease } from '../core/cli/release.ts';
-import { runPreflightDiagnostics, formatPreflightReport } from '../core/cli/preflight.ts';
+import { runPreflightDiagnostics, formatPreflightReport, formatPreflightReportJson } from '../core/cli/preflight.ts';
 import { runSetupCommand } from '../core/cli/setup.ts';
 import { resolveProjectRootFromArgs } from '../core/cli/project-root-resolver.ts';
 import { assertValidStartupPort } from '../core/invariants/startup-port.ts';
@@ -327,15 +327,18 @@ const { projectRoot, args } = resolveProjectRootFromArgs({
   invocationCwd
 });
 
-if (args[0] === 'init') {
+const preflightJsonOutput = args.includes('--json');
+const normalizedArgs = args.filter((arg) => arg !== '--json');
+
+if (normalizedArgs[0] === 'init') {
   try {
-    createProject(args[1]);
+    createProject(normalizedArgs[1]);
   } catch (error) {
     process.stderr.write(`Init failed: ${error?.message ?? String(error)}\n`);
     appendErrorLog({ projectRoot, error, context: 'init' });
     process.exitCode = 1;
   }
-} else if (args[0] === 'build') {
+} else if (normalizedArgs[0] === 'build') {
   try {
     const { distRoot } = runBuild({ runtimeRoot, projectRoot });
     process.stdout.write(`Build complete: ${distRoot}\n`);
@@ -344,7 +347,7 @@ if (args[0] === 'init') {
     appendErrorLog({ projectRoot, error, context: 'build' });
     process.exitCode = 1;
   }
-} else if (args[0] === 'release') {
+} else if (normalizedArgs[0] === 'release') {
   try {
     const { releaseRoot, zipPath } = runRelease({ runtimeRoot, projectRoot });
     process.stdout.write(`Release complete: ${releaseRoot}\n`);
@@ -354,13 +357,13 @@ if (args[0] === 'init') {
     appendErrorLog({ projectRoot, error, context: 'release' });
     process.exitCode = 1;
   }
-} else if (args[0] === 'bridge') {
+} else if (normalizedArgs[0] === 'bridge') {
   await startBridge();
-} else if (args[0] === 'preflight') {
+} else if (normalizedArgs[0] === 'preflight') {
   const report = await runPreflightDiagnostics({ projectRoot, runtimeRoot });
-  process.stdout.write(formatPreflightReport(report));
+  process.stdout.write(preflightJsonOutput ? formatPreflightReportJson(report) : formatPreflightReport(report));
   process.exitCode = report.exitCode;
-} else if (args[0] === 'setup') {
+} else if (normalizedArgs[0] === 'setup') {
   try {
     const result = await runSetupCommand({ projectRoot, runtimeRoot });
     process.exitCode = result.preflightExitCode === 0 && result.blockedPaths.length === 0 ? 0 : 1;
@@ -369,7 +372,7 @@ if (args[0] === 'init') {
     appendErrorLog({ projectRoot, error, context: 'setup' });
     process.exitCode = 1;
   }
-} else if (args[0] === 'guide') {
+} else if (normalizedArgs[0] === 'guide') {
   printOperatorGuide({ projectRoot });
 } else {
   await startServer();
