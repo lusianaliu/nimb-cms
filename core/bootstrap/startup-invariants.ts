@@ -2,10 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
 import { SHARED_STARTUP_PREFLIGHT_INVARIANTS } from '../invariants/startup-preflight-invariants.ts';
+import { STARTUP_PORT_INVARIANT, assertValidStartupPort, formatStartupPortInvariantFailure } from '../invariants/startup-port.ts';
 
 const ADMIN_STATIC_DIR_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.adminStaticDir;
 const PERSISTENCE_RUNTIME_JSON_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceRuntimeJson;
-const STARTUP_PORT_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.startupPort;
 const DATA_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.dataDirectoryWritable;
 const PERSISTENCE_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceDirectoryWritable;
 const LOGS_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable;
@@ -110,9 +110,7 @@ export const validateLogsDirectoryWritable = (project, options = {}) => {
 };
 
 export const validatePortAvailable = async (port) => {
-  if (!Number.isInteger(port) || port < 0 || port > 65535) {
-    throw new Error(`Startup invariant failed [${STARTUP_PORT_INVARIANT.id}]: invalid port: ${port}`);
-  }
+  const validatedPort = assertValidStartupPort(port, 'port');
 
   await new Promise((resolve, reject) => {
     const server = net.createServer();
@@ -127,9 +125,9 @@ export const validatePortAvailable = async (port) => {
       resolve(undefined);
     };
 
-    server.once('error', () => done(new Error(`Startup invariant failed [${STARTUP_PORT_INVARIANT.id}]: port is unavailable: ${port}`)));
-    server.once('listening', () => server.close((closeError) => done(closeError ? new Error(`Startup invariant failed [${STARTUP_PORT_INVARIANT.id}]: port check failed: ${port}`) : null)));
-    server.listen(port, '127.0.0.1');
+    server.once('error', () => done(new Error(formatStartupPortInvariantFailure(`port is unavailable: ${validatedPort}`))));
+    server.once('listening', () => server.close((closeError) => done(closeError ? new Error(formatStartupPortInvariantFailure(`port check failed: ${validatedPort}`)) : null)));
+    server.listen(validatedPort, '127.0.0.1');
   });
 };
 

@@ -3,6 +3,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { loadConfig, resolveConfigPath } from '../config/config-loader.ts';
 import { SHARED_STARTUP_PREFLIGHT_INVARIANTS } from '../invariants/startup-preflight-invariants.ts';
+import { STARTUP_PORT_INVARIANT, assertValidStartupPort, formatStartupPortInvariantFailure } from '../invariants/startup-port.ts';
 
 const LEGACY_CONFIG_FILENAME = 'nimb.config.json';
 const DEFAULT_ADMIN_STATIC_DIR = './ui/admin';
@@ -10,7 +11,6 @@ const INSTALL_STATE_RELATIVE_PATH = path.join('data', 'system', 'config.json');
 
 const ADMIN_STATIC_DIR_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.adminStaticDir;
 const PERSISTENCE_RUNTIME_JSON_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceRuntimeJson;
-const STARTUP_PORT_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.startupPort;
 const INSTALL_STATE_CONFIG_JSON_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.installStateConfigJson;
 const DATA_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.dataDirectoryWritable;
 const PERSISTENCE_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceDirectoryWritable;
@@ -48,16 +48,11 @@ const addFinding = (findings: PreflightFinding[], finding: PreflightFinding) => 
 const parseStartupPort = (config: ReturnType<typeof loadConfig> | null, env = process.env) => {
   const fromEnv = env.PORT;
   if (fromEnv !== undefined && `${fromEnv}`.trim() !== '') {
-    const envPort = Number(fromEnv);
-    if (!Number.isInteger(envPort) || envPort < 0 || envPort > 65535) {
-      throw new Error(`Invalid PORT environment variable: ${fromEnv}`);
-    }
-
-    return envPort;
+    return assertValidStartupPort(Number(fromEnv), 'PORT environment variable');
   }
 
   if (config?.server?.port !== undefined) {
-    return config.server.port;
+    return assertValidStartupPort(config.server.port, 'config.server.port');
   }
 
   return 3000;
@@ -76,9 +71,9 @@ const checkPortAvailable = async (port: number) => {
       resolve(undefined);
     };
 
-    server.once('error', () => done(new Error(`Startup invariant failed [${STARTUP_PORT_INVARIANT.id}]: port is unavailable: ${port}`)));
+    server.once('error', () => done(new Error(formatStartupPortInvariantFailure(`port is unavailable: ${port}`))));
     server.once('listening', () => {
-      server.close((closeError) => done(closeError ? new Error(`Startup invariant failed [${STARTUP_PORT_INVARIANT.id}]: port check failed: ${port}`) : null));
+      server.close((closeError) => done(closeError ? new Error(formatStartupPortInvariantFailure(`port check failed: ${port}`)) : null));
     });
     server.listen(port, '127.0.0.1');
   });
