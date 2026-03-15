@@ -8,6 +8,7 @@ import { STARTUP_PORT_INVARIANT, assertValidStartupPort, formatStartupPortInvari
 import { formatPersistenceRuntimeJsonInvariantFailure } from '../invariants/persistence-runtime-json.ts';
 import {
   formatDirectoryMissingWithWritableParentDetail,
+  formatDirectoryNextParentAnnotation,
   formatDirectoryNextPathSuffix,
   formatDirectoryParentNotWritableInvariantFailure,
   formatDirectoryShapeInvariantFailure,
@@ -168,7 +169,7 @@ const evaluateRequiredDirectory = (
       check: `${label} parent path writable`,
       detail: formatDirectoryParentNotWritableInvariantFailure(invariant, directoryPath, nearestExisting),
       why: invariant.why,
-      next: `${invariant.remediation} (Path: ${directoryPath}; Parent: ${nearestExisting})`
+      next: `${invariant.remediation} (Path: ${directoryPath}; ${formatDirectoryNextParentAnnotation(nearestExisting)})`
     });
   }
 };
