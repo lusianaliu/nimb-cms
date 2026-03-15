@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SHARED_STARTUP_PREFLIGHT_INVARIANTS, getSharedInvariant } from '../core/invariants/startup-preflight-invariants.ts';
 import { runPreflightDiagnostics } from '../core/cli/preflight.ts';
-import { validateDataDirectoryWritable } from '../core/bootstrap/startup-invariants.ts';
+import { validateAdminStaticDir, validateDataDirectoryWritable } from '../core/bootstrap/startup-invariants.ts';
 import { assertValidStartupPort, formatStartupPortInvariantFailure } from '../core/invariants/startup-port.ts';
 import { formatPersistenceRuntimeJsonInvariantFailure } from '../core/invariants/persistence-runtime-json.ts';
 import { formatDirectoryWritabilityInvariantFailure } from '../core/invariants/directory-writability.ts';
+import { ADMIN_STATIC_DIR_INVARIANT, formatAdminStaticDirInvariantFailure } from '../core/invariants/admin-static-dir.ts';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -289,5 +290,73 @@ test('phase 188: preflight required-directory writable failure detail uses canon
       SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable,
       `logs directory is not writable: ${logsPath}`
     )
+  );
+});
+
+
+test('phase 189: shared admin-static-dir helper enforces canonical invariant failure text', () => {
+  assert.equal(ADMIN_STATIC_DIR_INVARIANT.id, 'admin-static-dir');
+  assert.equal(
+    formatAdminStaticDirInvariantFailure('admin staticDir does not exist: /tmp/ui/admin'),
+    'Startup invariant failed [admin-static-dir]: admin staticDir does not exist: /tmp/ui/admin'
+  );
+});
+
+test('phase 189: startup admin staticDir failure detail reuses canonical helper text', () => {
+  const projectRoot = mkProjectRoot();
+
+  const expectedMessage = formatAdminStaticDirInvariantFailure(
+    `admin staticDir does not exist: ${path.join(projectRoot, 'ui', 'custom-admin')}`
+  );
+
+  try {
+    validateAdminStaticDir(
+      {
+        admin: {
+          enabled: true,
+          staticDir: './ui/custom-admin'
+        }
+      },
+      projectRoot
+    );
+    assert.fail('Expected startup admin staticDir check to throw');
+  } catch (error) {
+    assert.equal(error instanceof Error ? error.message : String(error), expectedMessage);
+  }
+});
+
+test('phase 189: preflight configured admin staticDir missing/detail shape reuse canonical helper text', async () => {
+  const projectRoot = mkProjectRoot();
+  seedBasicProject(projectRoot);
+
+  fs.writeFileSync(path.join(projectRoot, 'config', 'nimb.config.json'), `${JSON.stringify({
+    name: 'phase-189-site',
+    runtime: { mode: 'production' },
+    admin: { enabled: true, staticDir: './ui/custom-admin' }
+  }, null, 2)}\n`);
+
+  const missingReport = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: projectRoot
+  });
+
+  const missingFinding = missingReport.findings.find((finding) => finding.code === 'admin-static-configured-missing');
+  assert.equal(
+    missingFinding?.detail,
+    formatAdminStaticDirInvariantFailure(`admin staticDir does not exist: ${path.join(projectRoot, 'ui', 'custom-admin')}`)
+  );
+
+  fs.mkdirSync(path.join(projectRoot, 'ui'), { recursive: true });
+  fs.writeFileSync(path.join(projectRoot, 'ui', 'custom-admin'), 'not-a-directory\n');
+
+  const shapeReport = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: projectRoot
+  });
+
+  const shapeFinding = shapeReport.findings.find((finding) => finding.code === 'admin-static-dir-shape');
+  assert.equal(
+    shapeFinding?.detail,
+    formatAdminStaticDirInvariantFailure(`admin staticDir is not a directory: ${path.join(projectRoot, 'ui', 'custom-admin')}`)
   );
 });

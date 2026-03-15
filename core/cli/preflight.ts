@@ -3,6 +3,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { loadConfig, resolveConfigPath } from '../config/config-loader.ts';
 import { SHARED_STARTUP_PREFLIGHT_INVARIANTS } from '../invariants/startup-preflight-invariants.ts';
+import { ADMIN_STATIC_DIR_INVARIANT, formatAdminStaticDirInvariantFailure } from '../invariants/admin-static-dir.ts';
 import { STARTUP_PORT_INVARIANT, assertValidStartupPort, formatStartupPortInvariantFailure } from '../invariants/startup-port.ts';
 import { formatPersistenceRuntimeJsonInvariantFailure } from '../invariants/persistence-runtime-json.ts';
 import { formatDirectoryWritabilityInvariantFailure } from '../invariants/directory-writability.ts';
@@ -11,7 +12,6 @@ const LEGACY_CONFIG_FILENAME = 'nimb.config.json';
 const DEFAULT_ADMIN_STATIC_DIR = './ui/admin';
 const INSTALL_STATE_RELATIVE_PATH = path.join('data', 'system', 'config.json');
 
-const ADMIN_STATIC_DIR_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.adminStaticDir;
 const INSTALL_STATE_CONFIG_JSON_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.installStateConfigJson;
 const DATA_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.dataDirectoryWritable;
 const PERSISTENCE_RUNTIME_JSON_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceRuntimeJson;
@@ -304,7 +304,7 @@ export const runPreflightDiagnostics = async ({ projectRoot, runtimeRoot, env = 
             severity: invariantFailSeverity(ADMIN_STATIC_DIR_INVARIANT),
             code: 'admin-static-dir-shape',
             check: ADMIN_STATIC_DIR_INVARIANT.title,
-            detail: `Admin staticDir resolves to ${resolvedAdminStaticDir}, but this path is not a directory.`,
+            detail: formatAdminStaticDirInvariantFailure(`admin staticDir is not a directory: ${resolvedAdminStaticDir}`),
             why: ADMIN_STATIC_DIR_INVARIANT.why,
             next: `${ADMIN_STATIC_DIR_INVARIANT.remediation} (Resolved path: ${resolvedAdminStaticDir})`
           });
@@ -322,7 +322,7 @@ export const runPreflightDiagnostics = async ({ projectRoot, runtimeRoot, env = 
             severity: invariantFailSeverity(ADMIN_STATIC_DIR_INVARIANT),
             code: 'admin-static-configured-missing',
             check: ADMIN_STATIC_DIR_INVARIANT.title,
-            detail: `Admin staticDir resolves to ${resolvedAdminStaticDir}, but this directory is missing.`,
+            detail: formatAdminStaticDirInvariantFailure(`admin staticDir does not exist: ${resolvedAdminStaticDir}`),
             why: ADMIN_STATIC_DIR_INVARIANT.why,
             next: `${ADMIN_STATIC_DIR_INVARIANT.remediation} (Resolved path: ${resolvedAdminStaticDir})`
           });

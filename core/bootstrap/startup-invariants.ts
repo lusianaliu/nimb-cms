@@ -2,11 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
 import { SHARED_STARTUP_PREFLIGHT_INVARIANTS } from '../invariants/startup-preflight-invariants.ts';
+import { formatAdminStaticDirInvariantFailure } from '../invariants/admin-static-dir.ts';
 import { STARTUP_PORT_INVARIANT, assertValidStartupPort, formatStartupPortInvariantFailure } from '../invariants/startup-port.ts';
 import { formatPersistenceRuntimeJsonInvariantFailure } from '../invariants/persistence-runtime-json.ts';
 import { formatDirectoryWritabilityInvariantFailure } from '../invariants/directory-writability.ts';
 
-const ADMIN_STATIC_DIR_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.adminStaticDir;
 const DATA_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.dataDirectoryWritable;
 const PERSISTENCE_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceDirectoryWritable;
 const LOGS_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable;
@@ -31,11 +31,11 @@ export const validateAdminStaticDir = (config, rootDirectory) => {
       return;
     }
 
-    throw new Error(`Startup invariant failed [${ADMIN_STATIC_DIR_INVARIANT.id}]: admin staticDir does not exist: ${adminDir}`);
+    throw new Error(formatAdminStaticDirInvariantFailure(`admin staticDir does not exist: ${adminDir}`));
   }
 
   if (!fs.statSync(adminDir).isDirectory()) {
-    throw new Error(`Startup invariant failed [${ADMIN_STATIC_DIR_INVARIANT.id}]: admin staticDir is not a directory: ${adminDir}`);
+    throw new Error(formatAdminStaticDirInvariantFailure(`admin staticDir is not a directory: ${adminDir}`));
   }
 };
 
