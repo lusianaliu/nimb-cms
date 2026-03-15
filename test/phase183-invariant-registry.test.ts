@@ -5,6 +5,7 @@ import { runPreflightDiagnostics } from '../core/cli/preflight.ts';
 import { validateDataDirectoryWritable } from '../core/bootstrap/startup-invariants.ts';
 import { assertValidStartupPort, formatStartupPortInvariantFailure } from '../core/invariants/startup-port.ts';
 import { formatPersistenceRuntimeJsonInvariantFailure } from '../core/invariants/persistence-runtime-json.ts';
+import { formatDirectoryWritabilityInvariantFailure } from '../core/invariants/directory-writability.ts';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -225,6 +226,68 @@ test('phase 187: preflight persistence-runtime invalid JSON detail reuses canoni
     runtimeJsonCheck?.detail,
     formatPersistenceRuntimeJsonInvariantFailure(
       `persistence file is invalid JSON: ${path.join(projectRoot, 'data', 'system', 'runtime.json')}`
+    )
+  );
+});
+
+
+test('phase 188: shared writable-directory helper enforces canonical invariant failure text', () => {
+  assert.equal(
+    formatDirectoryWritabilityInvariantFailure(
+      SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable,
+      'logs directory is not writable: /tmp/logs'
+    ),
+    'Startup invariant failed [logs-directory-writable]: logs directory is not writable: /tmp/logs'
+  );
+});
+
+test('phase 188: startup data-directory writability failure detail reuses canonical helper text', () => {
+  const projectRoot = mkProjectRoot();
+  fs.mkdirSync(path.join(projectRoot, 'data'), { recursive: true });
+  fs.writeFileSync(path.join(projectRoot, 'data', 'content'), 'not-a-directory\n');
+
+  const expectedMessage = formatDirectoryWritabilityInvariantFailure(
+    SHARED_STARTUP_PREFLIGHT_INVARIANTS.dataDirectoryWritable,
+    `data directory is not writable: ${path.join(projectRoot, 'data')}`
+  );
+
+  try {
+    validateDataDirectoryWritable({
+      dataDir: path.join(projectRoot, 'data'),
+      dataSystemDir: path.join(projectRoot, 'data', 'system'),
+      dataContentDir: path.join(projectRoot, 'data', 'content'),
+      dataUploadsDir: path.join(projectRoot, 'data', 'uploads')
+    });
+    assert.fail('Expected startup data-directory writability check to throw');
+  } catch (error) {
+    assert.equal(error instanceof Error ? error.message : String(error), expectedMessage);
+  }
+});
+
+
+test('phase 188: preflight required-directory writable failure detail uses canonical helper text', async () => {
+  const projectRoot = mkProjectRoot();
+  seedBasicProject(projectRoot);
+
+  const logsPath = path.join(projectRoot, 'logs');
+  fs.rmSync(logsPath, { recursive: true, force: true });
+  fs.symlinkSync('/proc', logsPath, 'dir');
+
+  const report = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: projectRoot
+  });
+
+  const logsWritableFinding = report.findings.find(
+    (finding) => finding.code === 'required-directory-writable' && finding.check === 'logs writable'
+  );
+
+  assert.equal(logsWritableFinding?.severity, 'FAIL');
+  assert.equal(
+    logsWritableFinding?.detail,
+    formatDirectoryWritabilityInvariantFailure(
+      SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable,
+      `logs directory is not writable: ${logsPath}`
     )
   );
 });
