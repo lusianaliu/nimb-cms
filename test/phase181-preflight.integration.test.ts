@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import net from 'node:net';
-import { runPreflightDiagnostics } from '../core/cli/preflight.ts';
+import { formatPreflightReport, runPreflightDiagnostics } from '../core/cli/preflight.ts';
 
 const mkProjectRoot = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase181-'));
 
@@ -135,5 +135,27 @@ test('phase 181: canonical preflight CLI command prints summary and uses failure
 
   assert.equal(result.status, 1);
   assert.match(result.stdout, /Nimb Deployment Preflight/);
+  assert.match(result.stdout, /Change status: preflight is validation-only and does not auto-fix files or directories\./);
+  assert.match(result.stdout, /Manual action required \(FAIL findings\):/);
+  assert.match(result.stdout, /Project layout:/);
+  assert.match(result.stdout, /operator next step: Fix path conflicts first/);
   assert.match(result.stdout, /Preflight result: FAIL/);
+});
+
+test('phase 201: preflight report groups WARN findings by remediation category with operator next steps', async () => {
+  const projectRoot = mkProjectRoot();
+  seedBasicProject(projectRoot);
+
+  fs.rmSync(path.join(projectRoot, 'themes'), { recursive: true, force: true });
+
+  const report = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: '/workspace/nimb-cms'
+  });
+
+  const formatted = formatPreflightReport(report);
+  assert.match(formatted, /Warnings to review \(WARN findings\):/);
+  assert.match(formatted, /Project layout:/);
+  assert.match(formatted, /expected-directory-missing/);
+  assert.match(formatted, /operator next step: Fix path conflicts first/);
 });

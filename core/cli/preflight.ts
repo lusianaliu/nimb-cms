@@ -52,8 +52,75 @@ export type PreflightReport = {
   exitCode: number;
 };
 
+type RemediationCategory = 'Project layout' | 'Filesystem permissions' | 'Configuration' | 'Network/port binding' | 'Install-state data' | 'Other';
+
 const addFinding = (findings: PreflightFinding[], finding: PreflightFinding) => {
   findings.push(Object.freeze(finding));
+};
+
+const categorizeFinding = (finding: PreflightFinding): RemediationCategory => {
+  if (finding.code.includes('startup-port')) {
+    return 'Network/port binding';
+  }
+
+  if (finding.code.startsWith('config-') || finding.code.startsWith('admin-static')) {
+    return 'Configuration';
+  }
+
+  if (finding.code.startsWith('install-state')) {
+    return 'Install-state data';
+  }
+
+  if (finding.code.includes('writable') || finding.code.includes('parent')) {
+    return 'Filesystem permissions';
+  }
+
+  if (finding.code.includes('directory') || finding.code.includes('project-root') || finding.code.includes('shape')) {
+    return 'Project layout';
+  }
+
+  return 'Other';
+};
+
+const remediationPlaybook: Record<RemediationCategory, string> = {
+  'Project layout': 'Fix path conflicts first: replace files where directories are required, then re-run setup.',
+  'Filesystem permissions': 'Grant runtime write access to required paths (`data/*`, `logs`) before retrying.',
+  Configuration: 'Fix invalid or missing configuration values/paths in `config/nimb.config.json`.',
+  'Network/port binding': 'Choose a free port (PORT or config.server.port), or stop the process currently using it.',
+  'Install-state data': 'Ensure `data/system/config.json` exists as valid JSON and is readable by the runtime user.',
+  Other: 'Review finding details and resolve the blocker before startup.'
+};
+
+const pushGroupedFindings = ({ lines, title, findings }: { lines: string[]; title: string; findings: PreflightFinding[] }) => {
+  lines.push(title);
+
+  if (findings.length === 0) {
+    lines.push('- none');
+    lines.push('');
+    return;
+  }
+
+  const grouped = new Map<RemediationCategory, PreflightFinding[]>();
+  for (const finding of findings) {
+    const category = categorizeFinding(finding);
+    const existing = grouped.get(category);
+    if (existing) {
+      existing.push(finding);
+    } else {
+      grouped.set(category, [finding]);
+    }
+  }
+
+  for (const [category, categoryFindings] of grouped.entries()) {
+    lines.push(`- ${category}:`);
+    lines.push(`  operator next step: ${remediationPlaybook[category]}`);
+    for (const finding of categoryFindings) {
+      lines.push(`  - ${finding.check} (${finding.code})`);
+      lines.push(`    next: ${finding.next}`);
+    }
+  }
+
+  lines.push('');
 };
 
 const parseStartupPort = (config: ReturnType<typeof loadConfig> | null, env = process.env) => {
@@ -480,6 +547,14 @@ export const formatPreflightReport = (report: PreflightReport) => {
     lines.push(`  next: ${finding.next}`);
     lines.push('');
   }
+
+  lines.push('Change status: preflight is validation-only and does not auto-fix files or directories.');
+  lines.push('');
+
+  const failFindings = report.findings.filter((finding) => finding.severity === 'FAIL');
+  const warnFindings = report.findings.filter((finding) => finding.severity === 'WARN');
+  pushGroupedFindings({ lines, title: 'Manual action required (FAIL findings):', findings: failFindings });
+  pushGroupedFindings({ lines, title: 'Warnings to review (WARN findings):', findings: warnFindings });
 
   const overall = report.summary.fail > 0 ? 'FAIL' : report.summary.warn > 0 ? 'WARN' : 'PASS';
   lines.push(`Preflight result: ${overall}`);
