@@ -8,6 +8,7 @@ import { formatPersistenceRuntimeJsonInvariantFailure } from '../core/invariants
 import {
   formatDirectoryParentNotWritableInvariantFailure,
   formatDirectoryShapeInvariantFailure,
+  formatDirectoryUnresolvedParentInvariantFailure,
   formatDirectoryWritabilityInvariantFailure
 } from '../core/invariants/directory-writability.ts';
 import { ADMIN_STATIC_DIR_INVARIANT, formatAdminStaticDirInvariantFailure } from '../core/invariants/admin-static-dir.ts';
@@ -436,5 +437,46 @@ test('phase 191: preflight required-directory parent-path writable failure detai
       projectRoot
     )
   );
+});
+
+test('phase 192: shared unresolved-parent helper enforces canonical invariant failure text', () => {
+  assert.equal(
+    formatDirectoryUnresolvedParentInvariantFailure(
+      SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable,
+      '/tmp/site/logs'
+    ),
+    'Startup invariant failed [logs-directory-writable]: Unable to resolve an existing parent path for /tmp/site/logs.'
+  );
+});
+
+test('phase 192: preflight required-directory unresolved-parent detail reuses canonical helper text', async () => {
+  const projectRoot = '/tmp/nimb-phase192-unresolved-parent';
+  const originalExistsSync = fs.existsSync;
+
+  fs.existsSync = () => false;
+
+  try {
+    const report = await runPreflightDiagnostics({
+      projectRoot,
+      runtimeRoot: projectRoot
+    });
+
+    const logsPath = path.join(projectRoot, 'logs');
+
+    const logsParentFinding = report.findings.find(
+      (finding) => finding.code === 'required-directory-parent' && finding.check === 'logs parent path'
+    );
+
+    assert.equal(logsParentFinding?.severity, SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable.severityIntent.preflight.fail);
+    assert.equal(
+      logsParentFinding?.detail,
+      formatDirectoryUnresolvedParentInvariantFailure(
+        SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable,
+        logsPath
+      )
+    );
+  } finally {
+    fs.existsSync = originalExistsSync;
+  }
 });
 

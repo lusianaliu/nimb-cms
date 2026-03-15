@@ -25,9 +25,15 @@ export const resolveNearestExistingPath = (targetPath: string) => {
 export const formatDirectoryParentNotWritableDetail = (directoryPath: string, nearestExistingPath: string) =>
   `${directoryPath} is missing and parent path ${nearestExistingPath} is not writable.`;
 
+export const formatDirectoryUnresolvedParentDetail = (directoryPath: string) =>
+  `Unable to resolve an existing parent path for ${directoryPath}.`;
+
 
 export const formatDirectoryParentNotWritableInvariantFailure = (
   invariant: SharedInvariantDefinition,
   directoryPath: string,
   nearestExistingPath: string
 ) => formatDirectoryWritabilityInvariantFailure(invariant, formatDirectoryParentNotWritableDetail(directoryPath, nearestExistingPath));
+
+export const formatDirectoryUnresolvedParentInvariantFailure = (invariant: SharedInvariantDefinition, directoryPath: string) =>
+  formatDirectoryWritabilityInvariantFailure(invariant, formatDirectoryUnresolvedParentDetail(directoryPath));
