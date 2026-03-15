@@ -7,6 +7,7 @@ import { ADMIN_STATIC_DIR_INVARIANT, formatAdminStaticDirInvariantFailure } from
 import { STARTUP_PORT_INVARIANT, assertValidStartupPort, formatStartupPortInvariantFailure } from '../invariants/startup-port.ts';
 import { formatPersistenceRuntimeJsonInvariantFailure } from '../invariants/persistence-runtime-json.ts';
 import {
+  formatDirectoryMissingWithWritableParentDetail,
   formatDirectoryParentNotWritableInvariantFailure,
   formatDirectoryShapeInvariantFailure,
   formatDirectoryUnresolvedParentInvariantFailure,
@@ -155,7 +156,7 @@ const evaluateRequiredDirectory = (
       severity: 'WARN',
       code: 'required-directory-missing',
       check: `${label} exists`,
-      detail: `${directoryPath} is missing, but parent path ${nearestExisting} appears writable.`,
+      detail: formatDirectoryMissingWithWritableParentDetail(directoryPath, nearestExisting),
       why: invariant.why,
       next: `${invariant.remediation} (Path: ${directoryPath})`
     });

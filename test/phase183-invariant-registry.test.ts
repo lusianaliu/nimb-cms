@@ -6,6 +6,7 @@ import { validateAdminStaticDir, validateDataDirectoryWritable } from '../core/b
 import { assertValidStartupPort, formatStartupPortInvariantFailure } from '../core/invariants/startup-port.ts';
 import { formatPersistenceRuntimeJsonInvariantFailure } from '../core/invariants/persistence-runtime-json.ts';
 import {
+  formatDirectoryMissingWithWritableParentDetail,
   formatDirectoryParentNotWritableInvariantFailure,
   formatDirectoryShapeInvariantFailure,
   formatDirectoryUnresolvedParentInvariantFailure,
@@ -480,3 +481,37 @@ test('phase 192: preflight required-directory unresolved-parent detail reuses ca
   }
 });
 
+
+
+test('phase 193: shared missing-directory helper enforces canonical writable-parent detail text', () => {
+  assert.equal(
+    formatDirectoryMissingWithWritableParentDetail(
+      '/tmp/site/logs',
+      '/tmp/site'
+    ),
+    '/tmp/site/logs is missing, but parent path /tmp/site appears writable so startup can create it.'
+  );
+});
+
+test('phase 193: preflight required-directory missing detail reuses shared writable-parent helper text', async () => {
+  const projectRoot = mkProjectRoot();
+  seedBasicProject(projectRoot);
+
+  const logsPath = path.join(projectRoot, 'logs');
+  fs.rmSync(logsPath, { recursive: true, force: true });
+
+  const report = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: projectRoot
+  });
+
+  const logsMissingFinding = report.findings.find(
+    (finding) => finding.code === 'required-directory-missing' && finding.check === 'logs exists'
+  );
+
+  assert.equal(logsMissingFinding?.severity, 'WARN');
+  assert.equal(
+    logsMissingFinding?.detail,
+    formatDirectoryMissingWithWritableParentDetail(logsPath, projectRoot)
+  );
+});
