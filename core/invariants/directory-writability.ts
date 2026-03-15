@@ -33,6 +33,9 @@ export const formatDirectoryMissingWithWritableParentDetail = (directoryPath: st
 
 export const formatDirectoryNextPathSuffix = (directoryPath: string) => `(Path: ${directoryPath})`;
 
+export const formatDirectoryRemediationWithPathSuffix = (remediation: string, directoryPath: string) =>
+  `${remediation} ${formatDirectoryNextPathSuffix(directoryPath)}`;
+
 export const formatDirectoryNextParentAnnotation = (parentPath: string) => `Parent: ${parentPath}`;
 
 
