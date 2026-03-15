@@ -4,6 +4,7 @@ import { SHARED_STARTUP_PREFLIGHT_INVARIANTS, getSharedInvariant } from '../core
 import { runPreflightDiagnostics } from '../core/cli/preflight.ts';
 import { validateDataDirectoryWritable } from '../core/bootstrap/startup-invariants.ts';
 import { assertValidStartupPort, formatStartupPortInvariantFailure } from '../core/invariants/startup-port.ts';
+import { formatPersistenceRuntimeJsonInvariantFailure } from '../core/invariants/persistence-runtime-json.ts';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -197,4 +198,33 @@ test('phase 186: preflight startup-port finding detail reuses canonical invalid-
   const portFinding = report.findings.find((finding) => finding.code === 'startup-port-invalid-or-unavailable');
   assert.equal(portFinding?.severity, 'FAIL');
   assert.match(portFinding?.detail ?? '', /Startup invariant failed \[startup-port\]: invalid PORT environment variable: NaN/);
+});
+
+
+test('phase 187: shared persistence-runtime helper enforces canonical invariant failure text', () => {
+  assert.equal(
+    formatPersistenceRuntimeJsonInvariantFailure('persistence file is invalid JSON: /tmp/runtime.json'),
+    'Startup invariant failed [persistence-runtime-json]: persistence file is invalid JSON: /tmp/runtime.json'
+  );
+});
+
+test('phase 187: preflight persistence-runtime invalid JSON detail reuses canonical invariant text', async () => {
+  const projectRoot = mkProjectRoot();
+  seedBasicProject(projectRoot);
+
+  fs.writeFileSync(path.join(projectRoot, 'data', 'system', 'runtime.json'), '{broken-json');
+
+  const report = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: projectRoot
+  });
+
+  const runtimeJsonCheck = report.findings.find((finding) => finding.code === 'persistence-runtime-invalid-json');
+  assert.equal(runtimeJsonCheck?.severity, 'FAIL');
+  assert.equal(
+    runtimeJsonCheck?.detail,
+    formatPersistenceRuntimeJsonInvariantFailure(
+      `persistence file is invalid JSON: ${path.join(projectRoot, 'data', 'system', 'runtime.json')}`
+    )
+  );
 });

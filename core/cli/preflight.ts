@@ -4,15 +4,16 @@ import net from 'node:net';
 import { loadConfig, resolveConfigPath } from '../config/config-loader.ts';
 import { SHARED_STARTUP_PREFLIGHT_INVARIANTS } from '../invariants/startup-preflight-invariants.ts';
 import { STARTUP_PORT_INVARIANT, assertValidStartupPort, formatStartupPortInvariantFailure } from '../invariants/startup-port.ts';
+import { formatPersistenceRuntimeJsonInvariantFailure } from '../invariants/persistence-runtime-json.ts';
 
 const LEGACY_CONFIG_FILENAME = 'nimb.config.json';
 const DEFAULT_ADMIN_STATIC_DIR = './ui/admin';
 const INSTALL_STATE_RELATIVE_PATH = path.join('data', 'system', 'config.json');
 
 const ADMIN_STATIC_DIR_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.adminStaticDir;
-const PERSISTENCE_RUNTIME_JSON_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceRuntimeJson;
 const INSTALL_STATE_CONFIG_JSON_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.installStateConfigJson;
 const DATA_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.dataDirectoryWritable;
+const PERSISTENCE_RUNTIME_JSON_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceRuntimeJson;
 const PERSISTENCE_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceDirectoryWritable;
 const LOGS_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable;
 
@@ -417,7 +418,7 @@ export const runPreflightDiagnostics = async ({ projectRoot, runtimeRoot, env = 
           severity: 'FAIL',
           code: 'persistence-runtime-invalid-json',
           check: PERSISTENCE_RUNTIME_JSON_INVARIANT.title,
-          detail: `${persistenceRuntimePath} exists but is not valid JSON.`,
+          detail: formatPersistenceRuntimeJsonInvariantFailure(`persistence file is invalid JSON: ${persistenceRuntimePath}`),
           why: PERSISTENCE_RUNTIME_JSON_INVARIANT.why,
           next: `${PERSISTENCE_RUNTIME_JSON_INVARIANT.remediation} (Path: ${persistenceRuntimePath})`
         });
