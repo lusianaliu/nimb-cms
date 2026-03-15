@@ -159,3 +159,46 @@ test('phase 201: preflight report groups WARN findings by remediation category w
   assert.match(formatted, /expected-directory-missing/);
   assert.match(formatted, /operator next step: Fix path conflicts first/);
 });
+
+
+test('phase 202: preflight report includes ordered retry summary with fix-first guidance', async () => {
+  const projectRoot = mkProjectRoot();
+  seedBasicProject(projectRoot);
+
+  fs.rmSync(path.join(projectRoot, 'plugins'), { recursive: true, force: true });
+  fs.rmSync(path.join(projectRoot, 'data'), { recursive: true, force: true });
+  fs.writeFileSync(path.join(projectRoot, 'data'), 'not a directory\n');
+
+  const report = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: '/workspace/nimb-cms'
+  });
+
+  const formatted = formatPreflightReport(report);
+  assert.match(formatted, /Retry summary:/);
+  assert.match(formatted, /Fix first \(in order\):/);
+  assert.match(formatted, /1\. Project layout \(1 blocker\)/);
+  assert.match(formatted, /Warnings to schedule after blockers are cleared:/);
+  assert.match(formatted, /- Project layout \(4 warnings\)/);
+  assert.match(formatted, /Support handoff: npx nimb preflight --json > nimb-preflight-report\.json/);
+});
+
+test('phase 202: canonical preflight CLI supports --json support handoff output', () => {
+  const projectRoot = mkProjectRoot();
+  seedBasicProject(projectRoot);
+
+  fs.rmSync(path.join(projectRoot, 'logs'), { recursive: true, force: true });
+  fs.writeFileSync(path.join(projectRoot, 'logs'), 'not a directory\n');
+
+  const result = spawnSync('node', ['/workspace/nimb-cms/bin/nimb.js', 'preflight', '--json', '--project-root', projectRoot], {
+    encoding: 'utf8'
+  });
+
+  assert.equal(result.status, 1);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.result, 'FAIL');
+  assert.equal(Array.isArray(parsed.retrySummary.blockingCategories), true);
+  assert.equal(parsed.retrySummary.retryCommand, 'npx nimb preflight');
+  assert.equal(parsed.retrySummary.blockingCategories[0].category, 'Project layout');
+  assert.equal(parsed.retrySummary.blockingCategories[0].findings.some((finding: { code: string }) => finding.code === 'required-directory-shape' || finding.code === 'expected-directory-shape'), true);
+});
