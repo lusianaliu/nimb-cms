@@ -122,13 +122,38 @@ const createProject = (projectName) => {
   const readmePath = path.join(targetRoot, 'README.md');
   fs.writeFileSync(
     readmePath,
-    `# ${projectName}\n\nGenerated with \`nimb init\`.\n\n## Run locally\n\n\`\`\`bash\nnpm install\nnpm start\n\`\`\`\n`
+    `# ${projectName}\n\nGenerated with \`nimb init\`.\n\n## Run locally\n\n\`\`\`bash\nnpm install\nnpm start\n\`\`\`\n\n## Project vs repository\n\nRun Nimb from this generated project directory, not from the Nimb source repository.\n\n## Preflight before deployment\n\n\`\`\`bash\nnpx nimb preflight\n\`\`\`\n\nResolve any FAIL findings before starting Nimb on a server.\n\n## Required writable paths\n\nNimb must be able to write to:\n\n- \`data/\`\n- \`data/system/\`\n- \`data/content/\`\n- \`data/uploads/\`\n- \`logs/\`\n`
   );
 
   process.stdout.write('Project created.\n');
   process.stdout.write(`cd ${projectName}\n`);
   process.stdout.write('npm install\n');
   process.stdout.write('npx nimb\n');
+};
+
+const printOperatorGuide = ({ projectRoot }) => {
+  process.stdout.write('Nimb Install & Deployment Guide\n');
+  process.stdout.write('================================\n');
+  process.stdout.write(`Project root: ${projectRoot}\n\n`);
+  process.stdout.write('1) Create an installed project\n');
+  process.stdout.write('   - Recommended: npx nimb init my-site\n');
+  process.stdout.write('   - Then: cd my-site\n\n');
+  process.stdout.write('2) Understand runtime context\n');
+  process.stdout.write('   - Nimb should run from an installed project root.\n');
+  process.stdout.write('   - The source repository root is a development environment, not a deployment target.\n');
+  process.stdout.write('   - Override project root only when needed: --project-root <path>\n\n');
+  process.stdout.write('3) Required writable paths\n');
+  process.stdout.write('   - data/\n');
+  process.stdout.write('   - data/system/ (install-state source: data/system/config.json)\n');
+  process.stdout.write('   - data/content/\n');
+  process.stdout.write('   - data/uploads/\n');
+  process.stdout.write('   - logs/\n\n');
+  process.stdout.write('4) Run deployment preflight\n');
+  process.stdout.write('   - npx nimb preflight\n');
+  process.stdout.write('   - Resolve all FAIL findings before startup.\n\n');
+  process.stdout.write('5) Start Nimb\n');
+  process.stdout.write('   - npx nimb\n');
+  process.stdout.write('   - Open /admin after startup to continue setup/content operations.\n');
 };
 
 
@@ -329,6 +354,8 @@ if (args[0] === 'init') {
   const report = await runPreflightDiagnostics({ projectRoot, runtimeRoot });
   process.stdout.write(formatPreflightReport(report));
   process.exitCode = report.exitCode;
+} else if (args[0] === 'guide') {
+  printOperatorGuide({ projectRoot });
 } else {
   await startServer();
 }
