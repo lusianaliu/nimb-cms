@@ -8,6 +8,7 @@ import { STARTUP_PORT_INVARIANT, assertValidStartupPort, formatStartupPortInvari
 import { formatPersistenceRuntimeJsonInvariantFailure } from '../invariants/persistence-runtime-json.ts';
 import {
   formatDirectoryMissingWithWritableParentDetail,
+  formatDirectoryNextPathSuffix,
   formatDirectoryParentNotWritableInvariantFailure,
   formatDirectoryShapeInvariantFailure,
   formatDirectoryUnresolvedParentInvariantFailure,
@@ -130,7 +131,7 @@ const evaluateRequiredDirectory = (
         check: `${label} writable`,
         detail: formatDirectoryWritabilityInvariantFailure(invariant, `${label} directory is not writable: ${directoryPath}`),
         why: invariant.why,
-        next: `${invariant.remediation} (Path: ${directoryPath})`
+        next: `${invariant.remediation} ${formatDirectoryNextPathSuffix(directoryPath)}`
       });
     }
 
@@ -145,7 +146,7 @@ const evaluateRequiredDirectory = (
       check: `${label} parent path`,
       detail: formatDirectoryUnresolvedParentInvariantFailure(invariant, directoryPath),
       why: invariant.why,
-      next: `${invariant.remediation} (Path: ${directoryPath})`
+      next: `${invariant.remediation} ${formatDirectoryNextPathSuffix(directoryPath)}`
     });
     return;
   }
@@ -158,7 +159,7 @@ const evaluateRequiredDirectory = (
       check: `${label} exists`,
       detail: formatDirectoryMissingWithWritableParentDetail(directoryPath, nearestExisting),
       why: invariant.why,
-      next: `${invariant.remediation} (Path: ${directoryPath})`
+      next: `${invariant.remediation} ${formatDirectoryNextPathSuffix(directoryPath)}`
     });
   } catch {
     addFinding(findings, {
