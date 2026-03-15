@@ -7,6 +7,7 @@ import { assertValidStartupPort, formatStartupPortInvariantFailure } from '../co
 import { formatPersistenceRuntimeJsonInvariantFailure } from '../core/invariants/persistence-runtime-json.ts';
 import {
   formatDirectoryMissingWithWritableParentDetail,
+  formatDirectoryNextParentAnnotation,
   formatDirectoryNextPathSuffix,
   formatDirectoryParentNotWritableInvariantFailure,
   formatDirectoryShapeInvariantFailure,
@@ -540,6 +541,47 @@ test('phase 194: writable-directory invariants reuse shared remediation fragment
   );
 });
 
+test('phase 196: shared directory parent annotation helper formats parent suffix fragment', () => {
+  assert.equal(
+    formatDirectoryNextParentAnnotation('/tmp/site'),
+    'Parent: /tmp/site'
+  );
+});
+
+test('phase 196: preflight parent-not-writable next text reuses shared parent annotation suffix helper', async () => {
+  const projectRoot = mkProjectRoot();
+  seedBasicProject(projectRoot);
+
+  const logsPath = path.join(projectRoot, 'logs');
+  fs.rmSync(logsPath, { recursive: true, force: true });
+
+  const originalAccessSync = fs.accessSync;
+  fs.accessSync = ((targetPath: fs.PathLike, mode?: number) => {
+    if (mode === fs.constants.W_OK && `${targetPath}` === projectRoot) {
+      throw new Error('simulated parent not writable');
+    }
+
+    return originalAccessSync(targetPath, mode);
+  }) as typeof fs.accessSync;
+
+  try {
+    const report = await runPreflightDiagnostics({
+      projectRoot,
+      runtimeRoot: projectRoot
+    });
+
+    const logsParentFinding = report.findings.find(
+      (finding) => finding.code === 'required-directory-parent' && finding.check === 'logs parent path writable'
+    );
+
+    assert.equal(
+      logsParentFinding?.next,
+      `${SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable.remediation} (Path: ${logsPath}; ${formatDirectoryNextParentAnnotation(projectRoot)})`
+    );
+  } finally {
+    fs.accessSync = originalAccessSync;
+  }
+});
 
 test('phase 195: shared directory next path suffix helper formats canonical path annotation', () => {
   assert.equal(

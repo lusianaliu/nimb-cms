@@ -33,6 +33,8 @@ export const formatDirectoryMissingWithWritableParentDetail = (directoryPath: st
 
 export const formatDirectoryNextPathSuffix = (directoryPath: string) => `(Path: ${directoryPath})`;
 
+export const formatDirectoryNextParentAnnotation = (parentPath: string) => `Parent: ${parentPath}`;
+
 
 export const formatDirectoryParentNotWritableInvariantFailure = (
   invariant: SharedInvariantDefinition,
