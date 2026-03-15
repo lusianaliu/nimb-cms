@@ -5,7 +5,7 @@ import { runPreflightDiagnostics } from '../core/cli/preflight.ts';
 import { validateAdminStaticDir, validateDataDirectoryWritable } from '../core/bootstrap/startup-invariants.ts';
 import { assertValidStartupPort, formatStartupPortInvariantFailure } from '../core/invariants/startup-port.ts';
 import { formatPersistenceRuntimeJsonInvariantFailure } from '../core/invariants/persistence-runtime-json.ts';
-import { formatDirectoryWritabilityInvariantFailure } from '../core/invariants/directory-writability.ts';
+import { formatDirectoryShapeInvariantFailure, formatDirectoryWritabilityInvariantFailure } from '../core/invariants/directory-writability.ts';
 import { ADMIN_STATIC_DIR_INVARIANT, formatAdminStaticDirInvariantFailure } from '../core/invariants/admin-static-dir.ts';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -358,5 +358,41 @@ test('phase 189: preflight configured admin staticDir missing/detail shape reuse
   assert.equal(
     shapeFinding?.detail,
     formatAdminStaticDirInvariantFailure(`admin staticDir is not a directory: ${path.join(projectRoot, 'ui', 'custom-admin')}`)
+  );
+});
+
+
+test('phase 190: shared directory-shape helper enforces canonical invariant failure text', () => {
+  assert.equal(
+    formatDirectoryShapeInvariantFailure(
+      SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable,
+      'logs',
+      '/tmp/logs'
+    ),
+    'Startup invariant failed [logs-directory-writable]: logs path is not a directory: /tmp/logs'
+  );
+});
+
+test('phase 190: preflight required-directory shape detail reuses canonical helper text', async () => {
+  const projectRoot = mkProjectRoot();
+  seedBasicProject(projectRoot);
+
+  const logsPath = path.join(projectRoot, 'logs');
+  fs.rmSync(logsPath, { recursive: true, force: true });
+  fs.writeFileSync(logsPath, 'not-a-directory\n');
+
+  const report = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: projectRoot
+  });
+
+  const logsShapeFinding = report.findings.find(
+    (finding) => finding.code === 'required-directory-shape' && finding.check === 'logs path shape'
+  );
+
+  assert.equal(logsShapeFinding?.severity, SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable.severityIntent.preflight.fail);
+  assert.equal(
+    logsShapeFinding?.detail,
+    formatDirectoryShapeInvariantFailure(SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable, 'logs', logsPath)
   );
 });

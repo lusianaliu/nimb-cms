@@ -6,7 +6,7 @@ import { SHARED_STARTUP_PREFLIGHT_INVARIANTS } from '../invariants/startup-prefl
 import { ADMIN_STATIC_DIR_INVARIANT, formatAdminStaticDirInvariantFailure } from '../invariants/admin-static-dir.ts';
 import { STARTUP_PORT_INVARIANT, assertValidStartupPort, formatStartupPortInvariantFailure } from '../invariants/startup-port.ts';
 import { formatPersistenceRuntimeJsonInvariantFailure } from '../invariants/persistence-runtime-json.ts';
-import { formatDirectoryWritabilityInvariantFailure } from '../invariants/directory-writability.ts';
+import { formatDirectoryShapeInvariantFailure, formatDirectoryWritabilityInvariantFailure } from '../invariants/directory-writability.ts';
 
 const LEGACY_CONFIG_FILENAME = 'nimb.config.json';
 const DEFAULT_ADMIN_STATIC_DIR = './ui/admin';
@@ -110,10 +110,10 @@ const evaluateRequiredDirectory = (
   if (fs.existsSync(directoryPath)) {
     if (!fs.statSync(directoryPath).isDirectory()) {
       addFinding(findings, {
-        severity: 'FAIL',
+        severity: invariantFailSeverity(invariant),
         code: 'required-directory-shape',
         check: `${label} path shape`,
-        detail: `${directoryPath} exists but is not a directory.`,
+        detail: formatDirectoryShapeInvariantFailure(invariant, label, directoryPath),
         why: invariant.why,
         next: `Replace ${directoryPath} with a directory before starting Nimb.`
       });
