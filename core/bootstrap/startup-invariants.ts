@@ -3,9 +3,9 @@ import path from 'node:path';
 import net from 'node:net';
 import { SHARED_STARTUP_PREFLIGHT_INVARIANTS } from '../invariants/startup-preflight-invariants.ts';
 import { STARTUP_PORT_INVARIANT, assertValidStartupPort, formatStartupPortInvariantFailure } from '../invariants/startup-port.ts';
+import { formatPersistenceRuntimeJsonInvariantFailure } from '../invariants/persistence-runtime-json.ts';
 
 const ADMIN_STATIC_DIR_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.adminStaticDir;
-const PERSISTENCE_RUNTIME_JSON_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceRuntimeJson;
 const DATA_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.dataDirectoryWritable;
 const PERSISTENCE_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.persistenceDirectoryWritable;
 const LOGS_DIRECTORY_WRITABLE_INVARIANT = SHARED_STARTUP_PREFLIGHT_INVARIANTS.logsDirectoryWritable;
@@ -94,7 +94,7 @@ export const validatePersistenceStorage = (project, options = {}) => {
   try {
     JSON.parse(fs.readFileSync(runtimePath, 'utf8'));
   } catch (_error) {
-    throw new Error(`Startup invariant failed [${PERSISTENCE_RUNTIME_JSON_INVARIANT.id}]: persistence file is invalid JSON: ${runtimePath}`);
+    throw new Error(formatPersistenceRuntimeJsonInvariantFailure(`persistence file is invalid JSON: ${runtimePath}`));
   }
 };
 
