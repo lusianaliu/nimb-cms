@@ -181,6 +181,9 @@ test('phase 202: preflight report includes ordered retry summary with fix-first 
   assert.match(formatted, /Warnings to schedule after blockers are cleared:/);
   assert.match(formatted, /- Project layout \(4 warnings\)/);
   assert.match(formatted, /Support handoff: npx nimb preflight --json > nimb-preflight-report\.json/);
+  assert.match(formatted, /Decision path:/);
+  assert.match(formatted, /Re-run setup now: not recommended for current FAIL findings\./);
+  assert.match(formatted, /Re-run preflight after manual fixes: use preflight to confirm blockers are cleared without changing files\./);
 });
 
 test('phase 202: canonical preflight CLI supports --json support handoff output', () => {
@@ -199,6 +202,25 @@ test('phase 202: canonical preflight CLI supports --json support handoff output'
   assert.equal(parsed.result, 'FAIL');
   assert.equal(Array.isArray(parsed.retrySummary.blockingCategories), true);
   assert.equal(parsed.retrySummary.retryCommand, 'npx nimb preflight');
+  assert.equal(parsed.retrySummary.decisionPath.rerunSetupNow, false);
+  assert.equal(parsed.retrySummary.decisionPath.rerunPreflightAfterManualFix, true);
   assert.equal(parsed.retrySummary.blockingCategories[0].category, 'Project layout');
   assert.equal(parsed.retrySummary.blockingCategories[0].findings.some((finding: { code: string }) => finding.code === 'required-directory-shape' || finding.code === 'expected-directory-shape'), true);
+});
+
+test('phase 203: preflight decision path recommends rerunning setup for missing required directories', async () => {
+  const projectRoot = mkProjectRoot();
+  seedBasicProject(projectRoot);
+
+  fs.rmSync(path.join(projectRoot, 'data', 'uploads'), { recursive: true, force: true });
+
+  const report = await runPreflightDiagnostics({
+    projectRoot,
+    runtimeRoot: '/workspace/nimb-cms'
+  });
+
+  const formatted = formatPreflightReport(report);
+  assert.match(formatted, /Decision path:/);
+  assert.match(formatted, /Re-run setup now: FAIL findings are missing required directories that setup can create safely\./);
+  assert.match(formatted, /command: npx nimb setup/);
 });
