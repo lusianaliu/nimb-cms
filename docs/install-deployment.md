@@ -12,7 +12,36 @@ npm install
 
 Run Nimb from this generated project directory. Do **not** treat the Nimb source repository root as your deployed CMS project.
 
-## 2) Required project layout and writable paths
+## 2) Read the operator guide
+
+```bash
+npx nimb guide
+```
+
+Use this when you want the canonical setup/deployment expectations printed in the current terminal with project-root context.
+
+## 3) Run guided setup (recommended before first startup)
+
+```bash
+npx nimb setup
+```
+
+What `setup` does:
+
+- verifies the resolved project root exists and is a directory,
+- creates missing canonical directories when safe (`content`, `config`, `data/*`, `plugins`, `themes`, `public`, `logs`),
+- reports what it created versus what already existed,
+- reports paths it could not safely fix,
+- runs `preflight` automatically and prints the full report,
+- gives a clear next-step message.
+
+What `setup` does **not** do:
+
+- it does not delete/replace conflicting non-directory paths,
+- it does not change file ownership/permissions for you,
+- it does not guarantee full runtime behavior (preflight still has limits).
+
+## 4) Required project layout and writable paths
 
 Nimb expects this layout in the project root:
 
@@ -30,15 +59,15 @@ Before deployment, ensure these directories are writable by the runtime process:
 - `data/uploads/`
 - `logs/`
 
-## 3) Run preflight before startup
+## 5) Run preflight directly when needed
 
 ```bash
 npx nimb preflight
 ```
 
-Resolve every `FAIL` finding before startup.
+Use `preflight` when you want validation-only checks (no setup actions). Resolve every `FAIL` finding before startup.
 
-## 4) Start Nimb
+## 6) Start Nimb
 
 ```bash
 npx nimb
@@ -46,7 +75,7 @@ npx nimb
 
 Then open `/admin` for admin/setup flows.
 
-## 5) Optional runtime root override
+## 7) Optional runtime root override
 
 If a process manager starts Nimb outside project root, explicitly set project root:
 
@@ -59,13 +88,3 @@ or environment variable:
 ```bash
 NIMB_PROJECT_ROOT=/path/to/my-site npx nimb
 ```
-
-## 6) Built-in operator guide command
-
-Nimb includes a CLI help path for operators:
-
-```bash
-npx nimb guide
-```
-
-It prints the same canonical install/deployment expectations with project-root context.
