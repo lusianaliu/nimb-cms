@@ -5,6 +5,7 @@ import { loadConfig, resolveConfigPath } from '../config/config-loader.ts';
 import { SHARED_STARTUP_PREFLIGHT_INVARIANTS } from '../invariants/startup-preflight-invariants.ts';
 import { STARTUP_PORT_INVARIANT, assertValidStartupPort, formatStartupPortInvariantFailure } from '../invariants/startup-port.ts';
 import { formatPersistenceRuntimeJsonInvariantFailure } from '../invariants/persistence-runtime-json.ts';
+import { formatDirectoryWritabilityInvariantFailure } from '../invariants/directory-writability.ts';
 
 const LEGACY_CONFIG_FILENAME = 'nimb.config.json';
 const DEFAULT_ADMIN_STATIC_DIR = './ui/admin';
@@ -134,7 +135,7 @@ const evaluateRequiredDirectory = (
         severity: 'FAIL',
         code: 'required-directory-writable',
         check: `${label} writable`,
-        detail: `${directoryPath} exists but is not writable by the current process.`,
+        detail: formatDirectoryWritabilityInvariantFailure(invariant, `${label} directory is not writable: ${directoryPath}`),
         why: invariant.why,
         next: `${invariant.remediation} (Path: ${directoryPath})`
       });
