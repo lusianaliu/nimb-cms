@@ -9,6 +9,7 @@ import { formatPersistenceRuntimeJsonInvariantFailure } from '../invariants/pers
 import {
   formatDirectoryParentNotWritableInvariantFailure,
   formatDirectoryShapeInvariantFailure,
+  formatDirectoryUnresolvedParentInvariantFailure,
   formatDirectoryWritabilityInvariantFailure,
   resolveNearestExistingPath
 } from '../invariants/directory-writability.ts';
@@ -141,7 +142,7 @@ const evaluateRequiredDirectory = (
       severity: 'FAIL',
       code: 'required-directory-parent',
       check: `${label} parent path`,
-      detail: `Unable to resolve an existing parent path for ${directoryPath}.`,
+      detail: formatDirectoryUnresolvedParentInvariantFailure(invariant, directoryPath),
       why: invariant.why,
       next: `${invariant.remediation} (Path: ${directoryPath})`
     });
