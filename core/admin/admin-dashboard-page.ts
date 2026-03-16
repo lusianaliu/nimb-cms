@@ -103,7 +103,7 @@ const renderScheduledQueue = (runtime) => {
           ${rows}
         </tbody>
       </table></div>
-      <p class="muted">This queue is a lightweight overview. Use Pages and Posts lists for full content management.</p>
+      <p class="muted">This queue is a lightweight overview. Use <a href="/admin/pages?filter=scheduled">Pages → Scheduled only</a> and <a href="/admin/posts?filter=scheduled">Posts → Scheduled only</a> for focused management.</p>
     </article>`;
 };
 

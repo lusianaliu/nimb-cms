@@ -1,6 +1,8 @@
 import { renderAdminShell, escapeHtml } from './admin-shell.ts';
 import { resolvePostPublishState } from '../content/publish-timing.ts';
 
+const normalizeFilter = (value: unknown) => `${value ?? ''}`.trim().toLowerCase() === 'scheduled' ? 'scheduled' : 'all';
+
 const formatDate = (value: unknown) => {
   const input = `${value ?? ''}`.trim();
   if (!input) {
@@ -50,8 +52,11 @@ const toFormStatus = (value: unknown, publishedAt: unknown) => {
   return `${publishedAt ?? ''}`.trim() ? 'published' : 'draft';
 };
 
-export const renderAdminPostsListPage = ({ posts, runtime, notice = null }) => {
-  const rows = (Array.isArray(posts) ? posts : []).map((post) => `<tr>
+export const renderAdminPostsListPage = ({ posts, runtime, notice = null, filter = 'all' }) => {
+  const activeFilter = normalizeFilter(filter);
+  const list = (Array.isArray(posts) ? posts : [])
+    .filter((post) => activeFilter === 'scheduled' ? resolvePostPublishState(post).status === 'scheduled' : true);
+  const rows = list.map((post) => `<tr>
       <td>${escapeHtml(post?.data?.title || 'Untitled post')}</td>
       <td>${escapeHtml(post?.data?.slug)}</td>
       <td>${statusPill(post)}</td>
@@ -75,6 +80,11 @@ export const renderAdminPostsListPage = ({ posts, runtime, notice = null }) => {
     pageDescription: 'Posts are for blog updates, news, and time-based content.',
     notice,
     content: `<p><a class="button-link" href="/admin/posts/new">Write a new post</a></p>
+      <nav class="filter-tabs" aria-label="Post list filters">
+        <a class="filter-tab${activeFilter === 'all' ? ' is-active' : ''}" href="/admin/posts">All posts</a>
+        <a class="filter-tab${activeFilter === 'scheduled' ? ' is-active' : ''}" href="/admin/posts?filter=scheduled">Scheduled only</a>
+      </nav>
+      ${activeFilter === 'scheduled' ? '<p class="muted">Shows posts currently in scheduled state (published with a future publish time).</p>' : ''}
       <div class="table-wrap"><table>
         <thead>
           <tr>
@@ -87,7 +97,9 @@ export const renderAdminPostsListPage = ({ posts, runtime, notice = null }) => {
           </tr>
         </thead>
         <tbody>
-          ${rows || '<tr><td colspan="6">No posts yet. Write a new post to start your blog.</td></tr>'}
+          ${rows || (activeFilter === 'scheduled'
+      ? '<tr><td colspan="6">No scheduled posts right now. Schedule a post by publishing with a future publish time.</td></tr>'
+      : '<tr><td colspan="6">No posts yet. Write a new post to start your blog.</td></tr>')}
         </tbody>
       </table></div>`
   });

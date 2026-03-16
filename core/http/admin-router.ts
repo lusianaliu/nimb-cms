@@ -665,7 +665,8 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
                 : null;
 
           const pages = runtime.content.list('page');
-          return toHtmlResponse(renderAdminPagesListPage({ pages, runtime, notice }));
+          const filter = `${requestContext.query?.filter ?? ''}`;
+          return toHtmlResponse(renderAdminPagesListPage({ pages, runtime, notice, filter }));
         });
       }
 
@@ -852,7 +853,8 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
                 : null;
 
           const posts = runtime.content.list('post');
-          return toHtmlResponse(renderAdminPostsListPage({ posts, runtime, notice }));
+          const filter = `${requestContext.query?.filter ?? ''}`;
+          return toHtmlResponse(renderAdminPostsListPage({ posts, runtime, notice, filter }));
         });
       }
 
