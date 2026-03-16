@@ -22,7 +22,7 @@ const parseDate = (value: unknown) => {
   return parsed;
 };
 
-export const resolvePostPublishState = (entry, now = new Date()) => {
+const resolvePublishState = (entry, now = new Date()) => {
   const status = normalizeStatus(entry?.data?.status);
   const publishedAt = parseDate(entry?.data?.publishedAt);
 
@@ -48,3 +48,7 @@ export const resolvePostPublishState = (entry, now = new Date()) => {
     isPublic: true
   });
 };
+
+export const resolvePostPublishState = (entry, now = new Date()) => resolvePublishState(entry, now);
+
+export const resolvePagePublishState = (entry, now = new Date()) => resolvePublishState(entry, now);

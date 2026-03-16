@@ -1,6 +1,7 @@
 import { renderAdminShell, escapeHtml } from './admin-shell.ts';
+import { resolvePagePublishState } from '../content/publish-timing.ts';
 
-const formatDate = (value: unknown) => {
+const formatDateTime = (value: unknown) => {
   const input = `${value ?? ''}`.trim();
   if (!input) {
     return '—';
@@ -11,25 +12,51 @@ const formatDate = (value: unknown) => {
     return input;
   }
 
-  return date.toISOString().slice(0, 10);
+  return date.toISOString().slice(0, 16).replace('T', ' ');
 };
 
 const normalizeStatus = (value: unknown) => `${value ?? ''}`.trim().toLowerCase() === 'draft' ? 'draft' : 'published';
 
-const statusPill = (value: unknown) => {
-  const status = normalizeStatus(value);
-  const label = status === 'draft' ? 'Draft' : 'Published';
-  return `<span class="status-pill status-pill--${status}">${label}</span>`;
+const statusPill = (page) => {
+  const publishState = resolvePagePublishState(page);
+  const label = publishState.status === 'draft'
+    ? 'Draft'
+    : publishState.status === 'scheduled'
+      ? 'Scheduled'
+      : 'Published';
+
+  return `<span class="status-pill status-pill--${publishState.status}">${label}</span>`;
 };
 
-const toFormStatus = (value: unknown) => normalizeStatus(value) === 'draft' ? 'draft' : 'published';
+const toDateTimeLocal = (value: unknown) => {
+  const input = `${value ?? ''}`.trim();
+  if (!input) {
+    return '';
+  }
+
+  const parsed = new Date(input);
+  if (Number.isNaN(parsed.getTime())) {
+    return '';
+  }
+
+  return parsed.toISOString().slice(0, 16);
+};
+
+const toFormStatus = (value: unknown, publishedAt: unknown) => {
+  if (`${value ?? ''}`.trim()) {
+    return normalizeStatus(value);
+  }
+
+  return `${publishedAt ?? ''}`.trim() ? 'published' : 'draft';
+};
 
 export const renderAdminPagesListPage = ({ pages, runtime, notice = null }) => {
   const rows = (Array.isArray(pages) ? pages : []).map((page) => `<tr>
       <td>${escapeHtml(page?.data?.title || 'Untitled page')}</td>
       <td>${escapeHtml(page?.data?.slug)}</td>
-      <td>${statusPill(page?.data?.status)}</td>
-      <td>${escapeHtml(formatDate(page?.updatedAt ?? page?.createdAt))}</td>
+      <td>${statusPill(page)}</td>
+      <td>${escapeHtml(formatDateTime(page?.data?.publishedAt))}</td>
+      <td>${escapeHtml(formatDateTime(page?.updatedAt ?? page?.createdAt))}</td>
       <td>
         <div class="table-actions">
           <a href="/admin/pages/${encodeURIComponent(`${page?.id ?? ''}`)}/edit">Edit</a>
@@ -54,12 +81,13 @@ export const renderAdminPagesListPage = ({ pages, runtime, notice = null }) => {
             <th>Title</th>
             <th>Slug</th>
             <th>Status</th>
+            <th>Publish time</th>
             <th>Last updated</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          ${rows || '<tr><td colspan="5">No pages yet. Create a new page to build your website navigation.</td></tr>'}
+          ${rows || '<tr><td colspan="6">No pages yet. Create a new page to build your website navigation.</td></tr>'}
         </tbody>
       </table></div>`
   });
@@ -75,7 +103,8 @@ export const renderAdminPageFormPage = ({ mode, page = null, runtime, notice = n
     title: `${values.title ?? page?.data?.title ?? ''}`,
     slug: `${values.slug ?? page?.data?.slug ?? ''}`,
     body: `${values.body ?? page?.data?.body ?? page?.data?.content ?? ''}`,
-    status: toFormStatus(values.status ?? page?.data?.status)
+    publishedAt: toDateTimeLocal(values.publishedAt ?? page?.data?.publishedAt),
+    status: toFormStatus(values.status ?? page?.data?.status, values.publishedAt ?? page?.data?.publishedAt)
   };
   const previewLink = isEdit
     ? `/admin/preview/pages/${encodeURIComponent(id)}`
@@ -112,11 +141,17 @@ export const renderAdminPageFormPage = ({ mode, page = null, runtime, notice = n
             <p class="field-help">Used in the page URL, for example <code>/about-us</code>. Leave simple words with hyphens.</p>
           </div>
           <div>
-            <label for="status">Visibility</label>
+            <label for="status">Publish status</label>
             <select id="status" name="status">
               <option value="published"${mergedValues.status === 'published' ? ' selected' : ''}>Published (visible on website)</option>
               <option value="draft"${mergedValues.status === 'draft' ? ' selected' : ''}>Draft (hidden until published)</option>
             </select>
+            <p class="field-help">Draft pages are hidden. Published pages with a future publish date are scheduled and stay hidden until that time.</p>
+          </div>
+          <div>
+            <label for="publishedAt">Publish date and time (optional)</label>
+            <input id="publishedAt" name="publishedAt" type="datetime-local" value="${escapeHtml(mergedValues.publishedAt)}">
+            <p class="field-help">Uses your server timezone. If this is in the future and you publish, the page is scheduled and auto-publishes at that time.</p>
           </div>
           <div>
             <label for="body">Page content</label>
@@ -132,12 +167,8 @@ export const renderAdminPageFormPage = ({ mode, page = null, runtime, notice = n
         </p>
         <p class="field-help">${isEdit
     ? 'Preview unsaved changes opens your current editor content in the active theme without saving. Preview saved page opens the latest saved version.'
-    : 'Preview unsaved page opens your current draft buffer in the active theme without creating or saving a page.'}</p>
-      </form>
-      <script src="/admin/editor/tinymce/tinymce.min.js"></script>
-      <script src="/admin/editor/editor.js"></script>
-      <script>
-        initEditor('#body');
-      </script>`
+    : 'Preview unsaved page opens your current draft in the active theme before first save.'}
+        </p>
+      </form>`
   });
 };

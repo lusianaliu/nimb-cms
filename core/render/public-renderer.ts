@@ -1,4 +1,4 @@
-import { resolvePostPublishState } from '../content/publish-timing.ts';
+import { resolvePagePublishState, resolvePostPublishState } from '../content/publish-timing.ts';
 
 const DEFAULT_NAVIGATION = Object.freeze([
   Object.freeze({ label: 'Home', url: '/' }),
@@ -44,7 +44,10 @@ export const getPostBySlug = (runtime, slug) => listEntries(runtime, 'post', { i
   .filter(isPublicPost)
   .find((entry) => `${entry?.data?.slug ?? ''}` === `${slug}`);
 
+const isPublicPage = (entry) => resolvePagePublishState(entry).isPublic;
+
 export const getPageBySlug = (runtime, slug) => listEntries(runtime, 'page', { includeDrafts: false })
+  .filter(isPublicPage)
   .find((entry) => `${entry?.data?.slug ?? ''}` === `${slug}`);
 
 const resolveSettingsEntry = (runtime) => (runtime?.contentStore?.list?.('settings') ?? [])[0]?.data ?? {};

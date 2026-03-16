@@ -46,7 +46,7 @@ test('phase 148: content editing forms explain page/post purpose and preserve va
     assert.equal(pageFormResponse.status, 200);
     assert.equal(pageFormHtml.includes('Pages are best for long-lived website content.'), true);
     assert.equal(pageFormHtml.includes('Page URL slug'), true);
-    assert.equal(pageFormHtml.includes('Visibility'), true);
+    assert.equal(pageFormHtml.includes('Publish status'), true);
 
     const invalidPageResponse = await fetch(`http://127.0.0.1:${port}/admin/pages/new`, {
       method: 'POST',
