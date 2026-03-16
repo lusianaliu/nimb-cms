@@ -46,6 +46,10 @@ test('phase 207: verify classifies ready baseline when preflight has no FAIL fin
   assert.match(report.firstRunHandoff.immediateNextStep, /npx nimb/);
   assert.equal(report.firstRunHandoff.ifStartupFails.length >= 3, true);
   assert.equal(report.firstRunHandoff.environmentContexts.length, 3);
+  assert.match(report.firstRunHandoff.reachabilityTriage.whenToUse, /not reachable/i);
+  assert.equal(report.firstRunHandoff.reachabilityTriage.checklist.length >= 4, true);
+  assert.match(report.firstRunHandoff.reachabilityTriage.environmentSpecificBoundary, /cannot be universally verified/i);
+  assert.equal(report.firstRunHandoff.reachabilityTriage.escalateWhen.length >= 3, true);
   assert.equal(report.summary.fail, 0);
 });
 
@@ -67,6 +71,8 @@ test('phase 207: verify classifies stop-and-fix for non-escalation FAIL findings
   assert.match(formatted, /does not guarantee full runtime behavior/i);
   assert.match(formatted, /First-run startup handoff:/);
   assert.match(formatted, /illustrative, not exhaustive/i);
+  assert.match(formatted, /Post-startup reachability triage \(bounded\):/);
+  assert.match(formatted, /First separate startup from reachability/i);
 });
 
 test('phase 207: verify classifies escalation for known support-now blocker classes', async () => {
@@ -101,5 +107,7 @@ test('phase 207: canonical verify CLI supports --json and non-zero exit when bas
   assert.equal(Array.isArray(parsed.verifiedChecks), true);
   assert.equal(typeof parsed.firstRunHandoff?.immediateNextStep, 'string');
   assert.equal(Array.isArray(parsed.firstRunHandoff?.ifStartupFails), true);
+  assert.equal(Array.isArray(parsed.firstRunHandoff?.reachabilityTriage?.checklist), true);
+  assert.equal(typeof parsed.firstRunHandoff?.reachabilityTriage?.environmentSpecificBoundary, 'string');
   assert.equal(parsed.preflight.result, 'FAIL');
 });
