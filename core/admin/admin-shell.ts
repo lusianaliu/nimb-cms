@@ -90,6 +90,7 @@ export function renderAdminShell(ctx: AdminShellContext): string {
     .status-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.78rem; font-weight: 600; }
     .status-pill--draft { background: #fff7ed; color: #9a3412; }
     .status-pill--published { background: #ecfdf5; color: #166534; }
+    .status-pill--scheduled { background: #eff6ff; color: #1d4ed8; }
     .table-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .table-wrap { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .table-wrap td code, .table-wrap td a, .table-wrap th, .table-wrap td { word-break: break-word; }
