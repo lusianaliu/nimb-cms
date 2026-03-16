@@ -189,6 +189,33 @@ Post-startup reachability triage (bounded first-check path):
 
 Use this only when `npx nimb` appears to start, but expected site/admin URL is still unreachable.
 
+Local reachability doctor (canonical local-only expectation summary):
+
+```bash
+npx nimb doctor reachability
+```
+
+Use this command before escalating external routing concerns when startup appears healthy.
+It prints the expected local bind behavior, effective port source, and local URLs to test first (`127.0.0.1`/`localhost` + admin path).
+
+What this doctor proves:
+
+- expected local bind/port assumptions from current config + environment (`PORT` takes precedence),
+- concrete local URLs to test first from the same machine/process namespace,
+- compact support handoff facts (expected port/admin path/install-state context).
+
+What this doctor does **not** prove:
+
+- that Nimb is currently running at the moment you run doctor,
+- reverse proxy/shared-host panel/container publish-forward routing,
+- external/public DNS/TLS reachability.
+
+When to stop local retries and escalate:
+
+- local URLs from doctor are reachable but external/admin domain URL still fails,
+- runtime/process stays up and `verify` remains `READY_TO_TRY_RUN` after one bounded retry cycle,
+- routing policy is controlled by platform/panel/proxy settings you cannot inspect or change.
+
 1. **Separate startup from reachability first**
    - if `npx nimb` exits/crashes, treat it as startup/runtime failure and inspect startup output + `logs/runtime-error.log`.
 2. **Check the same host + bound port before external URLs**
@@ -217,7 +244,7 @@ What `verify` does **not** prove:
 When `verify` is not `READY_TO_TRY_RUN`, stop and fix/escalate first instead of repeatedly retrying startup.
 When `verify` is `READY_TO_TRY_RUN` but first startup/reachability still fails after one careful retry cycle, treat it as a runtime/deployment-layer issue and escalate with support handoff JSON.
 
-## 7) Start Nimb
+## 8) Start Nimb
 
 ```bash
 npx nimb
@@ -225,7 +252,7 @@ npx nimb
 
 Then open `/admin` for admin/setup flows.
 
-## 8) Optional runtime root override
+## 9) Optional runtime root override
 
 If a process manager starts Nimb outside project root, explicitly set project root:
 
