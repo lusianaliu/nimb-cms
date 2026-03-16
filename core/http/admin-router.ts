@@ -167,6 +167,65 @@ const toTextResponse = (statusCode: number, bodyText: string) => ({
   }
 });
 
+
+const toRenderableEntry = (entry) => {
+  const data = entry?.data ?? {};
+  const contentValue = data.content ?? data.body ?? '';
+
+  return Object.freeze({
+    title: `${data.title ?? 'Untitled'}`,
+    slug: `${data.slug ?? ''}`,
+    content: typeof contentValue === 'string' ? contentValue : JSON.stringify(contentValue),
+    updatedAt: entry?.updatedAt instanceof Date ? entry.updatedAt.toISOString() : `${entry?.updatedAt ?? ''}`
+  });
+};
+
+const isPublishedEntry = (entry) => `${entry?.data?.status ?? 'published'}`.trim().toLowerCase() !== 'draft';
+
+const queryEntries = (runtime, type: string, options: Record<string, unknown> = {}) => {
+  try {
+    const dbEntries = typeof runtime?.db?.query === 'function'
+      ? (runtime.db.query(type, options) ?? [])
+      : [];
+
+    if (dbEntries.length > 0) {
+      return dbEntries;
+    }
+
+    const queriedEntries = typeof runtime?.contentQuery?.list === 'function'
+      ? (runtime.contentQuery.list(type, options) ?? [])
+      : [];
+
+    if (queriedEntries.length > 0) {
+      return queriedEntries;
+    }
+
+    if (typeof runtime?.content?.list === 'function') {
+      return runtime.content.list(type) ?? [];
+    }
+
+    return [];
+  } catch {
+    return [];
+  }
+};
+
+const getNavigationPages = (runtime) => queryEntries(runtime, 'page', { sort: 'updatedAt desc', limit: 10 })
+  .filter(isPublishedEntry)
+  .filter((entry) => `${entry?.data?.slug ?? ''}` && `${entry?.data?.slug ?? ''}` !== 'home')
+  .slice(0, 5)
+  .map(toRenderableEntry);
+
+const addPreviewBanner = (html: string, title: string, message: string) => {
+  const banner = `<aside style="position:sticky;top:0;z-index:20;padding:10px 14px;background:#fffbeb;border-bottom:1px solid #f59e0b;color:#7c2d12;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"><strong>${title}</strong><span style="display:block;margin-top:2px;">${message}</span></aside>`;
+
+  if (html.includes('<body>')) {
+    return html.replace('<body>', `<body>${banner}`);
+  }
+
+  return `${banner}${html}`;
+};
+
 const parseFormBody = async (request) => {
   const chunks: Buffer[] = [];
 
@@ -341,6 +400,55 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
 
       if (context.path.startsWith('/admin-api/posts')) {
         return postController.dispatch(context);
+      }
+
+
+      const previewPageMatch = context.path.match(/^\/admin\/preview\/pages\/([^/]+)$/);
+      if (previewPageMatch && context.method === 'GET') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => {
+          const id = decodeURIComponent(previewPageMatch[1]);
+          const page = runtime.content.get('page', id);
+          if (!page) {
+            return toTextResponse(404, 'Page not found.');
+          }
+
+          const html = runtime?.themeRenderer?.renderTemplate?.('page', runtime, {
+            routePath: requestContext.path,
+            routeParams: { id },
+            pages: getNavigationPages(runtime),
+            page: toRenderableEntry(page)
+          }) ?? '';
+
+          return toHtmlResponse(addPreviewBanner(
+            html,
+            'Draft preview mode',
+            'This preview is available only to signed-in admins and does not make the page public.'
+          ));
+        });
+      }
+
+      const previewPostMatch = context.path.match(/^\/admin\/preview\/posts\/([^/]+)$/);
+      if (previewPostMatch && context.method === 'GET') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => {
+          const id = decodeURIComponent(previewPostMatch[1]);
+          const post = runtime.content.get('post', id);
+          if (!post) {
+            return toTextResponse(404, 'Post not found.');
+          }
+
+          const html = runtime?.themeRenderer?.renderTemplate?.('post-page', runtime, {
+            routePath: requestContext.path,
+            routeParams: { id },
+            pages: getNavigationPages(runtime),
+            post: toRenderableEntry(post)
+          }) ?? '';
+
+          return toHtmlResponse(addPreviewBanner(
+            html,
+            'Draft preview mode',
+            'This preview is available only to signed-in admins and does not make the post public.'
+          ));
+        });
       }
 
       if (context.path === '/admin/pages' && context.method === 'GET') {
