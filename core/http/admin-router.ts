@@ -427,7 +427,87 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
         });
       }
 
+
+      const unsavedPreviewPageMatch = context.path.match(/^\/admin\/preview\/pages\/([^/]+)\/unsaved$/);
+      if (unsavedPreviewPageMatch && context.method === 'POST') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
+          const id = decodeURIComponent(unsavedPreviewPageMatch[1]);
+          const page = runtime.content.get('page', id);
+          if (!page) {
+            return toTextResponse(404, 'Page not found.');
+          }
+
+          const formData = await parseFormBody(requestContext.request);
+          const body = `${formData.body ?? ''}`;
+          const previewPage = toRenderableEntry({
+            ...page,
+            data: {
+              ...page?.data,
+              title: `${formData.title ?? page?.data?.title ?? ''}`,
+              slug: `${formData.slug ?? page?.data?.slug ?? ''}`,
+              body,
+              content: body
+            }
+          });
+
+          const html = runtime?.themeRenderer?.renderTemplate?.('page', runtime, {
+            routePath: requestContext.path,
+            routeParams: { id, unsaved: '1' },
+            pages: getNavigationPages(runtime),
+            page: previewPage
+          }) ?? '';
+
+          return toHtmlResponse(addPreviewBanner(
+            html,
+            'Unsaved preview mode',
+            'You are previewing unsaved editor changes. This content is admin-only and was not saved or published.'
+          ));
+        });
+      }
+
       const previewPostMatch = context.path.match(/^\/admin\/preview\/posts\/([^/]+)$/);
+
+      const unsavedPreviewPostMatch = context.path.match(/^\/admin\/preview\/posts\/([^/]+)\/unsaved$/);
+      if (unsavedPreviewPostMatch && context.method === 'POST') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
+          const id = decodeURIComponent(unsavedPreviewPostMatch[1]);
+          const post = runtime.content.get('post', id);
+          if (!post) {
+            return toTextResponse(404, 'Post not found.');
+          }
+
+          const formData = await parseFormBody(requestContext.request);
+          const body = `${formData.body ?? ''}`;
+          const status = resolveStatusFromWorkflowAction(formData.workflowAction, formData.status);
+          const publishedAtRaw = status === 'draft' ? '' : `${formData.publishedAt ?? ''}`.trim();
+          const previewPost = toRenderableEntry({
+            ...post,
+            data: {
+              ...post?.data,
+              title: `${formData.title ?? post?.data?.title ?? ''}`,
+              slug: `${formData.slug ?? post?.data?.slug ?? ''}`,
+              body,
+              content: body,
+              status,
+              publishedAt: publishedAtRaw
+            }
+          });
+
+          const html = runtime?.themeRenderer?.renderTemplate?.('post-page', runtime, {
+            routePath: requestContext.path,
+            routeParams: { id, unsaved: '1' },
+            pages: getNavigationPages(runtime),
+            post: previewPost
+          }) ?? '';
+
+          return toHtmlResponse(addPreviewBanner(
+            html,
+            'Unsaved preview mode',
+            'You are previewing unsaved editor changes. This content is admin-only and was not saved or published.'
+          ));
+        });
+      }
+
       if (previewPostMatch && context.method === 'GET') {
         return (requestContext) => withAdminMiddleware(runtime, requestContext, () => {
           const id = decodeURIComponent(previewPostMatch[1]);

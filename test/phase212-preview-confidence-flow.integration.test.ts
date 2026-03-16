@@ -68,17 +68,19 @@ test('phase 212: admin-only preview routes render draft pages and posts without 
     const pageEditHtml = await pageEditResponse.text();
     assert.equal(pageEditResponse.status, 200);
     assert.equal(pageEditHtml.includes('/admin/preview/pages/'), true);
-    const pagePreviewMatch = pageEditHtml.match(/\/admin\/preview\/pages\/([^"\s<]+)/);
-    assert.ok(pagePreviewMatch);
+    const pagePreviewLink = [...pageEditHtml.matchAll(/\/admin\/preview\/pages\/([^"\s<]+)/g)]
+      .map((match) => match[0])
+      .find((value) => !value.endsWith('/unsaved'));
+    assert.ok(pagePreviewLink);
 
     const publicPageResponse = await fetch(`http://127.0.0.1:${port}/preview-about`, { redirect: 'manual' });
     assert.equal(publicPageResponse.status, 404);
 
-    const anonymousPagePreviewResponse = await fetch(`http://127.0.0.1:${port}/admin/preview/pages/${pagePreviewMatch[1]}`, { redirect: 'manual' });
+    const anonymousPagePreviewResponse = await fetch(`http://127.0.0.1:${port}${pagePreviewLink}`, { redirect: 'manual' });
     assert.equal(anonymousPagePreviewResponse.status, 302);
     assert.equal(anonymousPagePreviewResponse.headers.get('location'), '/admin/login');
 
-    const authedPagePreviewResponse = await fetch(`http://127.0.0.1:${port}/admin/preview/pages/${pagePreviewMatch[1]}`, {
+    const authedPagePreviewResponse = await fetch(`http://127.0.0.1:${port}${pagePreviewLink}`, {
       headers: { cookie: authCookie }
     });
     const authedPagePreviewHtml = await authedPagePreviewResponse.text();
@@ -115,13 +117,15 @@ test('phase 212: admin-only preview routes render draft pages and posts without 
     const postEditHtml = await postEditResponse.text();
     assert.equal(postEditResponse.status, 200);
     assert.equal(postEditHtml.includes('/admin/preview/posts/'), true);
-    const postPreviewMatch = postEditHtml.match(/\/admin\/preview\/posts\/([^"\s<]+)/);
-    assert.ok(postPreviewMatch);
+    const postPreviewLink = [...postEditHtml.matchAll(/\/admin\/preview\/posts\/([^"\s<]+)/g)]
+      .map((match) => match[0])
+      .find((value) => !value.endsWith('/unsaved'));
+    assert.ok(postPreviewLink);
 
     const publicPostResponse = await fetch(`http://127.0.0.1:${port}/blog/preview-launch`, { redirect: 'manual' });
     assert.equal(publicPostResponse.status, 404);
 
-    const authedPostPreviewResponse = await fetch(`http://127.0.0.1:${port}/admin/preview/posts/${postPreviewMatch[1]}`, {
+    const authedPostPreviewResponse = await fetch(`http://127.0.0.1:${port}${postPreviewLink}`, {
       headers: { cookie: authCookie }
     });
     const authedPostPreviewHtml = await authedPostPreviewResponse.text();

@@ -153,10 +153,11 @@ export const renderAdminPostFormPage = ({ mode, post = null, runtime, notice = n
         <p class="admin-form-actions">
           <button type="submit" name="workflowAction" value="save-draft">${isEdit ? 'Save draft changes' : 'Save as draft'}</button>
           <button type="submit" name="workflowAction" value="publish-now">${isEdit ? 'Publish changes' : 'Publish now'}</button>
+          ${isEdit ? `<button type="submit" formaction="/admin/preview/posts/${encodeURIComponent(id)}/unsaved" formmethod="post" formtarget="_blank" formnovalidate>Preview unsaved changes</button>` : ''}
           ${isEdit ? `<a class="button-link button-link--muted" href="${previewLink}" target="_blank" rel="noopener">Preview saved post</a>` : ''}
           <a class="button-link button-link--muted" href="/admin/posts">Cancel</a>
         </p>
-        ${isEdit ? '<p class="field-help">Preview opens the latest saved version in your active site theme. Unsaved changes are not included.</p>' : ''}
+        ${isEdit ? '<p class="field-help">Preview unsaved changes opens your current editor content in the active theme without saving. Preview saved post opens the latest saved version.</p>' : ''}
       </form>
       <script src="/admin/editor/tinymce/tinymce.min.js"></script>
       <script src="/admin/editor/editor.js"></script>
