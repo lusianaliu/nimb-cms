@@ -9,7 +9,7 @@ import { renderAdminPostFormPage, renderAdminPostsListPage } from '../admin/admi
 import { renderAdminSettingsPage } from '../admin/admin-settings-page.ts';
 import { createPageController } from './page-controller.ts';
 import { createPostController } from './post-controller.ts';
-import { resolvePostPublishState } from '../content/publish-timing.ts';
+import { resolvePagePublishState, resolvePostPublishState } from '../content/publish-timing.ts';
 import type { MiddlewareContext } from './middleware.ts';
 
 const defaultAdminShell = `<!doctype html>
@@ -181,7 +181,7 @@ const toRenderableEntry = (entry) => {
   });
 };
 
-const isPublishedEntry = (entry) => `${entry?.data?.status ?? 'published'}`.trim().toLowerCase() !== 'draft';
+const isPublishedEntry = (entry) => resolvePagePublishState(entry).isPublic;
 
 const queryEntries = (runtime, type: string, options: Record<string, unknown> = {}) => {
   try {
@@ -261,6 +261,21 @@ const resolveStatusFromWorkflowAction = (workflowAction: unknown, fallbackStatus
   return normalizeStatus(fallbackStatus);
 };
 
+
+const resolvePageNoticeSuffix = (status: string, publishedAt: string) => {
+  const publishState = resolvePagePublishState({
+    data: {
+      status,
+      publishedAt
+    }
+  });
+
+  return publishState.status === 'draft'
+    ? 'draft'
+    : publishState.status === 'scheduled'
+      ? 'scheduled'
+      : 'published';
+};
 
 const resolvePostNoticeSuffix = (status: string, publishedAt: string) => {
   const publishState = resolvePostPublishState({
@@ -635,12 +650,16 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
               ? { tone: 'success' as const, title: 'Draft saved', message: 'Your page draft was saved and is hidden from the public site.' }
               : noticeKey === 'created-published'
                 ? { tone: 'success' as const, title: 'Page published', message: 'Your page is now visible on the public site.' }
+              : noticeKey === 'created-scheduled'
+                ? { tone: 'success' as const, title: 'Page scheduled', message: 'Your page is scheduled and will stay hidden until its publish date/time.' }
             : noticeKey === 'updated'
               ? { tone: 'success' as const, title: 'Page saved', message: 'Your page changes were saved successfully.' }
               : noticeKey === 'updated-draft'
                 ? { tone: 'success' as const, title: 'Draft saved', message: 'Your page draft changes were saved.' }
                 : noticeKey === 'updated-published'
                   ? { tone: 'success' as const, title: 'Page published', message: 'Your page changes were published to the public site.' }
+                : noticeKey === 'updated-scheduled'
+                  ? { tone: 'success' as const, title: 'Page scheduled', message: 'Your page changes are scheduled and will stay hidden until their publish date/time.' }
               : noticeKey === 'deleted'
                 ? { tone: 'success' as const, title: 'Page deleted', message: 'The page was deleted.' }
                 : null;
@@ -661,6 +680,7 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
           const body = `${formData.body ?? ''}`;
           const normalizedSlug = slugify(`${formData.slug ?? ''}`.trim() || title);
           const status = resolveStatusFromWorkflowAction(formData.workflowAction, formData.status);
+          const publishedAtRaw = status === 'draft' ? '' : `${formData.publishedAt ?? ''}`.trim();
           const pages = runtime.content.list('page');
 
           const errors: string[] = [];
@@ -678,12 +698,12 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
             return toHtmlResponse(renderAdminPageFormPage({
               mode: 'new',
               runtime,
-              values: { title, slug: normalizedSlug, body, status },
+              values: { title, slug: normalizedSlug, body, status, publishedAt: publishedAtRaw },
               errors
             }));
           }
 
-          const payload = { title, slug: normalizedSlug, body, status };
+          const payload = { title, slug: normalizedSlug, body, status, publishedAt: publishedAtRaw };
           const apiResponse = await invokePageApi(pageController, {
             method: 'POST',
             path: '/admin-api/pages',
@@ -695,12 +715,13 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
             return toHtmlResponse(renderAdminPageFormPage({
               mode: 'new',
               runtime,
-              values: { title, slug: normalizedSlug, body, status },
+              values: { title, slug: normalizedSlug, body, status, publishedAt: publishedAtRaw },
               errors: [formatApiError(apiResponse, 'Failed to create page. Please review the form and try again.')]
             }));
           }
 
-          return toRedirectResponse(`/admin/pages?notice=${status === 'draft' ? 'created-draft' : 'created-published'}`);
+          const noticeSuffix = resolvePageNoticeSuffix(status, publishedAtRaw);
+          return toRedirectResponse(`/admin/pages?notice=created-${noticeSuffix}`);
         });
       }
 
@@ -741,6 +762,7 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
           const body = `${formData.body ?? ''}`;
           const normalizedSlug = slugify(`${formData.slug ?? ''}`.trim() || title);
           const status = resolveStatusFromWorkflowAction(formData.workflowAction, formData.status);
+          const publishedAtRaw = status === 'draft' ? '' : `${formData.publishedAt ?? ''}`.trim();
           const pages = runtime.content.list('page');
 
           const errors: string[] = [];
@@ -759,12 +781,12 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
               mode: 'edit',
               page,
               runtime,
-              values: { title, slug: normalizedSlug, body, status },
+              values: { title, slug: normalizedSlug, body, status, publishedAt: publishedAtRaw },
               errors
             }));
           }
 
-          const payload = { title, slug: normalizedSlug, body, status };
+          const payload = { title, slug: normalizedSlug, body, status, publishedAt: publishedAtRaw };
           const apiResponse = await invokePageApi(pageController, {
             method: 'PUT',
             path: `/admin-api/pages/${encodeURIComponent(id)}`,
@@ -777,12 +799,13 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
               mode: 'edit',
               page,
               runtime,
-              values: { title, slug: normalizedSlug, body, status },
+              values: { title, slug: normalizedSlug, body, status, publishedAt: publishedAtRaw },
               errors: [formatApiError(apiResponse, 'Failed to update page. Please review the form and try again.')]
             }));
           }
 
-          return toRedirectResponse(`/admin/pages?notice=${status === 'draft' ? 'updated-draft' : 'updated-published'}`);
+          const noticeSuffix = resolvePageNoticeSuffix(status, publishedAtRaw);
+          return toRedirectResponse(`/admin/pages?notice=updated-${noticeSuffix}`);
         });
       }
 

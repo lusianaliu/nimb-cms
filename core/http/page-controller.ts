@@ -5,6 +5,7 @@ type PagePayload = {
   title?: unknown,
   slug?: unknown,
   body?: unknown,
+  publishedAt?: unknown,
   status?: unknown
 };
 
@@ -46,6 +47,7 @@ const normalizePageInput = (runtime, payload: PagePayload) => {
   const title = `${payload?.title ?? ''}`.trim();
   const slug = `${payload?.slug ?? ''}`.trim();
   const body = payload?.body;
+  const publishedAt = `${payload?.publishedAt ?? ''}`.trim();
   const status = `${payload?.status ?? ''}`.trim().toLowerCase() === 'draft' ? 'draft' : 'published';
 
   if (!title || !slug) {
@@ -60,12 +62,28 @@ const normalizePageInput = (runtime, payload: PagePayload) => {
     };
   }
 
+  if (publishedAt) {
+    const parsed = new Date(publishedAt);
+    if (Number.isNaN(parsed.getTime())) {
+      return {
+        valid: false,
+        error: jsonResponse({
+          error: {
+            code: 'INVALID_PAGE_FIELDS',
+            message: 'Field "publishedAt" must be a valid datetime.'
+          }
+        }, { statusCode: 400 })
+      };
+    }
+  }
+
   return {
     valid: true,
     data: {
       title,
       slug,
       ...(typeof body === 'undefined' ? {} : (hasField(runtime, 'page', 'content') ? { content: `${body}` } : { body: `${body}` })),
+      ...(publishedAt ? (hasField(runtime, 'page', 'publishedAt') ? { publishedAt: new Date(publishedAt) } : {}) : {}),
       ...(hasField(runtime, 'page', 'status') ? { status } : {})
     }
   };

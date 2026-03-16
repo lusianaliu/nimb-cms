@@ -1,5 +1,5 @@
 import { createRouter } from './router.ts';
-import { resolvePostPublishState } from '../content/publish-timing.ts';
+import { resolvePagePublishState, resolvePostPublishState } from '../content/publish-timing.ts';
 
 const toHtmlResponse = (html: string, statusCode = 200) => ({
   statusCode,
@@ -25,7 +25,7 @@ const toRenderableEntry = (entry) => {
   });
 };
 
-const isPublishedPageEntry = (entry) => `${entry?.data?.status ?? 'published'}`.trim().toLowerCase() !== 'draft';
+const isPublishedPageEntry = (entry) => resolvePagePublishState(entry).isPublic;
 
 const isPublicPostEntry = (entry) => resolvePostPublishState(entry).isPublic;
 
