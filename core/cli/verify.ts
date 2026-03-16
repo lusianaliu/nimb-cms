@@ -15,6 +15,14 @@ export type BaselineVerificationReport = {
   projectRoot: string;
   readiness: BaselineReadiness;
   recommendation: string;
+  firstRunHandoff: {
+    immediateNextStep: string;
+    meaningOfReady: string;
+    notGuaranteed: string;
+    ifStartupFails: string[];
+    environmentContexts: string[];
+    escalationWhen: string[];
+  };
   summary: {
     pass: number;
     warn: number;
@@ -75,6 +83,24 @@ export const deriveBaselineVerificationReport = (preflight: PreflightReport): Ba
       ? 'Baseline is not verified. Stop and fix FAIL findings first, then re-run: npx nimb verify'
       : 'Baseline is outside safe operator assumptions for self-service repair. Escalate with JSON handoff: npx nimb preflight --json > nimb-preflight-report.json';
 
+  const immediateNextStep = readiness === 'READY_TO_TRY_RUN'
+    ? 'Run startup now from this project root: npx nimb'
+    : readiness === 'STOP_AND_FIX_FIRST'
+      ? 'Do not start yet. Fix FAIL findings, then re-run: npx nimb verify'
+      : 'Do not keep retrying startup. Export JSON and escalate now: npx nimb preflight --json > nimb-preflight-report.json';
+
+  const ifStartupFails = [
+    'Re-run baseline check once: npx nimb verify',
+    'If verify is no longer READY_TO_TRY_RUN, fix reported FAIL findings first.',
+    'If verify stays READY_TO_TRY_RUN but startup/reachability still fails, treat as runtime/deployment-layer issue and escalate with preflight JSON handoff.'
+  ];
+
+  const environmentContexts = [
+    'Local/dev-like process run: try npx nimb in the project root and open /admin after startup.',
+    'Container/process-manager/proxy context: verify app process starts first, then confirm host/port/proxy route actually forwards traffic to Nimb.',
+    'Shared-host/panel-like context: platform policy may control writable paths, process model, or routing; escalate when those controls block startup/reachability.'
+  ];
+
   const verifiedChecks: VerificationCheck[] = [
     {
       id: 'project-root',
@@ -122,6 +148,18 @@ export const deriveBaselineVerificationReport = (preflight: PreflightReport): Ba
     projectRoot: preflight.projectRoot,
     readiness,
     recommendation,
+    firstRunHandoff: {
+      immediateNextStep,
+      meaningOfReady: 'READY_TO_TRY_RUN means baseline preflight assumptions passed right now and a first startup attempt is justified.',
+      notGuaranteed: 'It does not prove full runtime behavior, plugin/theme correctness, or platform-specific routing/proxy policy.',
+      ifStartupFails,
+      environmentContexts,
+      escalationWhen: [
+        'Startup or reachability still fails after one careful verify + startup retry cycle.',
+        'Port/proxy/process policy is managed by container, host panel, or platform and you cannot change it directly.',
+        'JSON/state values or filesystem ownership constraints remain unclear after one targeted fix attempt.'
+      ]
+    },
     summary: preflight.summary,
     verifiedChecks,
     notVerified: [
@@ -173,6 +211,24 @@ export const formatBaselineVerificationReport = (report: BaselineVerificationRep
   }
 
   lines.push('');
+  lines.push('First-run startup handoff:');
+  lines.push(`- Next step: ${report.firstRunHandoff.immediateNextStep}`);
+  lines.push(`- What READY_TO_TRY_RUN means: ${report.firstRunHandoff.meaningOfReady}`);
+  lines.push(`- What it does not prove: ${report.firstRunHandoff.notGuaranteed}`);
+  lines.push('- If startup still fails:');
+  for (const step of report.firstRunHandoff.ifStartupFails) {
+    lines.push(`  - ${step}`);
+  }
+  lines.push('- Common deployment contexts (illustrative, not exhaustive):');
+  for (const context of report.firstRunHandoff.environmentContexts) {
+    lines.push(`  - ${context}`);
+  }
+  lines.push('- Escalate instead of blind retries when:');
+  for (const boundary of report.firstRunHandoff.escalationWhen) {
+    lines.push(`  - ${boundary}`);
+  }
+
+  lines.push('');
   lines.push('If not ready: fix FAIL findings with setup/preflight guidance, then re-run verify.');
   lines.push('JSON handoff for support: npx nimb preflight --json > nimb-preflight-report.json');
 
@@ -183,6 +239,7 @@ export const formatBaselineVerificationReportJson = (report: BaselineVerificatio
   projectRoot: report.projectRoot,
   readiness: report.readiness,
   recommendation: report.recommendation,
+  firstRunHandoff: report.firstRunHandoff,
   summary: report.summary,
   verifiedChecks: report.verifiedChecks,
   notVerified: report.notVerified,
