@@ -170,6 +170,21 @@ How to interpret baseline readiness:
 - `STOP_AND_FIX_FIRST`: baseline assumptions are not yet satisfied; fix blockers first, then re-run `verify`.
 - `ESCALATE_NOW`: blocker class is outside safe self-service assumptions (for example persistent JSON/state uncertainty or platform-controlled port/policy blockers); export preflight JSON and involve technical help.
 
+First-run handoff immediately after `READY_TO_TRY_RUN`:
+
+1. Run startup now from the same project root: `npx nimb`
+2. Treat this as a justified first startup attempt, not as full deployment proof.
+3. If startup or reachability still fails, run one careful re-check cycle:
+   - `npx nimb verify`
+   - if no longer `READY_TO_TRY_RUN`, fix reported FAIL findings first;
+   - if still `READY_TO_TRY_RUN` but startup/reachability fails, escalate with JSON handoff.
+
+Common deployment contexts (illustrative, not exhaustive):
+
+- **Local/dev-like run**: start with `npx nimb`, then open `/admin`.
+- **Container/process-manager/proxy run**: confirm both app startup and upstream forwarding to Nimb host/port.
+- **Shared-host/panel-like run**: when path ownership, process model, or routing policy is platform-controlled, escalate instead of blind retries.
+
 What `verify` proves:
 
 - project root resolves correctly,
@@ -184,6 +199,7 @@ What `verify` does **not** prove:
 - host/container routing and proxy behavior under every platform policy.
 
 When `verify` is not `READY_TO_TRY_RUN`, stop and fix/escalate first instead of repeatedly retrying startup.
+When `verify` is `READY_TO_TRY_RUN` but first startup/reachability still fails after one careful retry cycle, treat it as a runtime/deployment-layer issue and escalate with support handoff JSON.
 
 ## 7) Start Nimb
 
