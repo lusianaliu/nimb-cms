@@ -94,6 +94,22 @@ Common manual fixes before retrying:
 - **Port conflicts**: change `PORT` / `config.server.port`, or stop the process that is currently using the port.
 - **Config errors**: fix invalid JSON or invalid values in `config/nimb.config.json`.
 
+Environment fix playbooks in preflight output:
+
+- When preflight sees blocking findings that match known environment failure patterns, it now prints an **Environment fix playbooks** section.
+- These playbooks bridge from finding category/code to practical action with:
+  - typical causes,
+  - bounded command examples,
+  - explicit retry step,
+  - escalation guidance.
+- Playbooks are intentionally labeled as **common examples, not universal guarantees**.
+- Commands shown are illustrative Linux-style operator examples and must be reviewed before running in your own host/container/panel context.
+
+Current high-payoff playbook focus:
+
+- **Filesystem permission/ownership blockers** (`required-directory-writable`, `required-directory-parent`) include a runtime write-access reset playbook for `data/*` and `logs`.
+- This targets the most common diagnosis-to-action gap in deployment preflight: operators know write access failed, but do not know a concrete first command sequence to try safely.
+
 
 Support/debug handoff output:
 
@@ -102,6 +118,7 @@ npx nimb preflight --json > nimb-preflight-report.json
 ```
 
 Use this JSON report when sharing blockers with a technical helper. It includes canonical findings, grouped blocking categories, grouped warning categories, and the retry command.
+It also includes any matched `environmentFixPlaybooks` entries so support can see the same practical examples and escalation notes.
 
 When to stop and fix before retrying:
 

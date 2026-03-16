@@ -60,6 +60,17 @@ export type RetryDecisionPath = {
 
 type RemediationCategory = 'Project layout' | 'Filesystem permissions' | 'Configuration' | 'Network/port binding' | 'Install-state data' | 'Other';
 
+type EnvironmentFixPlaybook = {
+  id: string;
+  title: string;
+  categories: RemediationCategory[];
+  findingCodes: string[];
+  typicalCauses: string[];
+  commonCommands: string[];
+  retryStep: string;
+  escalation: string;
+};
+
 const REMEDIATION_CATEGORY_PRIORITY: RemediationCategory[] = [
   'Project layout',
   'Filesystem permissions',
@@ -105,6 +116,28 @@ const remediationPlaybook: Record<RemediationCategory, string> = {
   'Install-state data': 'Ensure `data/system/config.json` exists as valid JSON and is readable by the runtime user.',
   Other: 'Review finding details and resolve the blocker before startup.'
 };
+
+const ENVIRONMENT_FIX_PLAYBOOKS: EnvironmentFixPlaybook[] = [
+  {
+    id: 'linux-runtime-write-access',
+    title: 'Linux runtime write-access reset for required Nimb paths',
+    categories: ['Filesystem permissions'],
+    findingCodes: ['required-directory-writable', 'required-directory-parent'],
+    typicalCauses: [
+      'Project files were created by a different OS user than the runtime user.',
+      'Parent directory exists but runtime user has no write bit on data/ or logs/ paths.',
+      'Deployment copy preserved restrictive ownership from build machine artifacts.'
+    ],
+    commonCommands: [
+      'ls -ld data data/system data/content data/uploads logs',
+      'id -un',
+      'sudo chown -R <runtime-user>:<runtime-group> data logs',
+      'sudo chmod -R u+rwX,g+rwX data logs'
+    ],
+    retryStep: 'After ownership/permissions are corrected, run: npx nimb preflight',
+    escalation: 'If ownership is managed by a hosting panel/container policy, stop and ask hosting support for writable access to data/* and logs for the runtime account.'
+  }
+];
 
 const sortCategoryEntries = (entries: [RemediationCategory, PreflightFinding[]][]) => entries.sort((left, right) => {
   const leftPriority = REMEDIATION_CATEGORY_PRIORITY.indexOf(left[0]);
@@ -191,6 +224,43 @@ const buildRetrySummaryLines = (report: PreflightReport) => {
   return lines;
 };
 
+const deriveEnvironmentFixPlaybooks = (report: PreflightReport): EnvironmentFixPlaybook[] => {
+  const blockingCodes = new Set(report.findings.filter((finding) => finding.severity === 'FAIL').map((finding) => finding.code));
+  const blockingCategories = new Set(groupFindingsByCategory(report.findings.filter((finding) => finding.severity === 'FAIL')).map(([category]) => category));
+
+  return ENVIRONMENT_FIX_PLAYBOOKS.filter((playbook) => {
+    const categoryMatch = playbook.categories.some((category) => blockingCategories.has(category));
+    const codeMatch = playbook.findingCodes.some((code) => blockingCodes.has(code));
+    return categoryMatch || codeMatch;
+  });
+};
+
+const buildEnvironmentFixPlaybookLines = (report: PreflightReport) => {
+  const playbooks = deriveEnvironmentFixPlaybooks(report);
+  if (playbooks.length === 0) {
+    return [];
+  }
+
+  const lines: string[] = [];
+  lines.push('Environment fix playbooks (common examples, not universal guarantees):');
+  for (const playbook of playbooks) {
+    lines.push(`- ${playbook.title} (${playbook.id})`);
+    lines.push('  typical causes:');
+    for (const cause of playbook.typicalCauses) {
+      lines.push(`    - ${cause}`);
+    }
+    lines.push('  common command examples (review before running):');
+    for (const command of playbook.commonCommands) {
+      lines.push(`    - ${command}`);
+    }
+    lines.push(`  retry: ${playbook.retryStep}`);
+    lines.push(`  escalation: ${playbook.escalation}`);
+  }
+
+  lines.push('');
+  return lines;
+};
+
 const SUPPORT_NOW_FAIL_CODES = new Set([
   'config-invalid',
   'install-state-invalid-json',
@@ -247,6 +317,7 @@ export const formatPreflightReportJson = (report: PreflightReport) => {
   const warnGroups = groupFindingsByCategory(warnFindings);
   const overall = report.summary.fail > 0 ? 'FAIL' : report.summary.warn > 0 ? 'WARN' : 'PASS';
   const decisionPath = deriveRetryDecisionPath(report);
+  const environmentFixPlaybooks = deriveEnvironmentFixPlaybooks(report);
 
   return `${JSON.stringify({
     projectRoot: report.projectRoot,
@@ -265,6 +336,7 @@ export const formatPreflightReportJson = (report: PreflightReport) => {
         operatorNextStep: remediationPlaybook[category],
         findings: findings.map((finding) => ({ check: finding.check, code: finding.code, next: finding.next }))
       })),
+      environmentFixPlaybooks,
       retryCommand: 'npx nimb preflight',
       decisionPath
     },
@@ -704,6 +776,7 @@ export const formatPreflightReport = (report: PreflightReport) => {
   const warnFindings = report.findings.filter((finding) => finding.severity === 'WARN');
   pushGroupedFindings({ lines, title: 'Manual action required (FAIL findings):', findings: failFindings });
   pushGroupedFindings({ lines, title: 'Warnings to review (WARN findings):', findings: warnFindings });
+  lines.push(...buildEnvironmentFixPlaybookLines(report));
   lines.push(...buildRetrySummaryLines(report));
 
   const overall = report.summary.fail > 0 ? 'FAIL' : report.summary.warn > 0 ? 'WARN' : 'PASS';

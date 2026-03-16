@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import net from 'node:net';
-import { formatPreflightReport, runPreflightDiagnostics } from '../core/cli/preflight.ts';
+import { formatPreflightReport, formatPreflightReportJson, runPreflightDiagnostics } from '../core/cli/preflight.ts';
 
 const mkProjectRoot = () => fs.mkdtempSync(path.join(os.tmpdir(), 'nimb-phase181-'));
 
@@ -223,4 +223,59 @@ test('phase 203: preflight decision path recommends rerunning setup for missing 
   assert.match(formatted, /Decision path:/);
   assert.match(formatted, /Re-run setup now: FAIL findings are missing required directories that setup can create safely\./);
   assert.match(formatted, /command: npx nimb setup/);
+});
+
+test('phase 204: preflight report includes filesystem environment fix playbook for permission blockers', () => {
+  const report = {
+    projectRoot: '/tmp/nimb-phase-204',
+    findings: [
+      {
+        severity: 'FAIL',
+        code: 'required-directory-writable',
+        check: 'logs writable',
+        detail: 'logs directory is not writable',
+        why: 'Nimb requires runtime writes for logs.',
+        next: 'Grant runtime write access to logs and retry.'
+      }
+    ],
+    summary: {
+      pass: 0,
+      warn: 0,
+      fail: 1
+    },
+    exitCode: 1
+  } as const;
+
+  const formatted = formatPreflightReport(report);
+  assert.match(formatted, /Environment fix playbooks \(common examples, not universal guarantees\):/);
+  assert.match(formatted, /Linux runtime write-access reset for required Nimb paths/);
+  assert.match(formatted, /sudo chown -R <runtime-user>:<runtime-group> data logs/);
+  assert.match(formatted, /review before running/);
+});
+
+test('phase 204: preflight --json includes environment fix playbooks for support handoff', () => {
+  const report = {
+    projectRoot: '/tmp/nimb-phase-204',
+    findings: [
+      {
+        severity: 'FAIL',
+        code: 'required-directory-parent',
+        check: 'data/content parent path writable',
+        detail: 'nearest parent path is not writable',
+        why: 'Nimb requires runtime writes for content persistence.',
+        next: 'Grant write access and retry.'
+      }
+    ],
+    summary: {
+      pass: 0,
+      warn: 0,
+      fail: 1
+    },
+    exitCode: 1
+  } as const;
+
+  const parsed = JSON.parse(formatPreflightReportJson(report));
+  assert.equal(Array.isArray(parsed.retrySummary.environmentFixPlaybooks), true);
+  assert.equal(parsed.retrySummary.environmentFixPlaybooks[0].id, 'linux-runtime-write-access');
+  assert.match(parsed.retrySummary.environmentFixPlaybooks[0].escalation, /hosting support/);
 });
