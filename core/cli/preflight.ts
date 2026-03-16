@@ -136,6 +136,46 @@ const ENVIRONMENT_FIX_PLAYBOOKS: EnvironmentFixPlaybook[] = [
     ],
     retryStep: 'After ownership/permissions are corrected, run: npx nimb preflight',
     escalation: 'If ownership is managed by a hosting panel/container policy, stop and ask hosting support for writable access to data/* and logs for the runtime account.'
+  },
+  {
+    id: 'startup-port-conflict-triage',
+    title: 'Startup port conflict triage for local/container deployments',
+    categories: ['Network/port binding'],
+    findingCodes: ['startup-port-invalid-or-unavailable'],
+    typicalCauses: [
+      'Another app/process manager is already bound to the configured port.',
+      'A stale dev server or prior Nimb instance is still running in the same host/container.',
+      'PORT environment variable overrides config.server.port with a value that is blocked or invalid.'
+    ],
+    commonCommands: [
+      'echo "$PORT"',
+      'cat config/nimb.config.json',
+      'lsof -iTCP -sTCP:LISTEN -n -P | grep ":<port>"',
+      'ss -ltnp | grep ":<port>"',
+      'PORT=3100 npx nimb preflight'
+    ],
+    retryStep: 'After selecting a free port or stopping the conflicting process, run: npx nimb preflight',
+    escalation: 'If platform policy reserves or remaps ports and you cannot choose a known-free port, ask hosting/platform support for the allowed inbound bind port strategy.'
+  },
+  {
+    id: 'json-state-recovery-config-install',
+    title: 'Config/install-state JSON recovery (safe backup + validation first)',
+    categories: ['Configuration', 'Install-state data'],
+    findingCodes: ['config-invalid', 'install-state-invalid-json'],
+    typicalCauses: [
+      'Manual edits left trailing commas, comments, or partial JSON content.',
+      'Deployment copy/merge left truncated config or install-state files.',
+      'A text editor or script wrote non-JSON data to config/install-state paths.'
+    ],
+    commonCommands: [
+      'cp config/nimb.config.json config/nimb.config.json.bak.$(date +%Y%m%d%H%M%S)',
+      'cp data/system/config.json data/system/config.json.bak.$(date +%Y%m%d%H%M%S)',
+      'node -e "JSON.parse(require(\'node:fs\').readFileSync(\'config/nimb.config.json\',\'utf8\')); console.log(\'config JSON valid\')"',
+      'node -e "JSON.parse(require(\'node:fs\').readFileSync(\'data/system/config.json\',\'utf8\')); console.log(\'install-state JSON valid\')"',
+      'npx nimb preflight'
+    ],
+    retryStep: 'After restoring valid JSON (or replacing from a known-good backup/template), run: npx nimb preflight',
+    escalation: 'If you do not have a known-good backup or are unsure which keys are safe to change, stop and ask technical support before editing production state further.'
   }
 ];
 
@@ -225,12 +265,13 @@ const buildRetrySummaryLines = (report: PreflightReport) => {
 };
 
 const deriveEnvironmentFixPlaybooks = (report: PreflightReport): EnvironmentFixPlaybook[] => {
-  const blockingCodes = new Set(report.findings.filter((finding) => finding.severity === 'FAIL').map((finding) => finding.code));
-  const blockingCategories = new Set(groupFindingsByCategory(report.findings.filter((finding) => finding.severity === 'FAIL')).map(([category]) => category));
+  const actionableFindings = report.findings.filter((finding) => finding.severity === 'FAIL' || finding.severity === 'WARN');
+  const actionableCodes = new Set(actionableFindings.map((finding) => finding.code));
+  const actionableCategories = new Set(groupFindingsByCategory(actionableFindings).map(([category]) => category));
 
   return ENVIRONMENT_FIX_PLAYBOOKS.filter((playbook) => {
-    const categoryMatch = playbook.categories.some((category) => blockingCategories.has(category));
-    const codeMatch = playbook.findingCodes.some((code) => blockingCodes.has(code));
+    const categoryMatch = playbook.categories.some((category) => actionableCategories.has(category));
+    const codeMatch = playbook.findingCodes.some((code) => actionableCodes.has(code));
     return categoryMatch || codeMatch;
   });
 };

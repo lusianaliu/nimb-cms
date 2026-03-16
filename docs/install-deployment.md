@@ -108,8 +108,15 @@ Environment fix playbooks in preflight output:
 Current high-payoff playbook focus:
 
 - **Filesystem permission/ownership blockers** (`required-directory-writable`, `required-directory-parent`) include a runtime write-access reset playbook for `data/*` and `logs`.
-- This targets the most common diagnosis-to-action gap in deployment preflight: operators know write access failed, but do not know a concrete first command sequence to try safely.
+- **Network/port binding blockers** (`startup-port-invalid-or-unavailable`) include a bounded port-conflict triage playbook (check active port usage, verify effective configured port, retry with a known-free port).
+- **Config/install-state JSON corruption blockers** (`config-invalid`, `install-state-invalid-json`) include a safe recovery playbook focused on backup-first and JSON validation checks before retry.
+- These playbooks target the highest-payoff diagnosis-to-action gaps after Phase 204: operators now get concrete, review-before-running examples for the most common next steps without pretending cross-host automation is universal.
 
+Safety expectations for playbook command examples:
+
+- Commands are illustrative examples for common Linux/container workflows, not host-agnostic guarantees.
+- Stop before destructive edits: create backups of config/install-state JSON first.
+- If you are unsure about expected keys/values in production JSON, escalate to technical support rather than repeatedly rewriting files.
 
 Support/debug handoff output:
 
