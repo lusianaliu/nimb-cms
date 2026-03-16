@@ -21,6 +21,12 @@ export type BaselineVerificationReport = {
     notGuaranteed: string;
     ifStartupFails: string[];
     environmentContexts: string[];
+    reachabilityTriage: {
+      whenToUse: string;
+      checklist: string[];
+      environmentSpecificBoundary: string;
+      escalateWhen: string[];
+    };
     escalationWhen: string[];
   };
   summary: {
@@ -101,6 +107,13 @@ export const deriveBaselineVerificationReport = (preflight: PreflightReport): Ba
     'Shared-host/panel-like context: platform policy may control writable paths, process model, or routing; escalate when those controls block startup/reachability.'
   ];
 
+  const reachabilityTriageChecklist = [
+    'First separate startup from reachability: if npx nimb exits/crashes, treat as startup/runtime failure and inspect startup error + logs/runtime-error.log.',
+    'If process stays up and reports Ready/Port, check the same host first (for example http://127.0.0.1:<port>/ and /admin).',
+    'If local host:port works but external/admin URL does not, treat as environment routing mismatch (proxy, panel domain mapping, container port publish/forward).',
+    'Run one bounded re-check cycle only: npx nimb verify, then one startup retry. If still READY_TO_TRY_RUN but unreachable, escalate with JSON handoff instead of repeated retries.'
+  ];
+
   const verifiedChecks: VerificationCheck[] = [
     {
       id: 'project-root',
@@ -154,6 +167,16 @@ export const deriveBaselineVerificationReport = (preflight: PreflightReport): Ba
       notGuaranteed: 'It does not prove full runtime behavior, plugin/theme correctness, or platform-specific routing/proxy policy.',
       ifStartupFails,
       environmentContexts,
+      reachabilityTriage: {
+        whenToUse: 'Use this when Nimb appears to start but the site/admin URL is still not reachable as expected.',
+        checklist: reachabilityTriageChecklist,
+        environmentSpecificBoundary: 'External reachability depends on deployment environment routing/policy and cannot be universally verified by this command.',
+        escalateWhen: [
+          'Process stays up, verify remains READY_TO_TRY_RUN, and expected URL is still unreachable after one careful retry cycle.',
+          'You cannot inspect or change proxy/panel/container publish-forward settings directly in your environment.',
+          'You cannot explain host/port route mapping with confidence after the bounded checklist.'
+        ]
+      },
       escalationWhen: [
         'Startup or reachability still fails after one careful verify + startup retry cycle.',
         'Port/proxy/process policy is managed by container, host panel, or platform and you cannot change it directly.',
@@ -222,6 +245,17 @@ export const formatBaselineVerificationReport = (report: BaselineVerificationRep
   lines.push('- Common deployment contexts (illustrative, not exhaustive):');
   for (const context of report.firstRunHandoff.environmentContexts) {
     lines.push(`  - ${context}`);
+  }
+  lines.push('- Post-startup reachability triage (bounded):');
+  lines.push(`  - When to use: ${report.firstRunHandoff.reachabilityTriage.whenToUse}`);
+  lines.push('  - Checklist:');
+  for (const item of report.firstRunHandoff.reachabilityTriage.checklist) {
+    lines.push(`    - ${item}`);
+  }
+  lines.push(`  - Environment boundary: ${report.firstRunHandoff.reachabilityTriage.environmentSpecificBoundary}`);
+  lines.push('  - Escalate when:');
+  for (const item of report.firstRunHandoff.reachabilityTriage.escalateWhen) {
+    lines.push(`    - ${item}`);
   }
   lines.push('- Escalate instead of blind retries when:');
   for (const boundary of report.firstRunHandoff.escalationWhen) {

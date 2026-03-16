@@ -163,7 +163,12 @@ const printOperatorGuide = ({ projectRoot }) => {
   process.stdout.write('   - READY_TO_TRY_RUN means baseline assumptions are satisfied (not a full runtime guarantee).\n\n');
   process.stdout.write('7) Start Nimb\n');
   process.stdout.write('   - npx nimb\n');
-  process.stdout.write('   - Open /admin after startup to continue setup/content operations.\n');
+  process.stdout.write('   - Open /admin after startup to continue setup/content operations.\n\n');
+  process.stdout.write('8) If startup looks successful but site/admin is unreachable\n');
+  process.stdout.write('   - If process exits/crashes: treat as startup failure and inspect startup output + logs/runtime-error.log.\n');
+  process.stdout.write('   - If process stays up: check local host/port first, then treat external URL mismatch as proxy/panel/container routing issue.\n');
+  process.stdout.write('   - Run one bounded retry cycle: npx nimb verify, then one startup retry.\n');
+  process.stdout.write('   - If still READY_TO_TRY_RUN but unreachable, escalate with: npx nimb preflight --json > nimb-preflight-report.json\n');
 };
 
 

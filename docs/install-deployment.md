@@ -185,6 +185,22 @@ Common deployment contexts (illustrative, not exhaustive):
 - **Container/process-manager/proxy run**: confirm both app startup and upstream forwarding to Nimb host/port.
 - **Shared-host/panel-like run**: when path ownership, process model, or routing policy is platform-controlled, escalate instead of blind retries.
 
+Post-startup reachability triage (bounded first-check path):
+
+Use this only when `npx nimb` appears to start, but expected site/admin URL is still unreachable.
+
+1. **Separate startup from reachability first**
+   - if `npx nimb` exits/crashes, treat it as startup/runtime failure and inspect startup output + `logs/runtime-error.log`.
+2. **Check the same host + bound port before external URLs**
+   - if startup reported `Port: <n>`, check `http://127.0.0.1:<n>/` and `/admin` from that environment first.
+3. **If local host:port works but expected external URL does not**
+   - treat this as likely environment routing mismatch (reverse proxy route, hosting panel domain mapping, or container publish/forward mismatch).
+4. **Run one bounded retry cycle only**
+   - `npx nimb verify`, then one startup retry.
+   - if verify is still `READY_TO_TRY_RUN` but unreachable remains, stop blind retries and escalate with JSON handoff.
+
+Boundary note: `verify` can validate baseline startup assumptions, but it cannot universally prove external reachability across every proxy/panel/container environment.
+
 What `verify` proves:
 
 - project root resolves correctly,
