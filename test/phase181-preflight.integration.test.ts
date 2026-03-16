@@ -279,3 +279,93 @@ test('phase 204: preflight --json includes environment fix playbooks for support
   assert.equal(parsed.retrySummary.environmentFixPlaybooks[0].id, 'linux-runtime-write-access');
   assert.match(parsed.retrySummary.environmentFixPlaybooks[0].escalation, /hosting support/);
 });
+
+test('phase 205: preflight report includes startup port conflict playbook for startup-port failures', () => {
+  const report = {
+    projectRoot: '/tmp/nimb-phase-205',
+    findings: [
+      {
+        severity: 'FAIL',
+        code: 'startup-port-invalid-or-unavailable',
+        check: 'Startup port availability',
+        detail: 'port is unavailable: 3000',
+        why: 'Nimb startup requires an available bind port.',
+        next: 'Change port or stop conflicting process.'
+      }
+    ],
+    summary: {
+      pass: 0,
+      warn: 0,
+      fail: 1
+    },
+    exitCode: 1
+  } as const;
+
+  const formatted = formatPreflightReport(report);
+  assert.match(formatted, /Startup port conflict triage for local\/container deployments/);
+  assert.match(formatted, /lsof -iTCP -sTCP:LISTEN -n -P \| grep ":<port>"/);
+  assert.match(formatted, /common examples, not universal guarantees/);
+});
+
+test('phase 205: preflight report includes JSON recovery playbook for install-state invalid JSON warnings', () => {
+  const report = {
+    projectRoot: '/tmp/nimb-phase-205',
+    findings: [
+      {
+        severity: 'WARN',
+        code: 'install-state-invalid-json',
+        check: 'Install-state config JSON',
+        detail: 'Install-state file exists but is not valid JSON',
+        why: 'Install-state file must remain valid JSON for canonical mode decisions.',
+        next: 'Fix install-state JSON and retry.'
+      }
+    ],
+    summary: {
+      pass: 0,
+      warn: 1,
+      fail: 0
+    },
+    exitCode: 0
+  } as const;
+
+  const formatted = formatPreflightReport(report);
+  assert.match(formatted, /Config\/install-state JSON recovery \(safe backup \+ validation first\)/);
+  assert.match(formatted, /cp data\/system\/config\.json data\/system\/config\.json\.bak\./);
+  assert.match(formatted, /review before running/);
+});
+
+test('phase 205: preflight --json includes expanded playbooks for port and JSON remediation handoff', () => {
+  const report = {
+    projectRoot: '/tmp/nimb-phase-205',
+    findings: [
+      {
+        severity: 'FAIL',
+        code: 'startup-port-invalid-or-unavailable',
+        check: 'Startup port availability',
+        detail: 'port is unavailable: 3000',
+        why: 'Nimb startup requires an available bind port.',
+        next: 'Change port or stop conflicting process.'
+      },
+      {
+        severity: 'WARN',
+        code: 'install-state-invalid-json',
+        check: 'Install-state config JSON',
+        detail: 'Install-state file exists but is not valid JSON',
+        why: 'Install-state file must remain valid JSON for canonical mode decisions.',
+        next: 'Fix install-state JSON and retry.'
+      }
+    ],
+    summary: {
+      pass: 0,
+      warn: 1,
+      fail: 1
+    },
+    exitCode: 1
+  } as const;
+
+  const parsed = JSON.parse(formatPreflightReportJson(report));
+  assert.equal(Array.isArray(parsed.retrySummary.environmentFixPlaybooks), true);
+  assert.equal(parsed.retrySummary.environmentFixPlaybooks.some((playbook: { id: string }) => playbook.id === 'startup-port-conflict-triage'), true);
+  assert.equal(parsed.retrySummary.environmentFixPlaybooks.some((playbook: { id: string }) => playbook.id === 'json-state-recovery-config-install'), true);
+});
+
