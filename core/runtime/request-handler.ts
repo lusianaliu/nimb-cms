@@ -261,7 +261,7 @@ export const createRequestHandler = (runtime, {
       }
 
       if (context.path.startsWith('/admin')) {
-        const reservedAdminPaths = new Set(['/admin', '/admin/pages', '/admin/posts', '/admin/media', '/admin/settings']);
+        const reservedAdminPaths = new Set(['/admin', '/admin/pages', '/admin/posts', '/admin/scheduled', '/admin/media', '/admin/settings']);
         const page = reservedAdminPaths.has(context.path) ? null : runtime?.adminPages?.get?.(context.path);
 
         if (page) {

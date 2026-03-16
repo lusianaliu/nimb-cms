@@ -1,75 +1,13 @@
 import { loadSystemConfig } from '../system/system-config.ts';
 import { escapeHtml, renderAdminShell } from './admin-shell.ts';
-import { resolvePagePublishState, resolvePostPublishState } from '../content/publish-timing.ts';
+import { listScheduledContentItems } from './scheduled-content.ts';
 
 type DashboardOptions = {
   welcome?: boolean
 };
 
-type ScheduledQueueItem = {
-  id: string
-  title: string
-  typeLabel: 'Page' | 'Post'
-  publishTimeLabel: string
-  editUrl: string
-  publishedAtMs: number
-};
-
-const formatScheduledTime = (value: unknown) => {
-  const raw = `${value ?? ''}`.trim();
-  if (!raw) {
-    return 'Unknown';
-  }
-
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) {
-    return raw;
-  }
-
-  return parsed.toISOString().slice(0, 16).replace('T', ' ');
-};
-
-const toScheduledQueueItems = (runtime): ScheduledQueueItem[] => {
-  const pages = Array.isArray(runtime?.content?.list?.('page')) ? runtime.content.list('page') : [];
-  const posts = Array.isArray(runtime?.content?.list?.('post')) ? runtime.content.list('post') : [];
-
-  const scheduledPages = pages
-    .filter((entry) => resolvePagePublishState(entry).status === 'scheduled')
-    .map((entry) => {
-      const id = `${entry?.id ?? ''}`;
-      const publishedAtMs = new Date(`${entry?.data?.publishedAt ?? ''}`).getTime();
-      return {
-        id,
-        title: `${entry?.data?.title ?? 'Untitled page'}`,
-        typeLabel: 'Page' as const,
-        publishTimeLabel: formatScheduledTime(entry?.data?.publishedAt),
-        editUrl: `/admin/pages/${encodeURIComponent(id)}/edit`,
-        publishedAtMs
-      };
-    });
-
-  const scheduledPosts = posts
-    .filter((entry) => resolvePostPublishState(entry).status === 'scheduled')
-    .map((entry) => {
-      const id = `${entry?.id ?? ''}`;
-      const publishedAtMs = new Date(`${entry?.data?.publishedAt ?? ''}`).getTime();
-      return {
-        id,
-        title: `${entry?.data?.title ?? 'Untitled post'}`,
-        typeLabel: 'Post' as const,
-        publishTimeLabel: formatScheduledTime(entry?.data?.publishedAt),
-        editUrl: `/admin/posts/${encodeURIComponent(id)}/edit`,
-        publishedAtMs
-      };
-    });
-
-  return [...scheduledPages, ...scheduledPosts]
-    .sort((left, right) => left.publishedAtMs - right.publishedAtMs)
-    .slice(0, 10);
-};
-
 const renderScheduledQueue = (runtime) => {
-  const items = toScheduledQueueItems(runtime);
+  const items = listScheduledContentItems(runtime).slice(0, 10);
 
   if (items.length === 0) {
     return `<article>
@@ -103,7 +41,7 @@ const renderScheduledQueue = (runtime) => {
           ${rows}
         </tbody>
       </table></div>
-      <p class="muted">This queue is a lightweight overview. Use <a href="/admin/pages?filter=scheduled">Pages → Scheduled only</a> and <a href="/admin/posts?filter=scheduled">Posts → Scheduled only</a> for focused management.</p>
+      <p class="muted">This queue is a lightweight overview. Use <a href="/admin/scheduled">Scheduled Content</a> for cross-type management, or <a href="/admin/pages?filter=scheduled">Pages → Scheduled only</a> and <a href="/admin/posts?filter=scheduled">Posts → Scheduled only</a> for type-specific filtering.</p>
     </article>`;
 };
 

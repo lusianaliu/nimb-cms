@@ -7,6 +7,7 @@ import { renderAdminMediaPage } from '../admin/admin-media-page.ts';
 import { renderAdminPageFormPage, renderAdminPagesListPage } from '../admin/admin-pages-page.ts';
 import { renderAdminPostFormPage, renderAdminPostsListPage } from '../admin/admin-posts-page.ts';
 import { renderAdminSettingsPage } from '../admin/admin-settings-page.ts';
+import { renderAdminScheduledContentPage } from '../admin/admin-scheduled-page.ts';
 import { createPageController } from './page-controller.ts';
 import { createPostController } from './post-controller.ts';
 import { resolvePagePublishState, resolvePostPublishState } from '../content/publish-timing.ts';
@@ -628,6 +629,11 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
             'This preview is available only to signed-in admins and does not make the post public.'
           ));
         });
+      }
+
+
+      if (context.path === '/admin/scheduled' && context.method === 'GET') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, () => toHtmlResponse(renderAdminScheduledContentPage({ runtime })));
       }
 
       if (context.path === '/admin/pages' && context.method === 'GET') {
