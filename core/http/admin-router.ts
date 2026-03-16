@@ -429,6 +429,38 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
 
 
       const unsavedPreviewPageMatch = context.path.match(/^\/admin\/preview\/pages\/([^/]+)\/unsaved$/);
+
+      if (context.path === '/admin/preview/pages/new/unsaved' && context.method === 'POST') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
+          const formData = await parseFormBody(requestContext.request);
+          const body = `${formData.body ?? ''}`;
+          const previewPage = toRenderableEntry({
+            id: 'new-unsaved-preview',
+            type: 'page',
+            data: {
+              title: `${formData.title ?? ''}`,
+              slug: `${formData.slug ?? ''}`.trim() || 'unsaved-page-preview',
+              body,
+              content: body,
+              status: 'draft'
+            }
+          });
+
+          const html = runtime?.themeRenderer?.renderTemplate?.('page', runtime, {
+            routePath: requestContext.path,
+            routeParams: { id: 'new', unsaved: '1', mode: 'new' },
+            pages: getNavigationPages(runtime),
+            page: previewPage
+          }) ?? '';
+
+          return toHtmlResponse(addPreviewBanner(
+            html,
+            'Unsaved new page preview mode',
+            'You are previewing a brand-new unsaved page buffer. This preview is admin-only and does not create, save, or publish content.'
+          ));
+        });
+      }
+
       if (unsavedPreviewPageMatch && context.method === 'POST') {
         return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
           const id = decodeURIComponent(unsavedPreviewPageMatch[1]);
@@ -468,6 +500,41 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
       const previewPostMatch = context.path.match(/^\/admin\/preview\/posts\/([^/]+)$/);
 
       const unsavedPreviewPostMatch = context.path.match(/^\/admin\/preview\/posts\/([^/]+)\/unsaved$/);
+
+      if (context.path === '/admin/preview/posts/new/unsaved' && context.method === 'POST') {
+        return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
+          const formData = await parseFormBody(requestContext.request);
+          const body = `${formData.body ?? ''}`;
+          const status = resolveStatusFromWorkflowAction(formData.workflowAction, formData.status);
+          const publishedAtRaw = status === 'draft' ? '' : `${formData.publishedAt ?? ''}`.trim();
+          const previewPost = toRenderableEntry({
+            id: 'new-unsaved-preview',
+            type: 'post',
+            data: {
+              title: `${formData.title ?? ''}`,
+              slug: `${formData.slug ?? ''}`.trim() || 'unsaved-post-preview',
+              body,
+              content: body,
+              status,
+              publishedAt: publishedAtRaw
+            }
+          });
+
+          const html = runtime?.themeRenderer?.renderTemplate?.('post-page', runtime, {
+            routePath: requestContext.path,
+            routeParams: { id: 'new', unsaved: '1', mode: 'new' },
+            pages: getNavigationPages(runtime),
+            post: previewPost
+          }) ?? '';
+
+          return toHtmlResponse(addPreviewBanner(
+            html,
+            'Unsaved new post preview mode',
+            'You are previewing a brand-new unsaved post buffer. This preview is admin-only and does not create, save, or publish content.'
+          ));
+        });
+      }
+
       if (unsavedPreviewPostMatch && context.method === 'POST') {
         return (requestContext) => withAdminMiddleware(runtime, requestContext, async () => {
           const id = decodeURIComponent(unsavedPreviewPostMatch[1]);

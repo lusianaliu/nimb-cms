@@ -104,6 +104,9 @@ export const renderAdminPostFormPage = ({ mode, post = null, runtime, notice = n
   const previewLink = isEdit
     ? `/admin/preview/posts/${encodeURIComponent(id)}`
     : '';
+  const unsavedPreviewAction = isEdit
+    ? `/admin/preview/posts/${encodeURIComponent(id)}/unsaved`
+    : '/admin/preview/posts/new/unsaved';
 
   const errorNotice = errors.length > 0
     ? {
@@ -153,11 +156,13 @@ export const renderAdminPostFormPage = ({ mode, post = null, runtime, notice = n
         <p class="admin-form-actions">
           <button type="submit" name="workflowAction" value="save-draft">${isEdit ? 'Save draft changes' : 'Save as draft'}</button>
           <button type="submit" name="workflowAction" value="publish-now">${isEdit ? 'Publish changes' : 'Publish now'}</button>
-          ${isEdit ? `<button type="submit" formaction="/admin/preview/posts/${encodeURIComponent(id)}/unsaved" formmethod="post" formtarget="_blank" formnovalidate>Preview unsaved changes</button>` : ''}
+          <button type="submit" formaction="${unsavedPreviewAction}" formmethod="post" formtarget="_blank" formnovalidate>${isEdit ? 'Preview unsaved changes' : 'Preview unsaved post'}</button>
           ${isEdit ? `<a class="button-link button-link--muted" href="${previewLink}" target="_blank" rel="noopener">Preview saved post</a>` : ''}
           <a class="button-link button-link--muted" href="/admin/posts">Cancel</a>
         </p>
-        ${isEdit ? '<p class="field-help">Preview unsaved changes opens your current editor content in the active theme without saving. Preview saved post opens the latest saved version.</p>' : ''}
+        <p class="field-help">${isEdit
+    ? 'Preview unsaved changes opens your current editor content in the active theme without saving. Preview saved post opens the latest saved version.'
+    : 'Preview unsaved post opens your current draft buffer in the active theme without creating or saving a post.'}</p>
       </form>
       <script src="/admin/editor/tinymce/tinymce.min.js"></script>
       <script src="/admin/editor/editor.js"></script>
