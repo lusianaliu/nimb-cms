@@ -1,4 +1,5 @@
 import { createRouter } from './router.ts';
+import { resolvePostPublishState } from '../content/publish-timing.ts';
 
 const toHtmlResponse = (html: string, statusCode = 200) => ({
   statusCode,
@@ -24,10 +25,9 @@ const toRenderableEntry = (entry) => {
   });
 };
 
-const isPublishedEntry = (entry) => {
-  const status = `${entry?.data?.status ?? 'published'}`.trim().toLowerCase();
-  return status !== 'draft';
-};
+const isPublishedPageEntry = (entry) => `${entry?.data?.status ?? 'published'}`.trim().toLowerCase() !== 'draft';
+
+const isPublicPostEntry = (entry) => resolvePostPublishState(entry).isPublic;
 
 const queryEntries = (runtime, type: string, options: Record<string, unknown> = {}) => {
   try {
@@ -58,15 +58,15 @@ const queryEntries = (runtime, type: string, options: Record<string, unknown> = 
 };
 
 const getPostBySlug = (runtime, slug: string) => queryEntries(runtime, 'post', { sort: 'updatedAt desc' })
-  .filter(isPublishedEntry)
+  .filter(isPublicPostEntry)
   .find((entry) => `${entry?.data?.slug ?? ''}` === slug);
 
 const getPageBySlug = (runtime, slug: string) => queryEntries(runtime, 'page', { sort: 'updatedAt desc' })
-  .filter(isPublishedEntry)
+  .filter(isPublishedPageEntry)
   .find((entry) => `${entry?.data?.slug ?? ''}` === slug);
 
 const getNavigationPages = (runtime) => queryEntries(runtime, 'page', { sort: 'updatedAt desc', limit: 10 })
-  .filter(isPublishedEntry)
+  .filter(isPublishedPageEntry)
   .filter((entry) => `${entry?.data?.slug ?? ''}` && `${entry?.data?.slug ?? ''}` !== 'home')
   .slice(0, 5)
   .map(toRenderableEntry);
@@ -90,7 +90,7 @@ export const createPublicRouter = (runtime) => createRouter([
         sort: 'updatedAt desc',
         limit: 10
       })
-        .filter(isPublishedEntry)
+        .filter(isPublicPostEntry)
         .map(toRenderableEntry);
 
       return toHtmlResponse(runtime?.themeRenderer?.renderTemplate?.('homepage', runtime, createThemeVariables(context, {
@@ -107,7 +107,7 @@ export const createPublicRouter = (runtime) => createRouter([
         sort: 'updatedAt desc',
         limit: 50
       })
-        .filter(isPublishedEntry)
+        .filter(isPublicPostEntry)
         .map(toRenderableEntry);
 
       return toHtmlResponse(runtime?.themeRenderer?.renderTemplate?.('post-list', runtime, createThemeVariables(context, {

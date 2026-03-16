@@ -1,3 +1,5 @@
+import { resolvePostPublishState } from '../content/publish-timing.ts';
+
 const DEFAULT_NAVIGATION = Object.freeze([
   Object.freeze({ label: 'Home', url: '/' }),
   Object.freeze({ label: 'Blog', url: '/blog' })
@@ -28,13 +30,18 @@ const listEntries = (runtime, type, options = {}) => {
   }
 };
 
+const isPublicPost = (entry) => resolvePostPublishState(entry).isPublic;
+
 export const getLatestPosts = (runtime, limit = 10) => listEntries(runtime, 'post', {
   includeDrafts: false,
   sort: { field: 'updatedAt', direction: 'desc' },
   limit
-}).map(toRenderableEntry);
+})
+  .filter(isPublicPost)
+  .map(toRenderableEntry);
 
 export const getPostBySlug = (runtime, slug) => listEntries(runtime, 'post', { includeDrafts: false })
+  .filter(isPublicPost)
   .find((entry) => `${entry?.data?.slug ?? ''}` === `${slug}`);
 
 export const getPageBySlug = (runtime, slug) => listEntries(runtime, 'page', { includeDrafts: false })

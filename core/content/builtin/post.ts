@@ -10,6 +10,7 @@ export const post: ContentTypeSchema = Object.freeze({
     Object.freeze({ name: 'content', type: 'json' }),
     Object.freeze({ name: 'excerpt', type: 'string' }),
     Object.freeze({ name: 'status', type: 'string' }),
+    Object.freeze({ name: 'publishedAt', type: 'date' }),
     Object.freeze({ name: 'createdAt', type: 'date' }),
     Object.freeze({ name: 'updatedAt', type: 'date' })
   ])

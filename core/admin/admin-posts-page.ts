@@ -1,4 +1,5 @@
 import { renderAdminShell, escapeHtml } from './admin-shell.ts';
+import { resolvePostPublishState } from '../content/publish-timing.ts';
 
 const formatDate = (value: unknown) => {
   const input = `${value ?? ''}`.trim();
@@ -16,10 +17,15 @@ const formatDate = (value: unknown) => {
 
 const normalizeStatus = (value: unknown) => `${value ?? ''}`.trim().toLowerCase() === 'draft' ? 'draft' : 'published';
 
-const statusPill = (value: unknown) => {
-  const status = normalizeStatus(value);
-  const label = status === 'draft' ? 'Draft' : 'Published';
-  return `<span class="status-pill status-pill--${status}">${label}</span>`;
+const statusPill = (post) => {
+  const publishState = resolvePostPublishState(post);
+  const label = publishState.status === 'draft'
+    ? 'Draft'
+    : publishState.status === 'scheduled'
+      ? 'Scheduled'
+      : 'Published';
+
+  return `<span class="status-pill status-pill--${publishState.status}">${label}</span>`;
 };
 
 const toDateTimeLocal = (value: unknown) => {
@@ -48,7 +54,8 @@ export const renderAdminPostsListPage = ({ posts, runtime, notice = null }) => {
   const rows = (Array.isArray(posts) ? posts : []).map((post) => `<tr>
       <td>${escapeHtml(post?.data?.title || 'Untitled post')}</td>
       <td>${escapeHtml(post?.data?.slug)}</td>
-      <td>${statusPill(post?.data?.status ?? (post?.data?.publishedAt ? 'published' : 'draft'))}</td>
+      <td>${statusPill(post)}</td>
+      <td>${escapeHtml(formatDate(post?.data?.publishedAt))}</td>
       <td>${escapeHtml(formatDate(post?.updatedAt ?? post?.createdAt))}</td>
       <td>
         <div class="table-actions">
@@ -74,12 +81,13 @@ export const renderAdminPostsListPage = ({ posts, runtime, notice = null }) => {
             <th>Title</th>
             <th>Slug</th>
             <th>Status</th>
+            <th>Publish time</th>
             <th>Last updated</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          ${rows || '<tr><td colspan="5">No posts yet. Write a new post to start your blog.</td></tr>'}
+          ${rows || '<tr><td colspan="6">No posts yet. Write a new post to start your blog.</td></tr>'}
         </tbody>
       </table></div>`
   });
@@ -141,12 +149,12 @@ export const renderAdminPostFormPage = ({ mode, post = null, runtime, notice = n
               <option value="published"${mergedValues.status === 'published' ? ' selected' : ''}>Published (visible on blog)</option>
               <option value="draft"${mergedValues.status === 'draft' ? ' selected' : ''}>Draft (hidden until published)</option>
             </select>
-            <p class="field-help">Draft posts are saved but not shown on your public blog.</p>
+            <p class="field-help">Draft posts are hidden. Published posts with a future publish date are scheduled and stay hidden until that time.</p>
           </div>
           <div>
             <label for="publishedAt">Publish date and time (optional)</label>
             <input id="publishedAt" name="publishedAt" type="datetime-local" value="${escapeHtml(mergedValues.publishedAt)}">
-            <p class="field-help">Optional. If empty, the post uses the latest update time for ordering.</p>
+            <p class="field-help">Uses your server timezone. If this is in the future and you publish, the post is scheduled and auto-publishes at that time.</p>
           </div>
           <div>
             <label for="body">Post content</label>

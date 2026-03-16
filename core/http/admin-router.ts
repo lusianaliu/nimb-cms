@@ -9,6 +9,7 @@ import { renderAdminPostFormPage, renderAdminPostsListPage } from '../admin/admi
 import { renderAdminSettingsPage } from '../admin/admin-settings-page.ts';
 import { createPageController } from './page-controller.ts';
 import { createPostController } from './post-controller.ts';
+import { resolvePostPublishState } from '../content/publish-timing.ts';
 import type { MiddlewareContext } from './middleware.ts';
 
 const defaultAdminShell = `<!doctype html>
@@ -258,6 +259,22 @@ const resolveStatusFromWorkflowAction = (workflowAction: unknown, fallbackStatus
   }
 
   return normalizeStatus(fallbackStatus);
+};
+
+
+const resolvePostNoticeSuffix = (status: string, publishedAt: string) => {
+  const publishState = resolvePostPublishState({
+    data: {
+      status,
+      publishedAt
+    }
+  });
+
+  return publishState.status === 'draft'
+    ? 'draft'
+    : publishState.status === 'scheduled'
+      ? 'scheduled'
+      : 'published';
 };
 
 const isSlugTaken = (entries, candidate: string, currentId = '') => entries.some((entry) => {
@@ -797,12 +814,16 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
               ? { tone: 'success' as const, title: 'Draft saved', message: 'Your draft post was saved and is hidden from your blog.' }
               : noticeKey === 'created-published'
                 ? { tone: 'success' as const, title: 'Post published', message: 'Your post is now visible on your blog.' }
+                : noticeKey === 'created-scheduled'
+                  ? { tone: 'success' as const, title: 'Post scheduled', message: 'Your post is scheduled and will stay hidden until its publish date/time.' }
             : noticeKey === 'updated'
               ? { tone: 'success' as const, title: 'Post saved', message: 'Your post changes were saved successfully.' }
               : noticeKey === 'updated-draft'
                 ? { tone: 'success' as const, title: 'Draft saved', message: 'Your post draft changes were saved.' }
                 : noticeKey === 'updated-published'
                   ? { tone: 'success' as const, title: 'Post published', message: 'Your post changes were published to your blog.' }
+                  : noticeKey === 'updated-scheduled'
+                    ? { tone: 'success' as const, title: 'Post scheduled', message: 'Your post changes are scheduled and will stay hidden until their publish date/time.' }
               : noticeKey === 'deleted'
                 ? { tone: 'success' as const, title: 'Post deleted', message: 'The post was deleted.' }
                 : null;
@@ -879,7 +900,8 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
             }));
           }
 
-          return toRedirectResponse(`/admin/posts?notice=${status === 'draft' ? 'created-draft' : 'created-published'}`);
+          const noticeSuffix = resolvePostNoticeSuffix(status, publishedAtRaw);
+          return toRedirectResponse(`/admin/posts?notice=created-${noticeSuffix}`);
         });
       }
 
@@ -969,7 +991,8 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
             }));
           }
 
-          return toRedirectResponse(`/admin/posts?notice=${status === 'draft' ? 'updated-draft' : 'updated-published'}`);
+          const noticeSuffix = resolvePostNoticeSuffix(status, publishedAtRaw);
+          return toRedirectResponse(`/admin/posts?notice=updated-${noticeSuffix}`);
         });
       }
 

@@ -11,7 +11,7 @@
 ### Priority 2 — Editor and publishing usability
 
 - Missing comfortable end-to-end authoring flow for pages/posts in admin.
-- Missing scheduled publishing capability in the publishing workflow.
+- Scheduled publishing is now available for posts (MVP), but pages and broader editorial scheduling UX remain incomplete.
 - Missing minimum blog authoring flow quality bar that feels practical for small teams.
 
 ### Priority 3 — Operational confidence
