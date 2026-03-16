@@ -155,7 +155,37 @@ Canonical retry decision path after setup/preflight failures:
 4. If it says setup is not recommended, stop and fix blockers manually, then run `npx nimb preflight`.
 5. If it says **Ask support now**, export JSON handoff and include it with your support request instead of retrying blindly.
 
-## 6) Start Nimb
+
+## 6) Verify known-good baseline before first run/deploy
+
+```bash
+npx nimb verify
+```
+
+Use this bounded checkpoint after `setup`/`preflight` and before first startup or deployment handoff.
+
+How to interpret baseline readiness:
+
+- `READY_TO_TRY_RUN`: deploy-critical baseline assumptions are currently satisfied; you can try `npx nimb`.
+- `STOP_AND_FIX_FIRST`: baseline assumptions are not yet satisfied; fix blockers first, then re-run `verify`.
+- `ESCALATE_NOW`: blocker class is outside safe self-service assumptions (for example persistent JSON/state uncertainty or platform-controlled port/policy blockers); export preflight JSON and involve technical help.
+
+What `verify` proves:
+
+- project root resolves correctly,
+- config/install-state/startup-port checks align with canonical preflight assumptions,
+- required runtime writable paths (`data/*`, `logs`) pass bounded checks,
+- operator gets a single baseline classification before first run.
+
+What `verify` does **not** prove:
+
+- full runtime correctness after startup,
+- plugin/theme business logic correctness,
+- host/container routing and proxy behavior under every platform policy.
+
+When `verify` is not `READY_TO_TRY_RUN`, stop and fix/escalate first instead of repeatedly retrying startup.
+
+## 7) Start Nimb
 
 ```bash
 npx nimb
@@ -163,7 +193,7 @@ npx nimb
 
 Then open `/admin` for admin/setup flows.
 
-## 7) Optional runtime root override
+## 8) Optional runtime root override
 
 If a process manager starts Nimb outside project root, explicitly set project root:
 
