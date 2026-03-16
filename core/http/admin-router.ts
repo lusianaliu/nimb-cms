@@ -188,6 +188,19 @@ const slugify = (value: unknown) => `${value ?? ''}`
 
 const normalizeStatus = (value: unknown) => `${value ?? ''}`.trim().toLowerCase() === 'draft' ? 'draft' : 'published';
 
+const resolveStatusFromWorkflowAction = (workflowAction: unknown, fallbackStatus: unknown) => {
+  const action = `${workflowAction ?? ''}`.trim().toLowerCase();
+  if (action === 'save-draft') {
+    return 'draft';
+  }
+
+  if (action === 'publish-now') {
+    return 'published';
+  }
+
+  return normalizeStatus(fallbackStatus);
+};
+
 const isSlugTaken = (entries, candidate: string, currentId = '') => entries.some((entry) => {
   const entryId = `${entry?.id ?? ''}`;
   const slug = `${entry?.data?.slug ?? ''}`.trim().toLowerCase();
@@ -346,8 +359,16 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
           const noticeKey = `${requestContext.query?.notice ?? ''}`;
           const notice = noticeKey === 'created'
             ? { tone: 'success' as const, title: 'Page saved', message: 'Your page was saved successfully.' }
+            : noticeKey === 'created-draft'
+              ? { tone: 'success' as const, title: 'Draft saved', message: 'Your page draft was saved and is hidden from the public site.' }
+              : noticeKey === 'created-published'
+                ? { tone: 'success' as const, title: 'Page published', message: 'Your page is now visible on the public site.' }
             : noticeKey === 'updated'
               ? { tone: 'success' as const, title: 'Page saved', message: 'Your page changes were saved successfully.' }
+              : noticeKey === 'updated-draft'
+                ? { tone: 'success' as const, title: 'Draft saved', message: 'Your page draft changes were saved.' }
+                : noticeKey === 'updated-published'
+                  ? { tone: 'success' as const, title: 'Page published', message: 'Your page changes were published to the public site.' }
               : noticeKey === 'deleted'
                 ? { tone: 'success' as const, title: 'Page deleted', message: 'The page was deleted.' }
                 : null;
@@ -367,7 +388,7 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
           const title = `${formData.title ?? ''}`.trim();
           const body = `${formData.body ?? ''}`;
           const normalizedSlug = slugify(`${formData.slug ?? ''}`.trim() || title);
-          const status = normalizeStatus(formData.status);
+          const status = resolveStatusFromWorkflowAction(formData.workflowAction, formData.status);
           const pages = runtime.content.list('page');
 
           const errors: string[] = [];
@@ -407,7 +428,7 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
             }));
           }
 
-          return toRedirectResponse('/admin/pages?notice=created');
+          return toRedirectResponse(`/admin/pages?notice=${status === 'draft' ? 'created-draft' : 'created-published'}`);
         });
       }
 
@@ -447,7 +468,7 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
           const title = `${formData.title ?? ''}`.trim();
           const body = `${formData.body ?? ''}`;
           const normalizedSlug = slugify(`${formData.slug ?? ''}`.trim() || title);
-          const status = normalizeStatus(formData.status);
+          const status = resolveStatusFromWorkflowAction(formData.workflowAction, formData.status);
           const pages = runtime.content.list('page');
 
           const errors: string[] = [];
@@ -489,7 +510,7 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
             }));
           }
 
-          return toRedirectResponse('/admin/pages?notice=updated');
+          return toRedirectResponse(`/admin/pages?notice=${status === 'draft' ? 'updated-draft' : 'updated-published'}`);
         });
       }
 
@@ -517,8 +538,16 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
           const noticeKey = `${requestContext.query?.notice ?? ''}`;
           const notice = noticeKey === 'created'
             ? { tone: 'success' as const, title: 'Post saved', message: 'Your post was saved successfully.' }
+            : noticeKey === 'created-draft'
+              ? { tone: 'success' as const, title: 'Draft saved', message: 'Your draft post was saved and is hidden from your blog.' }
+              : noticeKey === 'created-published'
+                ? { tone: 'success' as const, title: 'Post published', message: 'Your post is now visible on your blog.' }
             : noticeKey === 'updated'
               ? { tone: 'success' as const, title: 'Post saved', message: 'Your post changes were saved successfully.' }
+              : noticeKey === 'updated-draft'
+                ? { tone: 'success' as const, title: 'Draft saved', message: 'Your post draft changes were saved.' }
+                : noticeKey === 'updated-published'
+                  ? { tone: 'success' as const, title: 'Post published', message: 'Your post changes were published to your blog.' }
               : noticeKey === 'deleted'
                 ? { tone: 'success' as const, title: 'Post deleted', message: 'The post was deleted.' }
                 : null;
@@ -546,7 +575,7 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
           const title = `${formData.title ?? ''}`.trim();
           const body = `${formData.body ?? ''}`;
           const normalizedSlug = slugify(`${formData.slug ?? ''}`.trim() || title);
-          const status = normalizeStatus(formData.status);
+          const status = resolveStatusFromWorkflowAction(formData.workflowAction, formData.status);
           const publishedAtRaw = status === 'draft' ? '' : `${formData.publishedAt ?? ''}`.trim();
           const posts = runtime.content.list('post');
 
@@ -595,7 +624,7 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
             }));
           }
 
-          return toRedirectResponse('/admin/posts?notice=created');
+          return toRedirectResponse(`/admin/posts?notice=${status === 'draft' ? 'created-draft' : 'created-published'}`);
         });
       }
 
@@ -635,7 +664,7 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
           const title = `${formData.title ?? ''}`.trim();
           const body = `${formData.body ?? ''}`;
           const normalizedSlug = slugify(`${formData.slug ?? ''}`.trim() || title);
-          const status = normalizeStatus(formData.status);
+          const status = resolveStatusFromWorkflowAction(formData.workflowAction, formData.status);
           const publishedAtRaw = status === 'draft' ? '' : `${formData.publishedAt ?? ''}`.trim();
           const posts = runtime.content.list('post');
 
@@ -685,7 +714,7 @@ export const createAdminRouter = ({ rootDirectory = process.cwd(), runtime = nul
             }));
           }
 
-          return toRedirectResponse('/admin/posts?notice=updated');
+          return toRedirectResponse(`/admin/posts?notice=${status === 'draft' ? 'updated-draft' : 'updated-published'}`);
         });
       }
 

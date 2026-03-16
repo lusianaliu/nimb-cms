@@ -77,19 +77,45 @@ test('phase 148: content editing forms explain page/post purpose and preserve va
         title: 'About Company',
         slug: 'about-company',
         body: 'About body',
-        status: 'draft'
+        status: 'published',
+        workflowAction: 'save-draft'
       }).toString(),
       redirect: 'manual'
     });
     assert.equal(pageCreateResponse.status, 302);
-    assert.equal(pageCreateResponse.headers.get('location'), '/admin/pages?notice=created');
+    assert.equal(pageCreateResponse.headers.get('location'), '/admin/pages?notice=created-draft');
 
-    const pageListResponse = await fetch(`http://127.0.0.1:${port}/admin/pages?notice=created`, {
+    const pageListResponse = await fetch(`http://127.0.0.1:${port}/admin/pages?notice=created-draft`, {
       headers: { cookie: authCookie }
     });
     const pageListHtml = await pageListResponse.text();
-    assert.equal(pageListHtml.includes('Page saved'), true);
+    assert.equal(pageListHtml.includes('Draft saved'), true);
     assert.equal(pageListHtml.includes('Draft'), true);
+
+    const publishPostResponse = await fetch(`http://127.0.0.1:${port}/admin/posts/new`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        cookie: authCookie
+      },
+      body: new URLSearchParams({
+        title: 'Launch Post',
+        slug: 'launch-post',
+        body: 'Launch details',
+        status: 'draft',
+        workflowAction: 'publish-now'
+      }).toString(),
+      redirect: 'manual'
+    });
+    assert.equal(publishPostResponse.status, 302);
+    assert.equal(publishPostResponse.headers.get('location'), '/admin/posts?notice=created-published');
+
+    const postListResponse = await fetch(`http://127.0.0.1:${port}/admin/posts?notice=created-published`, {
+      headers: { cookie: authCookie }
+    });
+    const postListHtml = await postListResponse.text();
+    assert.equal(postListHtml.includes('Post published'), true);
+    assert.equal(postListHtml.includes('Published'), true);
 
     const postFormResponse = await fetch(`http://127.0.0.1:${port}/admin/posts/new`, {
       headers: { cookie: authCookie }
