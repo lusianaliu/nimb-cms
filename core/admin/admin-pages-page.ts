@@ -77,6 +77,9 @@ export const renderAdminPageFormPage = ({ mode, page = null, runtime, notice = n
     body: `${values.body ?? page?.data?.body ?? page?.data?.content ?? ''}`,
     status: toFormStatus(values.status ?? page?.data?.status)
   };
+  const previewLink = isEdit
+    ? `/admin/preview/pages/${encodeURIComponent(id)}`
+    : '';
 
   const errorNotice = errors.length > 0
     ? {
@@ -120,8 +123,10 @@ export const renderAdminPageFormPage = ({ mode, page = null, runtime, notice = n
         <p class="admin-form-actions">
           <button type="submit" name="workflowAction" value="save-draft">${isEdit ? 'Save draft changes' : 'Save as draft'}</button>
           <button type="submit" name="workflowAction" value="publish-now">${isEdit ? 'Publish changes' : 'Publish now'}</button>
+          ${isEdit ? `<a class="button-link button-link--muted" href="${previewLink}" target="_blank" rel="noopener">Preview saved page</a>` : ''}
           <a class="button-link button-link--muted" href="/admin/pages">Cancel</a>
         </p>
+        ${isEdit ? '<p class="field-help">Preview opens the latest saved version in your active site theme. Unsaved changes are not included.</p>' : ''}
       </form>
       <script src="/admin/editor/tinymce/tinymce.min.js"></script>
       <script src="/admin/editor/editor.js"></script>
