@@ -331,6 +331,12 @@ export const createBootstrap = async ({
     order: 30
   });
   navRegistry.register({
+    id: 'scheduled',
+    label: 'Scheduled',
+    path: '/admin/scheduled',
+    order: 35
+  });
+  navRegistry.register({
     id: 'media',
     label: 'Media',
     path: '/admin/media',
