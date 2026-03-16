@@ -69,6 +69,15 @@ type EnvironmentFixPlaybook = {
   commonCommands: string[];
   retryStep: string;
   escalation: string;
+  recoveryAid?: {
+    safetyNote: string;
+    checklist: string[];
+    templateExamples: {
+      filePath: string;
+      intent: string;
+      json: Record<string, unknown>;
+    }[];
+  };
 };
 
 const REMEDIATION_CATEGORY_PRIORITY: RemediationCategory[] = [
@@ -175,7 +184,37 @@ const ENVIRONMENT_FIX_PLAYBOOKS: EnvironmentFixPlaybook[] = [
       'npx nimb preflight'
     ],
     retryStep: 'After restoring valid JSON (or replacing from a known-good backup/template), run: npx nimb preflight',
-    escalation: 'If you do not have a known-good backup or are unsure which keys are safe to change, stop and ask technical support before editing production state further.'
+    escalation: 'If you do not have a known-good backup or are unsure which keys are safe to change, stop and ask technical support before editing production state further.',
+    recoveryAid: {
+      safetyNote: 'Templates below are bounded recovery aids, not universal guaranteed fixes. Keep backups and prefer known-good production values when available.',
+      checklist: [
+        'Create timestamped backups of both JSON files before any edit.',
+        'Repair one file at a time and keep JSON strict (no trailing commas/comments).',
+        'Validate each edited file with node JSON.parse before touching runtime state.',
+        'Re-run npx nimb preflight after repairs; only retry startup when FAIL findings are cleared.',
+        'Stop and escalate if expected values are unknown after one careful attempt.'
+      ],
+      templateExamples: [
+        {
+          filePath: 'config/nimb.config.json',
+          intent: 'Minimal config structure example used by canonical setup/preflight paths.',
+          json: {
+            name: 'my-nimb-site',
+            runtime: { mode: 'production' },
+            admin: { enabled: true }
+          }
+        },
+        {
+          filePath: 'data/system/config.json',
+          intent: 'Minimal install-state structure example for canonical install-state parsing.',
+          json: {
+            installed: false,
+            version: '0.1.0',
+            installedAt: null
+          }
+        }
+      ]
+    }
   }
 ];
 
@@ -296,6 +335,22 @@ const buildEnvironmentFixPlaybookLines = (report: PreflightReport) => {
     }
     lines.push(`  retry: ${playbook.retryStep}`);
     lines.push(`  escalation: ${playbook.escalation}`);
+
+    if (playbook.recoveryAid) {
+      lines.push(`  safe recovery aid: ${playbook.recoveryAid.safetyNote}`);
+      lines.push('  validation checklist:');
+      for (const checklistStep of playbook.recoveryAid.checklist) {
+        lines.push(`    - ${checklistStep}`);
+      }
+      lines.push('  minimal template examples (review before applying):');
+      for (const template of playbook.recoveryAid.templateExamples) {
+        lines.push(`    - ${template.filePath}: ${template.intent}`);
+        const templateLines = JSON.stringify(template.json, null, 2).split('\n');
+        for (const templateLine of templateLines) {
+          lines.push(`      ${templateLine}`);
+        }
+      }
+    }
   }
 
   lines.push('');

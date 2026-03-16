@@ -109,7 +109,10 @@ Current high-payoff playbook focus:
 
 - **Filesystem permission/ownership blockers** (`required-directory-writable`, `required-directory-parent`) include a runtime write-access reset playbook for `data/*` and `logs`.
 - **Network/port binding blockers** (`startup-port-invalid-or-unavailable`) include a bounded port-conflict triage playbook (check active port usage, verify effective configured port, retry with a known-free port).
-- **Config/install-state JSON corruption blockers** (`config-invalid`, `install-state-invalid-json`) include a safe recovery playbook focused on backup-first and JSON validation checks before retry.
+- **Config/install-state JSON corruption blockers** (`config-invalid`, `install-state-invalid-json`) now include a bounded **safe recovery aid** with:
+  - a backup-first validation checklist,
+  - minimal JSON template examples for `config/nimb.config.json` and `data/system/config.json`,
+  - explicit reminder that templates are examples, not universal guaranteed repairs.
 - These playbooks target the highest-payoff diagnosis-to-action gaps after Phase 204: operators now get concrete, review-before-running examples for the most common next steps without pretending cross-host automation is universal.
 
 Safety expectations for playbook command examples:
@@ -117,6 +120,17 @@ Safety expectations for playbook command examples:
 - Commands are illustrative examples for common Linux/container workflows, not host-agnostic guarantees.
 - Stop before destructive edits: create backups of config/install-state JSON first.
 - If you are unsure about expected keys/values in production JSON, escalate to technical support rather than repeatedly rewriting files.
+
+JSON recovery checklist and templates (when `config-invalid` or `install-state-invalid-json` appears):
+
+1. Back up both files before editing:
+   - `config/nimb.config.json`
+   - `data/system/config.json`
+2. Repair one file at a time and keep strict JSON syntax (no comments/trailing commas).
+3. Validate each edited file locally with `node -e "JSON.parse(...)"` before startup.
+4. Use the preflight playbook's minimal templates only as bounded structure examples when no known-good backup is available.
+5. Re-run `npx nimb preflight` before retrying startup.
+6. Stop and ask technical support if values are still unclear after one careful attempt.
 
 Support/debug handoff output:
 

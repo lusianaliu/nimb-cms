@@ -369,3 +369,64 @@ test('phase 205: preflight --json includes expanded playbooks for port and JSON 
   assert.equal(parsed.retrySummary.environmentFixPlaybooks.some((playbook: { id: string }) => playbook.id === 'json-state-recovery-config-install'), true);
 });
 
+
+
+test('phase 206: preflight report includes JSON recovery validation checklist and minimal templates', () => {
+  const report = {
+    projectRoot: '/tmp/nimb-phase-206',
+    findings: [
+      {
+        severity: 'FAIL',
+        code: 'config-invalid',
+        check: 'Config file JSON format',
+        detail: 'Config file exists but is not valid JSON',
+        why: 'Config must remain valid JSON for bootstrap to load.',
+        next: 'Fix config JSON and retry.'
+      }
+    ],
+    summary: {
+      pass: 0,
+      warn: 0,
+      fail: 1
+    },
+    exitCode: 1
+  } as const;
+
+  const formatted = formatPreflightReport(report);
+  assert.match(formatted, /validation checklist:/);
+  assert.match(formatted, /minimal template examples \(review before applying\):/);
+  assert.match(formatted, /config\/nimb\.config\.json: Minimal config structure example/);
+  assert.match(formatted, /"runtime": \{/);
+  assert.match(formatted, /data\/system\/config\.json: Minimal install-state structure example/);
+  assert.match(formatted, /"installed": false/);
+  assert.match(formatted, /bounded recovery aids, not universal guaranteed fixes/);
+});
+
+test('phase 206: preflight --json handoff includes JSON recovery aid checklist and template examples', () => {
+  const report = {
+    projectRoot: '/tmp/nimb-phase-206',
+    findings: [
+      {
+        severity: 'WARN',
+        code: 'install-state-invalid-json',
+        check: 'Install-state config JSON',
+        detail: 'Install-state file exists but is not valid JSON',
+        why: 'Install-state file must remain valid JSON for canonical mode decisions.',
+        next: 'Fix install-state JSON and retry.'
+      }
+    ],
+    summary: {
+      pass: 0,
+      warn: 1,
+      fail: 0
+    },
+    exitCode: 0
+  } as const;
+
+  const parsed = JSON.parse(formatPreflightReportJson(report));
+  const jsonPlaybook = parsed.retrySummary.environmentFixPlaybooks.find((playbook: { id: string }) => playbook.id === 'json-state-recovery-config-install');
+  assert.ok(jsonPlaybook);
+  assert.equal(Array.isArray(jsonPlaybook.recoveryAid.checklist), true);
+  assert.equal(jsonPlaybook.recoveryAid.templateExamples[0].filePath, 'config/nimb.config.json');
+  assert.equal(jsonPlaybook.recoveryAid.templateExamples[1].filePath, 'data/system/config.json');
+});
