@@ -1,6 +1,8 @@
 import { renderAdminShell, escapeHtml } from './admin-shell.ts';
 import { resolvePagePublishState } from '../content/publish-timing.ts';
 
+const normalizeFilter = (value: unknown) => `${value ?? ''}`.trim().toLowerCase() === 'scheduled' ? 'scheduled' : 'all';
+
 const formatDateTime = (value: unknown) => {
   const input = `${value ?? ''}`.trim();
   if (!input) {
@@ -50,8 +52,11 @@ const toFormStatus = (value: unknown, publishedAt: unknown) => {
   return `${publishedAt ?? ''}`.trim() ? 'published' : 'draft';
 };
 
-export const renderAdminPagesListPage = ({ pages, runtime, notice = null }) => {
-  const rows = (Array.isArray(pages) ? pages : []).map((page) => `<tr>
+export const renderAdminPagesListPage = ({ pages, runtime, notice = null, filter = 'all' }) => {
+  const activeFilter = normalizeFilter(filter);
+  const list = (Array.isArray(pages) ? pages : [])
+    .filter((page) => activeFilter === 'scheduled' ? resolvePagePublishState(page).status === 'scheduled' : true);
+  const rows = list.map((page) => `<tr>
       <td>${escapeHtml(page?.data?.title || 'Untitled page')}</td>
       <td>${escapeHtml(page?.data?.slug)}</td>
       <td>${statusPill(page)}</td>
@@ -75,6 +80,11 @@ export const renderAdminPagesListPage = ({ pages, runtime, notice = null }) => {
     pageDescription: 'Pages are for your main website sections like Home, About, Services, or Contact.',
     notice,
     content: `<p><a class="button-link" href="/admin/pages/new">Create a new page</a></p>
+      <nav class="filter-tabs" aria-label="Page list filters">
+        <a class="filter-tab${activeFilter === 'all' ? ' is-active' : ''}" href="/admin/pages">All pages</a>
+        <a class="filter-tab${activeFilter === 'scheduled' ? ' is-active' : ''}" href="/admin/pages?filter=scheduled">Scheduled only</a>
+      </nav>
+      ${activeFilter === 'scheduled' ? '<p class="muted">Shows pages currently in scheduled state (published with a future publish time).</p>' : ''}
       <div class="table-wrap"><table>
         <thead>
           <tr>
@@ -87,7 +97,9 @@ export const renderAdminPagesListPage = ({ pages, runtime, notice = null }) => {
           </tr>
         </thead>
         <tbody>
-          ${rows || '<tr><td colspan="6">No pages yet. Create a new page to build your website navigation.</td></tr>'}
+          ${rows || (activeFilter === 'scheduled'
+      ? '<tr><td colspan="6">No scheduled pages right now. Schedule a page by publishing with a future publish time.</td></tr>'
+      : '<tr><td colspan="6">No pages yet. Create a new page to build your website navigation.</td></tr>')}
         </tbody>
       </table></div>`
   });

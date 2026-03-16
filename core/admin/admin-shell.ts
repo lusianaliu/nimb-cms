@@ -94,6 +94,9 @@ export function renderAdminShell(ctx: AdminShellContext): string {
     .table-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .table-wrap { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .table-wrap td code, .table-wrap td a, .table-wrap th, .table-wrap td { word-break: break-word; }
+    .filter-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+    .filter-tab { display: inline-block; text-decoration: none; border: 1px solid #cbd5e1; background: #fff; color: #0f172a; border-radius: 999px; padding: 6px 10px; font-size: 0.9rem; }
+    .filter-tab.is-active { background: #0f172a; color: #fff; border-color: #0f172a; }
     .admin-form-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     details summary { overflow-wrap: anywhere; }
     pre, code { overflow-wrap: anywhere; word-break: break-word; }
