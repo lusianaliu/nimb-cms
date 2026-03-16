@@ -17,4 +17,5 @@ npm install
 npx nimb guide
 npx nimb setup
 npx nimb
+npx nimb doctor reachability
 ```

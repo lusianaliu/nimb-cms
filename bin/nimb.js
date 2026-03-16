@@ -13,6 +13,7 @@ import { runRelease } from '../core/cli/release.ts';
 import { runPreflightDiagnostics, formatPreflightReport, formatPreflightReportJson } from '../core/cli/preflight.ts';
 import { runSetupCommand } from '../core/cli/setup.ts';
 import { runBaselineVerification, formatBaselineVerificationReport, formatBaselineVerificationReportJson } from '../core/cli/verify.ts';
+import { runReachabilityDoctor, formatReachabilityDoctorReport, formatReachabilityDoctorReportJson } from '../core/cli/doctor-reachability.ts';
 import { resolveProjectRootFromArgs } from '../core/cli/project-root-resolver.ts';
 import { assertValidStartupPort } from '../core/invariants/startup-port.ts';
 
@@ -167,6 +168,7 @@ const printOperatorGuide = ({ projectRoot }) => {
   process.stdout.write('8) If startup looks successful but site/admin is unreachable\n');
   process.stdout.write('   - If process exits/crashes: treat as startup failure and inspect startup output + logs/runtime-error.log.\n');
   process.stdout.write('   - If process stays up: check local host/port first, then treat external URL mismatch as proxy/panel/container routing issue.\n');
+  process.stdout.write('   - Run local-only doctor first: npx nimb doctor reachability\n');
   process.stdout.write('   - Run one bounded retry cycle: npx nimb verify, then one startup retry.\n');
   process.stdout.write('   - If still READY_TO_TRY_RUN but unreachable, escalate with: npx nimb preflight --json > nimb-preflight-report.json\n');
 };
@@ -387,6 +389,18 @@ if (normalizedArgs[0] === 'init') {
   process.exitCode = report.readiness === 'READY_TO_TRY_RUN' ? 0 : 1;
 } else if (normalizedArgs[0] === 'guide') {
   printOperatorGuide({ projectRoot });
+} else if (normalizedArgs[0] === 'doctor' && normalizedArgs[1] === 'reachability') {
+  try {
+    const report = runReachabilityDoctor({ projectRoot });
+    process.stdout.write(preflightJsonOutput ? formatReachabilityDoctorReportJson(report) : formatReachabilityDoctorReport(report));
+  } catch (error) {
+    process.stderr.write(`Doctor reachability failed: ${error?.message ?? String(error)}\n`);
+    appendErrorLog({ projectRoot, error, context: 'doctor-reachability' });
+    process.exitCode = 1;
+  }
+} else if (normalizedArgs[0] === 'doctor') {
+  process.stderr.write('Unknown doctor command. Supported: npx nimb doctor reachability\n');
+  process.exitCode = 1;
 } else {
   await startServer();
 }

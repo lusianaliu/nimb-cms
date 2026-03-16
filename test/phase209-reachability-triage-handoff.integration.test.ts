@@ -56,5 +56,6 @@ test('phase 209: guide output includes startup-vs-reachability split and escalat
   assert.match(result.stdout, /If startup looks successful but site\/admin is unreachable/);
   assert.match(result.stdout, /If process exits\/crashes: treat as startup failure/i);
   assert.match(result.stdout, /local host\/port first/i);
+  assert.match(result.stdout, /npx nimb doctor reachability/);
   assert.match(result.stdout, /npx nimb preflight --json > nimb-preflight-report.json/);
 });
