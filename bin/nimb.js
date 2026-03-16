@@ -12,6 +12,7 @@ import { runBuild } from '../core/cli/build.ts';
 import { runRelease } from '../core/cli/release.ts';
 import { runPreflightDiagnostics, formatPreflightReport, formatPreflightReportJson } from '../core/cli/preflight.ts';
 import { runSetupCommand } from '../core/cli/setup.ts';
+import { runBaselineVerification, formatBaselineVerificationReport, formatBaselineVerificationReportJson } from '../core/cli/verify.ts';
 import { resolveProjectRootFromArgs } from '../core/cli/project-root-resolver.ts';
 import { assertValidStartupPort } from '../core/invariants/startup-port.ts';
 
@@ -123,7 +124,7 @@ const createProject = (projectName) => {
   const readmePath = path.join(targetRoot, 'README.md');
   fs.writeFileSync(
     readmePath,
-    `# ${projectName}\n\nGenerated with \`nimb init\`.\n\n## Run locally\n\n\`\`\`bash\nnpm install\nnpx nimb setup\nnpm start\n\`\`\`\n\n## Project vs repository\n\nRun Nimb from this generated project directory, not from the Nimb source repository.\n\n## Guided setup before run/deploy\n\n\`\`\`bash\nnpx nimb setup\n\`\`\`\n\nThis creates any missing canonical layout directories that are safe to create, then runs preflight automatically.\n\n## Preflight only (validation without setup changes)\n\n\`\`\`bash\nnpx nimb preflight\n\`\`\`\n\n## Required writable paths\n\nNimb must be able to write to:\n\n- \`data/\`\n- \`data/system/\`\n- \`data/content/\`\n- \`data/uploads/\`\n- \`logs/\`\n`
+    `# ${projectName}\n\nGenerated with \`nimb init\`.\n\n## Run locally\n\n\`\`\`bash\nnpm install\nnpx nimb setup\nnpm start\n\`\`\`\n\n## Project vs repository\n\nRun Nimb from this generated project directory, not from the Nimb source repository.\n\n## Guided setup before run/deploy\n\n\`\`\`bash\nnpx nimb setup\n\`\`\`\n\nThis creates any missing canonical layout directories that are safe to create, then runs preflight automatically.\n\n## Preflight only (validation without setup changes)\n\n\`\`\`bash\nnpx nimb preflight\n\`\`\`\n\n## Verify known-good baseline before first run/deploy\n\n\`\`\`bash\nnpx nimb verify\n\`\`\`\n\n\`verify\` classifies baseline readiness as READY_TO_TRY_RUN, STOP_AND_FIX_FIRST, or ESCALATE_NOW.\nIt checks baseline assumptions only and does not guarantee full runtime behavior.\n\n## Required writable paths\n\nNimb must be able to write to:\n\n- \`data/\`\n- \`data/system/\`\n- \`data/content/\`\n- \`data/uploads/\`\n- \`logs/\`\n`
   );
 
   process.stdout.write('Project created.\n');
@@ -157,7 +158,10 @@ const printOperatorGuide = ({ projectRoot }) => {
   process.stdout.write('5) Run preflight directly when needed\n');
   process.stdout.write('   - npx nimb preflight\n');
   process.stdout.write('   - Use this for validation-only checks without setup actions.\n\n');
-  process.stdout.write('6) Start Nimb\n');
+  process.stdout.write('6) Verify known-good baseline before first run/deploy\n');
+  process.stdout.write('   - npx nimb verify\n');
+  process.stdout.write('   - READY_TO_TRY_RUN means baseline assumptions are satisfied (not a full runtime guarantee).\n\n');
+  process.stdout.write('7) Start Nimb\n');
   process.stdout.write('   - npx nimb\n');
   process.stdout.write('   - Open /admin after startup to continue setup/content operations.\n');
 };
@@ -372,6 +376,10 @@ if (normalizedArgs[0] === 'init') {
     appendErrorLog({ projectRoot, error, context: 'setup' });
     process.exitCode = 1;
   }
+} else if (normalizedArgs[0] === 'verify') {
+  const report = await runBaselineVerification({ projectRoot, runtimeRoot });
+  process.stdout.write(preflightJsonOutput ? formatBaselineVerificationReportJson(report) : formatBaselineVerificationReport(report));
+  process.exitCode = report.readiness === 'READY_TO_TRY_RUN' ? 0 : 1;
 } else if (normalizedArgs[0] === 'guide') {
   printOperatorGuide({ projectRoot });
 } else {
