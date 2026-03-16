@@ -1,8 +1,110 @@
 import { loadSystemConfig } from '../system/system-config.ts';
 import { escapeHtml, renderAdminShell } from './admin-shell.ts';
+import { resolvePagePublishState, resolvePostPublishState } from '../content/publish-timing.ts';
 
 type DashboardOptions = {
   welcome?: boolean
+};
+
+type ScheduledQueueItem = {
+  id: string
+  title: string
+  typeLabel: 'Page' | 'Post'
+  publishTimeLabel: string
+  editUrl: string
+  publishedAtMs: number
+};
+
+const formatScheduledTime = (value: unknown) => {
+  const raw = `${value ?? ''}`.trim();
+  if (!raw) {
+    return 'Unknown';
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return raw;
+  }
+
+  return parsed.toISOString().slice(0, 16).replace('T', ' ');
+};
+
+const toScheduledQueueItems = (runtime): ScheduledQueueItem[] => {
+  const pages = Array.isArray(runtime?.content?.list?.('page')) ? runtime.content.list('page') : [];
+  const posts = Array.isArray(runtime?.content?.list?.('post')) ? runtime.content.list('post') : [];
+
+  const scheduledPages = pages
+    .filter((entry) => resolvePagePublishState(entry).status === 'scheduled')
+    .map((entry) => {
+      const id = `${entry?.id ?? ''}`;
+      const publishedAtMs = new Date(`${entry?.data?.publishedAt ?? ''}`).getTime();
+      return {
+        id,
+        title: `${entry?.data?.title ?? 'Untitled page'}`,
+        typeLabel: 'Page' as const,
+        publishTimeLabel: formatScheduledTime(entry?.data?.publishedAt),
+        editUrl: `/admin/pages/${encodeURIComponent(id)}/edit`,
+        publishedAtMs
+      };
+    });
+
+  const scheduledPosts = posts
+    .filter((entry) => resolvePostPublishState(entry).status === 'scheduled')
+    .map((entry) => {
+      const id = `${entry?.id ?? ''}`;
+      const publishedAtMs = new Date(`${entry?.data?.publishedAt ?? ''}`).getTime();
+      return {
+        id,
+        title: `${entry?.data?.title ?? 'Untitled post'}`,
+        typeLabel: 'Post' as const,
+        publishTimeLabel: formatScheduledTime(entry?.data?.publishedAt),
+        editUrl: `/admin/posts/${encodeURIComponent(id)}/edit`,
+        publishedAtMs
+      };
+    });
+
+  return [...scheduledPages, ...scheduledPosts]
+    .sort((left, right) => left.publishedAtMs - right.publishedAtMs)
+    .slice(0, 10);
+};
+
+const renderScheduledQueue = (runtime) => {
+  const items = toScheduledQueueItems(runtime);
+
+  if (items.length === 0) {
+    return `<article>
+      <h2>Upcoming scheduled content</h2>
+      <p class="muted">No scheduled pages or posts yet. Schedule from the page/post editor using Publish now with a future publish time.</p>
+    </article>`;
+  }
+
+  const rows = items.map((item) => `<tr>
+      <td>${escapeHtml(item.title)}</td>
+      <td>${escapeHtml(item.typeLabel)}</td>
+      <td><span class="status-pill status-pill--scheduled">Scheduled</span></td>
+      <td>${escapeHtml(item.publishTimeLabel)}</td>
+      <td><a href="${item.editUrl}">Edit ${escapeHtml(item.typeLabel.toLowerCase())}</a></td>
+    </tr>`).join('');
+
+  return `<article>
+      <h2>Upcoming scheduled content</h2>
+      <p class="muted">Soonest items first. Times use your server timezone format from scheduling fields.</p>
+      <div class="table-wrap"><table>
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Publish time</th>
+            <th>Quick action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table></div>
+      <p class="muted">This queue is a lightweight overview. Use Pages and Posts lists for full content management.</p>
+    </article>`;
 };
 
 const readSiteName = (runtime) => {
@@ -70,6 +172,7 @@ export const renderAdminDashboardPage = (runtime, options: DashboardOptions = {}
         </ul>
       </article>
     </div>
+    ${renderScheduledQueue(runtime)}
     <article>
       <h2>What you can do now</h2>
       <p class="muted">Nimb currently supports pages, posts, media uploads, and core settings for website-first publishing.</p>
