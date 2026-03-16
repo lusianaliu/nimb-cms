@@ -72,7 +72,7 @@ test('phase 119: admin pages UI supports listing, creating, editing, and deletin
     });
 
     assert.equal(createResponse.status, 302);
-    assert.equal(createResponse.headers.get('location'), '/admin/pages?notice=created');
+    assert.equal(createResponse.headers.get('location'), '/admin/pages?notice=created-published');
 
     const listAfterCreateResponse = await fetch(`http://127.0.0.1:${port}/admin/pages`, {
       headers: { cookie: authCookie }
@@ -113,7 +113,7 @@ test('phase 119: admin pages UI supports listing, creating, editing, and deletin
     });
 
     assert.equal(updateResponse.status, 302);
-    assert.equal(updateResponse.headers.get('location'), '/admin/pages?notice=updated');
+    assert.equal(updateResponse.headers.get('location'), '/admin/pages?notice=updated-published');
 
     const listAfterUpdateResponse = await fetch(`http://127.0.0.1:${port}/admin/pages`, {
       headers: { cookie: authCookie }

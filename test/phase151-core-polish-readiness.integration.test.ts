@@ -95,13 +95,13 @@ test('phase 151: post/page notices and public empty states use consistent wordin
       }).toString(),
       redirect: 'manual'
     });
-    assert.equal(pageCreateResponse.headers.get('location'), '/admin/pages?notice=created');
+    assert.equal(pageCreateResponse.headers.get('location'), '/admin/pages?notice=created-draft');
 
-    const pages = await fetch(`http://127.0.0.1:${port}/admin/pages?notice=created`, {
+    const pages = await fetch(`http://127.0.0.1:${port}/admin/pages?notice=created-draft`, {
       headers: { cookie: authCookie }
     });
     const pagesHtml = await pages.text();
-    assert.equal(pagesHtml.includes('Page saved'), true);
+    assert.equal(pagesHtml.includes('Draft saved'), true);
 
     const postCreateResponse = await fetch(`http://127.0.0.1:${port}/admin/posts/new`, {
       method: 'POST',
@@ -118,13 +118,13 @@ test('phase 151: post/page notices and public empty states use consistent wordin
       }).toString(),
       redirect: 'manual'
     });
-    assert.equal(postCreateResponse.headers.get('location'), '/admin/posts?notice=created');
+    assert.equal(postCreateResponse.headers.get('location'), '/admin/posts?notice=created-draft');
 
-    const posts = await fetch(`http://127.0.0.1:${port}/admin/posts?notice=created`, {
+    const posts = await fetch(`http://127.0.0.1:${port}/admin/posts?notice=created-draft`, {
       headers: { cookie: authCookie }
     });
     const postsHtml = await posts.text();
-    assert.equal(postsHtml.includes('Post saved'), true);
+    assert.equal(postsHtml.includes('Draft saved'), true);
 
     const blog = await fetch(`http://127.0.0.1:${port}/blog`);
     const blogHtml = await blog.text();

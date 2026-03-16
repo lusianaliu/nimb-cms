@@ -146,7 +146,8 @@ export const renderAdminPostFormPage = ({ mode, post = null, runtime, notice = n
           </div>
         </div>
         <p class="admin-form-actions">
-          <button type="submit">${mergedValues.status === 'published' ? (isEdit ? 'Update published post' : 'Publish post') : (isEdit ? 'Save draft changes' : 'Save draft')}</button>
+          <button type="submit" name="workflowAction" value="save-draft">${isEdit ? 'Save draft changes' : 'Save as draft'}</button>
+          <button type="submit" name="workflowAction" value="publish-now">${isEdit ? 'Publish changes' : 'Publish now'}</button>
           <a class="button-link button-link--muted" href="/admin/posts">Cancel</a>
         </p>
       </form>
